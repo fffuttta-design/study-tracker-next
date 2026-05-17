@@ -7,8 +7,6 @@ import {
   deleteDoc,
   onSnapshot,
   writeBatch,
-  query,
-  orderBy,
   type Firestore,
   type QuerySnapshot,
   type DocumentData,
