@@ -19,15 +19,16 @@ export interface ReviewRecord {
 export interface LearningItem {
   id: string;
   dateKey: string; // YYYY-MM-DD (登録日)
-  categoryId: string;
+  categoryId?: string;
   title: string;
-  url: string;
+  url?: string;
   content: string;
-  importance: Importance;
+  importance?: Importance;
   reviews: ReviewRecord[]; // 5段階
   sortOrder: number;
   createdAt?: string; // ISO 8601
   notionPageId?: string;
+  notionPagePath?: string; // ページ階層 (例: "事業 / ビジネス戦闘力")
 }
 
 export function getNextStageIndex(item: LearningItem): number {

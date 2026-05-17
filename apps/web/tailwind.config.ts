@@ -1,9 +1,10 @@
 import type { Config } from "tailwindcss";
+import path from "path";
 
 const config: Config = {
   content: [
-    "./src/**/*.{js,ts,jsx,tsx,mdx}",
-    "../../packages/ui/src/**/*.{js,ts,jsx,tsx}",
+    path.resolve(__dirname, "./src/**/*.{js,ts,jsx,tsx,mdx}"),
+    path.resolve(__dirname, "../../packages/ui/src/**/*.{js,ts,jsx,tsx}"),
   ],
   theme: {
     extend: {

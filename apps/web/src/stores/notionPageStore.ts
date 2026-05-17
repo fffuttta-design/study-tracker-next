@@ -1,5 +1,4 @@
-'use client';
-
+﻿
 import { create } from 'zustand';
 import { type NotionPage, createNotionPage } from '@study-tracker/core';
 import { subscribeCol, upsertDoc, deleteDocById } from '@study-tracker/firebase';

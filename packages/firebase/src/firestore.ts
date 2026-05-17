@@ -42,13 +42,17 @@ export function subscribeCol<T>(
   });
 }
 
+function stripUndefined(data: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined));
+}
+
 export async function upsertDoc(
   uid: string,
   colName: string,
   id: string,
   data: Record<string, unknown>
 ): Promise<void> {
-  await setDoc(doc(getDb(), 'users', uid, colName, id), data, { merge: true });
+  await setDoc(doc(getDb(), 'users', uid, colName, id), stripUndefined(data), { merge: true });
 }
 
 export async function deleteDocById(

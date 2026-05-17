@@ -1,7 +1,7 @@
-'use client';
-
+﻿
 import { create } from 'zustand';
-import { type LearningItem, createReviews, DEFAULT_REVIEW_STAGE_DAYS } from '@study-tracker/core';
+import { type LearningItem, createReviews } from '@study-tracker/core';
+import { useSettingsStore } from './settingsStore';
 import { subscribeCol, upsertDoc, deleteDocById } from '@study-tracker/firebase';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -30,7 +30,7 @@ export const useLearningStore = create<LearningState>((set) => ({
     const item: LearningItem = {
       id,
       ...data,
-      reviews: createReviews(data.dateKey, DEFAULT_REVIEW_STAGE_DAYS),
+      reviews: createReviews(data.dateKey, useSettingsStore.getState().reviewStageDays),
       createdAt: now,
     };
     await upsertDoc(uid, 'learningItems', id, item as unknown as Record<string, unknown>);

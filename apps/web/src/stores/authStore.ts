@@ -1,5 +1,3 @@
-'use client';
-
 import { create } from 'zustand';
 import { type User } from 'firebase/auth';
 import { onAuthChanged, signInWithGoogle, signOutUser } from '@study-tracker/firebase';

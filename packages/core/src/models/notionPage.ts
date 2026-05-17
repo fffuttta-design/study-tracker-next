@@ -15,14 +15,15 @@ export function createNotionPage(params?: {
   parentId?: string;
   order?: number;
 }): NotionPage {
-  return {
+  const page: NotionPage = {
     id: uuidv4(),
     title: '',
     content: '',
-    parentId: params?.parentId,
     icon: '📄',
     order: params?.order ?? 0,
     updatedAt: new Date().toISOString(),
     isFavorite: false,
   };
+  if (params?.parentId !== undefined) page.parentId = params.parentId;
+  return page;
 }
