@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Node } from '@tiptap/core';
+import { Node as TiptapNode, InputRule } from '@tiptap/core';
 import {
   useEditor, EditorContent,
   NodeViewWrapper, NodeViewContent,
@@ -58,25 +58,73 @@ const EMOJI_PRESETS = [
   '😮','😯','😲','😳','🥺','😦','😧','😨','😰','😥',
   '😢','😭','😱','😖','😣','😞','😓','😩','😫','😤',
   '😡','😠','🤬','😈','👿','💀','☠️','💩','🤡','👹',
-  // ジェスチャー・人
+  '👺','👻','👽','👾','🤖',
+  // ジェスチャー・体
   '👋','🤚','✋','🖐','🖖','👌','✌️','🤞','🤟','🤘',
   '🤙','👈','👉','👆','👇','☝️','👍','👎','✊','👊',
-  '🤛','🤜','👏','🙌','🤝','🙏','💪','🦾',
-  // ハート・よく使う記号
+  '🤛','🤜','👏','🙌','🤝','🙏','💪','🦾','🦿','🦵',
+  '🦶','👂','🦻','👃','🧠','🦷','🦴','👀','👅','🫦',
+  // ハート・愛
   '❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔',
-  '❣️','💕','💞','💓','💗','💖','💘','💝',
+  '❣️','💕','💞','💓','💗','💖','💘','💝','💟','❤️‍🔥',
+  // よく使う記号・マーク
   '⭐','🌟','✨','🔥','💥','💫','❄️','🌈','💯','🎉',
-  '🎊','🎁','🎈','🥳','🏆','🥇','👑','💎','🎯','✅',
-  // ドキュメント・仕事
-  '📄','📝','📚','📖','📓','📒','📋','📊','📈','💡',
-  '🎯','🔖','📌','🗂️','📁','💼','🖥️','💻','📱','🔐',
-  '🛠️','⚙️','🔑','🧠','🔍','🔬','🎓','💰','🏢','🚀',
-  // 自然・動物・食べ物
-  '🌿','🌸','🌙','☀️','🌊','🌈','🌍','✈️','🏠','⛩️',
-  '🐶','🐱','🐻','🦊','🦁','🐸','🦋','🐝',
-  '☕','🍎','🍕','🍜','🍣','🍰','🥂',
-  // クリエイティブ
-  '🎨','🎵','🎶','📸','🎬','🎮','🎲','🖼️','🎭','🎪',
+  '🎊','🎁','🎈','🥳','🏆','🥇','🥈','🥉','👑','💎',
+  '🎯','✅','❌','⚡','🌀','💢','💨','💦','🎀','🎗️',
+  '🔴','🟠','🟡','🟢','🔵','🟣','⚫','⚪','🟤','🔶',
+  // ドキュメント・仕事・学習
+  '📄','📝','📚','📖','📓','📔','📒','📕','📗','📘',
+  '📙','📋','📊','📈','📉','💡','🔖','📌','📍','🗂️',
+  '📁','📂','🗃️','💼','🗄️','🖥️','💻','📱','⌨️','🖱️',
+  '🖨️','🔐','🔑','🗝️','🛠️','⚙️','🔧','🔩','🧰','🧲',
+  '🔬','🔭','📡','🧪','🧫','🧬','🎓','🏫','✏️','📏',
+  '📐','🗒️','🗓️','📆','📅','⏰','⌚','⏱️','⏲️','🕰️',
+  // お金・ビジネス
+  '💰','💴','💵','💶','💷','💸','💳','🏦','🏢','📊',
+  '📈','💹','🤝','🏅','🎖️','🏆','🔐','🔒','🔓','🗺️',
+  // 自然・天気
+  '🌿','🌱','🌲','🌳','🌴','🌵','🎋','🎍','🍀','🌾',
+  '🌸','🌺','🌻','🌹','🌷','🌼','💐','🍁','🍂','🍃',
+  '🌙','🌛','🌜','🌚','🌝','🌞','☀️','⛅','🌤️','🌥️',
+  '🌦️','🌧️','⛈️','🌩️','🌨️','❄️','☃️','⛄','💨','🌬️',
+  '🌊','🌈','⚡','🌍','🌎','🌏','🗺️','🧊','🌋','🏔️',
+  '⛰️','🏕️','🏖️','🏜️','🏝️','🏞️','🌄','🌅','🌆','🌉',
+  // 動物
+  '🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯',
+  '🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐔','🐧',
+  '🐦','🐤','🦆','🦅','🦉','🦇','🐺','🐗','🦄','🐝',
+  '🦋','🐛','🐌','🐞','🦎','🐢','🐍','🦕','🦖','🐙',
+  '🦑','🦀','🐡','🐠','🐟','🐬','🐳','🐋','🦈','🐊',
+  '🦒','🦓','🐘','🦛','🦏','🦍','🐪','🦘','🐆','🐅',
+  '🦌','🐕','🐩','🐈','🐓','🦃','🦜','🦢','🦩','🕊️',
+  // 食べ物・飲み物
+  '☕','🍵','🧃','🥤','🧋','🍺','🍻','🥂','🍷','🥃',
+  '🍸','🍹','🍾','🍎','🍊','🍋','🍌','🍉','🍇','🍓',
+  '🍒','🍑','🥭','🍍','🥥','🥝','🍅','🫐','🍆','🥑',
+  '🌽','🥕','🥦','🍄','🥜','🌰','🍞','🥐','🧀','🍳',
+  '🥚','🍖','🍗','🥩','🍔','🍟','🌭','🍕','🌮','🌯',
+  '🍜','🍝','🍛','🍣','🍱','🥟','🦪','🍙','🍚','🍘',
+  '🧁','🍰','🎂','🍮','🍭','🍬','🍫','🍩','🍪','🍡',
+  // 旅行・乗り物
+  '✈️','🚀','🛸','🚁','🚂','🚗','🚕','🚙','🚌','🚎',
+  '🏍️','🛵','🚲','⛵','🚢','🏠','🏡','🏢','🏣','🏤',
+  '🏥','🏦','🏫','🏛️','🏗️','🏰','🏯','⛩️','🕌','⛪',
+  '🕍','🗼','🗽','⛲','🎡','🎢','🎠',
+  // スポーツ・活動
+  '⚽','🏀','🏈','⚾','🎾','🏐','🏉','🥏','🎱','🏓',
+  '🏸','🥊','🥋','🎿','⛷️','🏂','🏋️','🤸','⛹️','🏊',
+  '🚴','🧘','🏄','🤾','🏇','⛺','🎣','🤿','🏹','🥅',
+  // クリエイティブ・エンタメ
+  '🎨','🖌️','🎵','🎶','🎸','🎹','🎺','🎻','🥁','🎷',
+  '🎤','🎙️','🎧','📸','📷','🎥','📽️','🎬','📺','📻',
+  '🎮','🕹️','🎲','🎯','🎳','🎪','🎭','🖼️','🎟️','🎠',
+  // ファッション・アクセサリー
+  '👗','👒','🎩','🎓','👑','💍','💄','👓','🕶️','🥽',
+  '👟','👠','👡','👢','🧣','🧤','🧥','👜','👛','🎒',
+  // その他
+  '🔮','💊','💉','🩺','🧬','⚗️','🔭','🌡️','🧭','💌',
+  '📬','📦','🎁','🧨','🎆','🎇','🪄','🪆','🧸','🪁',
+  '🎊','🎉','🎈','🎀','🎗️','🏮','🪔','🕯️','🔦','💡',
 ];
 
 // ── PageLink ノード ──────────────────────────────────────────────────
@@ -187,7 +235,7 @@ function PageLinkView({ node, updateAttributes }: NodeViewProps) {
   );
 }
 
-const PageLinkNode = Node.create({
+const PageLinkNode = TiptapNode.create({
   name: 'pageLink',
   group: 'block',
   atom: true,
@@ -227,7 +275,7 @@ function UrlMentionView({ node }: NodeViewProps) {
   );
 }
 
-const UrlMentionNode = Node.create({
+const UrlMentionNode = TiptapNode.create({
   name: 'urlMention',
   group: 'inline',
   inline: true,
@@ -288,7 +336,7 @@ function CalloutView({ node, updateAttributes }: NodeViewProps) {
   );
 }
 
-const CalloutNode = Node.create({
+const CalloutNode = TiptapNode.create({
   name: 'callout',
   group: 'block',
   content: 'block+',
@@ -414,7 +462,7 @@ function ToggleHeadingView({ node, updateAttributes }: NodeViewProps) {
   );
 }
 
-const ToggleHeadingNode = Node.create({
+const ToggleHeadingNode = TiptapNode.create({
   name: 'toggleHeading',
   group: 'block',
   content: 'block+',
@@ -428,6 +476,28 @@ const ToggleHeadingNode = Node.create({
   parseHTML() { return [{ tag: 'div[data-type="toggle-heading"]' }]; },
   renderHTML({ HTMLAttributes }) { return ['div', { ...HTMLAttributes, 'data-type': 'toggle-heading' }, 0]; },
   addNodeView() { return ReactNodeViewRenderer(ToggleHeadingView); },
+  addInputRules() {
+    return [
+      new InputRule({
+        find: /^_ $/,
+        handler: ({ state, range, chain }) => {
+          const $from = state.doc.resolve(range.from);
+          const depth = $from.depth;
+          const nodeFrom = depth > 0 ? $from.before(depth) : 0;
+          const nodeTo = depth > 0 ? $from.after(depth) : state.doc.content.size;
+          const { schema } = state;
+          const toggleNode = schema.nodes.toggleHeading.create(
+            { level: 1, isOpen: true },
+            [schema.nodes.heading.create({ level: 1 }), schema.nodes.paragraph.create()],
+          );
+          chain().command(({ tr }) => {
+            tr.replaceWith(nodeFrom, nodeTo, toggleNode);
+            return true;
+          }).run();
+        },
+      }),
+    ];
+  },
 });
 
 // ── 目次 ─────────────────────────────────────────────────────────────
@@ -459,6 +529,7 @@ function TocView({ editor }: NodeViewProps) {
       if (node.type.name === 'heading' && node.attrs.level === level && node.textContent === text) {
         targetPos = pos;
       }
+      return;
     });
     if (targetPos === -1) return;
     editor.commands.setTextSelection(targetPos + 1);
@@ -485,7 +556,7 @@ function TocView({ editor }: NodeViewProps) {
   );
 }
 
-const TocNode = Node.create({
+const TocNode = TiptapNode.create({
   name: 'toc',
   group: 'block',
   atom: true,
@@ -691,6 +762,13 @@ export function NotionEditor({
   const [pasteLoading, setPasteLoading] = useState(false);
   const [recordText, setRecordText] = useState<string | null>(null);
 
+  const contentDivRef = useRef<HTMLDivElement>(null);
+  const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const marqueeRef = useRef<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+
+  const [tableButtonInfo, setTableButtonInfo] = useState<{ rowY: number; colX: number; centerX: number; centerY: number } | null>(null);
+  const tableButtonTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const pasteUrlCallbackRef = useRef<((url: string, coords: { bottom: number; left: number }) => void) | null>(null);
   pasteUrlCallbackRef.current = (url, coords) => {
     setPastePopup({ url, pos: { top: coords.bottom + 8, left: coords.left }, isYoutube: isYouTubeUrl(url) });
@@ -754,26 +832,6 @@ export function NotionEditor({
           const coords = view.coordsAtPos(view.state.selection.from);
           pasteUrlCallbackRef.current?.(text, coords);
           return true;
-        }
-        return false;
-      },
-      handleKeyDown(view, event) {
-        // '>' キーで見出しをトグル見出しに変換
-        if (event.key === '>' && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
-          const { state } = view;
-          const { $from } = state.selection;
-          if ($from.parent.type.name === 'heading' && $from.parentOffset === 0) {
-            const level = $from.parent.attrs.level as number;
-            const headingNode = $from.parent;
-            const from = $from.before();
-            const to = $from.after();
-            const toggleNode = state.schema.nodes.toggleHeading.create(
-              { level, isOpen: true },
-              [headingNode.copy(headingNode.content), state.schema.nodes.paragraph.create()]
-            );
-            view.dispatch(state.tr.replaceWith(from, to, toggleNode));
-            return true;
-          }
         }
         return false;
       },
@@ -864,10 +922,94 @@ export function NotionEditor({
             found = true;
           }
         }
+        return;
       });
     }, 600);
     return () => clearTimeout(timer);
   }, [editor, highlightText]);
+
+  // テーブルホバーで + ボタン表示
+  useEffect(() => {
+    if (!editor) return;
+    const editorEl = editor.view.dom;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const target = e.target as Element;
+      const tableEl = target.closest('table');
+      if (!tableEl) {
+        if (tableButtonTimeoutRef.current) clearTimeout(tableButtonTimeoutRef.current);
+        tableButtonTimeoutRef.current = setTimeout(() => setTableButtonInfo(null), 200);
+        return;
+      }
+      if (tableButtonTimeoutRef.current) clearTimeout(tableButtonTimeoutRef.current);
+      const rect = tableEl.getBoundingClientRect();
+      setTableButtonInfo({
+        rowY: rect.bottom,
+        colX: rect.right,
+        centerX: rect.left + rect.width / 2,
+        centerY: rect.top + rect.height / 2,
+      });
+    };
+
+    const handleMouseLeave = () => {
+      if (tableButtonTimeoutRef.current) clearTimeout(tableButtonTimeoutRef.current);
+      tableButtonTimeoutRef.current = setTimeout(() => setTableButtonInfo(null), 200);
+    };
+
+    editorEl.addEventListener('mousemove', handleMouseMove);
+    editorEl.addEventListener('mouseleave', handleMouseLeave);
+    return () => {
+      editorEl.removeEventListener('mousemove', handleMouseMove);
+      editorEl.removeEventListener('mouseleave', handleMouseLeave);
+    };
+  }, [editor]);
+
+  // 左余白ドラッグでマーキー選択
+  const handleOuterMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!contentDivRef.current || !editor) return;
+    const contentRect = contentDivRef.current.getBoundingClientRect();
+    if (e.clientX >= contentRect.left - 8) return;
+
+    e.preventDefault();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const init = { x1: startX, y1: startY, x2: startX, y2: startY };
+    marqueeRef.current = init;
+    setMarquee(init);
+
+    const onMove = (ev: MouseEvent) => {
+      const next = { x1: startX, y1: startY, x2: ev.clientX, y2: ev.clientY };
+      marqueeRef.current = next;
+      setMarquee({ ...next });
+    };
+
+    const onUp = (ev: MouseEvent) => {
+      const m = marqueeRef.current;
+      if (m && editor) {
+        const minY = Math.min(m.y1, ev.clientY);
+        const maxY = Math.max(m.y1, ev.clientY);
+        const midX = contentRect.left + 20;
+        const startResult = editor.view.posAtCoords({ left: midX, top: minY + 2 });
+        const endResult = editor.view.posAtCoords({ left: midX, top: maxY - 2 });
+        if (startResult && endResult) {
+          const $from = editor.state.doc.resolve(startResult.pos);
+          const $to = editor.state.doc.resolve(endResult.pos);
+          const fromD = $from.depth > 0 ? $from.depth : 1;
+          const toD = $to.depth > 0 ? $to.depth : 1;
+          const lineStart = $from.start(fromD);
+          const lineEnd = $to.end(toD);
+          editor.chain().focus().setTextSelection({ from: Math.min(lineStart, lineEnd), to: Math.max(lineStart, lineEnd) }).run();
+        }
+      }
+      marqueeRef.current = null;
+      setMarquee(null);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [editor]);
 
   const handleRecord = useCallback(() => {
     if (!editor) return;
@@ -929,8 +1071,8 @@ export function NotionEditor({
   const outerClass = `relative flex flex-1 overflow-y-auto py-8 ${notionPlusLayout === 'center' ? 'justify-center px-6' : 'pl-16 pr-8'}`;
 
   return (
-    <div className={outerClass} onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }); }}>
-      <div className="w-full max-w-3xl">
+    <div className={outerClass} onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }); }} onMouseDown={handleOuterMouseDown}>
+      <div className="w-full max-w-3xl" ref={contentDivRef}>
         <input
           ref={titleRef}
           defaultValue={initialTitle}
@@ -982,6 +1124,41 @@ export function NotionEditor({
       {/* 学習記録ダイアログ */}
       {recordText !== null && (
         <RecordDialog initialContent={recordText} notionPageId={notionPageId} notionPagePath={notionPagePath} onClose={() => setRecordText(null)} />
+      )}
+
+      {/* マーキー選択矩形 */}
+      {marquee && (
+        <div
+          className="pointer-events-none fixed z-30 border border-blue-400 bg-blue-400/10"
+          style={{
+            left: Math.min(marquee.x1, marquee.x2),
+            top: Math.min(marquee.y1, marquee.y2),
+            width: Math.abs(marquee.x2 - marquee.x1),
+            height: Math.abs(marquee.y2 - marquee.y1),
+          }}
+        />
+      )}
+
+      {/* テーブルホバー + ボタン */}
+      {tableButtonInfo && (
+        <>
+          <button
+            className="fixed z-40 flex h-5 w-5 items-center justify-center rounded-full border border-gray-300 bg-white text-xs text-gray-400 shadow-sm hover:border-brand-400 hover:text-brand-500"
+            style={{ top: tableButtonInfo.rowY + 4, left: tableButtonInfo.centerX - 10 }}
+            onMouseEnter={() => { if (tableButtonTimeoutRef.current) clearTimeout(tableButtonTimeoutRef.current); }}
+            onMouseLeave={() => { tableButtonTimeoutRef.current = setTimeout(() => setTableButtonInfo(null), 200); }}
+            onClick={() => editor?.chain().focus().addRowAfter().run()}
+            title="行を追加"
+          >+</button>
+          <button
+            className="fixed z-40 flex h-5 w-5 items-center justify-center rounded-full border border-gray-300 bg-white text-xs text-gray-400 shadow-sm hover:border-brand-400 hover:text-brand-500"
+            style={{ top: tableButtonInfo.centerY - 10, left: tableButtonInfo.colX + 4 }}
+            onMouseEnter={() => { if (tableButtonTimeoutRef.current) clearTimeout(tableButtonTimeoutRef.current); }}
+            onMouseLeave={() => { tableButtonTimeoutRef.current = setTimeout(() => setTableButtonInfo(null), 200); }}
+            onClick={() => editor?.chain().focus().addColumnAfter().run()}
+            title="列を追加"
+          >+</button>
+        </>
       )}
 
       {/* URL ペーストポップアップ */}
