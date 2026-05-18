@@ -17,7 +17,6 @@ interface SidebarProps {
 const NAV = [
   { href: '/learning', label: '学習リスト', icon: '📚' },
   { href: '/notion-plus', label: 'NotionPlus', icon: '📝' },
-  { href: '/settings', label: '設定', icon: '⚙️' },
 ];
 
 function PageIcon({ icon }: { icon: string }) {
@@ -220,8 +219,19 @@ export function Sidebar({ user }: SidebarProps) {
         })}
       </nav>
 
-      {/* ユーザー情報 */}
-      <div className="border-t border-gray-100 p-3">
+      {/* 設定 + ユーザー情報 */}
+      <div className="border-t border-gray-100 p-3 space-y-1">
+        <Link
+          href="/settings"
+          className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors ${
+            pathname.startsWith('/settings')
+              ? 'bg-white font-medium text-gray-900 shadow-sm'
+              : 'text-gray-600 hover:bg-white hover:text-gray-900'
+          }`}
+        >
+          <span>⚙️</span>
+          <span>設定</span>
+        </Link>
         <div className="flex items-center gap-2 rounded-md px-2 py-2">
           {user.photoURL && (
             // eslint-disable-next-line @next/next/no-img-element

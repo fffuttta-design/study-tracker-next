@@ -49,6 +49,14 @@ const STAGE_COLORS = [
   'bg-purple-50 text-purple-600 border-purple-200',
 ];
 
+const STAGE_CARD_BG = [
+  'bg-red-50',
+  'bg-yellow-50',
+  'bg-green-50',
+  'bg-blue-50',
+  'bg-purple-50',
+];
+
 function dailyQuote(): string {
   const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
   return DAILY_QUOTES[dayOfYear % DAILY_QUOTES.length];
@@ -114,7 +122,7 @@ export default function LearningPage() {
       </div>
 
       {/* タブコンテンツ */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto bg-gray-100">
         {tab === 0 && <DashboardTab todayItems={todayItems} dueItems={dueItems} uid={user?.uid ?? ''} selectedDate={selectedDate} onAdd={() => setAddDialogOpen(true)} />}
         {tab === 1 && <TodayTab items={todayItems} uid={user?.uid ?? ''} onAdd={() => setAddDialogOpen(true)} />}
         {tab === 2 && <ReviewTab dueItems={dueItems} uid={user?.uid ?? ''} />}
@@ -686,8 +694,10 @@ function ItemCard({ item, uid, showReviewAction }: {
     ? <span className="rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-xs text-blue-500">次: {STAGE_LABELS[nextReview.stageIndex]}</span>
     : null;
 
+  const cardBg = showReviewAction && nextReview ? (STAGE_CARD_BG[nextReview.stageIndex] ?? 'bg-white') : 'bg-white';
+
   return (
-    <div className={`rounded-lg border bg-white transition-shadow ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}>
+    <div className={`rounded-lg border transition-shadow ${cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}>
       <div className="flex items-start gap-3 px-4 py-3">
         {showReviewAction && nextReview && !fullyDone && (
           <button
@@ -698,9 +708,9 @@ function ItemCard({ item, uid, showReviewAction }: {
         )}
 
         <div className="min-w-0 flex-1 cursor-pointer" onClick={() => setExpanded((v) => !v)}>
-          <span className="font-semibold text-gray-800 text-lg leading-snug">
+          <p className="truncate font-semibold text-gray-800 text-lg leading-snug">
             {item.title || item.content.split('\n')[0].slice(0, 60)}
-          </span>
+          </p>
           <div className="mt-1 flex items-center gap-2 text-xs text-gray-400">
             {item.notionPagePath && (
               <span className="flex items-center gap-0.5">
