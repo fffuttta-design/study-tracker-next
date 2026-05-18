@@ -31,6 +31,79 @@ import { useLearningStore } from '@/stores/learningStore';
 import { useNotionPageStore } from '@/stores/notionPageStore';
 import './editor.css';
 
+// ── ProseMirror → Markdown 変換 ──────────────────────────────────────
+
+interface PmNode {
+  isText: boolean;
+  text?: string;
+  marks: Array<{ type: { name: string }; attrs: Record<string, unknown> }>;
+  type: { name: string };
+  attrs: Record<string, unknown>;
+  textContent: string;
+  forEach(fn: (node: PmNode) => void): void;
+}
+
+function pmToMarkdown(node: PmNode): string {
+  if (node.isText) {
+    let t = node.text ?? '';
+    for (const m of node.marks) {
+      switch (m.type.name) {
+        case 'bold':   t = `**${t}**`; break;
+        case 'italic': t = `*${t}*`; break;
+        case 'code':   t = `\`${t}\``; break;
+        case 'strike': t = `~~${t}~~`; break;
+        case 'link':   t = `[${t}](${m.attrs.href as string})`; break;
+      }
+    }
+    return t;
+  }
+  const children = (): string => {
+    const parts: string[] = [];
+    node.forEach((child) => parts.push(pmToMarkdown(child)));
+    return parts.join('');
+  };
+  switch (node.type.name) {
+    case 'doc':
+    case 'bulletList':
+    case 'taskList':
+      return children();
+    case 'orderedList': {
+      const parts: string[] = [];
+      let idx = 0;
+      node.forEach((item) => {
+        idx++;
+        const inner: string[] = [];
+        item.forEach((child) => inner.push(pmToMarkdown(child)));
+        parts.push(`${idx}. ${inner.join('').trim()}\n`);
+      });
+      return parts.join('');
+    }
+    case 'paragraph': {
+      const c = children();
+      return c.trim() ? c + '\n\n' : '';
+    }
+    case 'heading':
+      return `${'#'.repeat(node.attrs.level as number)} ${children()}\n\n`;
+    case 'blockquote':
+      return children().split('\n').filter(Boolean).map(l => `> ${l}`).join('\n') + '\n\n';
+    case 'codeBlock': {
+      const lang = (node.attrs.language as string | null) ?? '';
+      return `\`\`\`${lang}\n${node.textContent}\n\`\`\`\n\n`;
+    }
+    case 'listItem': {
+      return `- ${children().trim()}\n`;
+    }
+    case 'taskItem': {
+      const checked = node.attrs.checked as boolean | undefined;
+      return `${checked ? '- [x]' : '- [ ]'} ${children().trim()}\n`;
+    }
+    case 'hardBreak':
+      return '\n';
+    default:
+      return children();
+  }
+}
+
 // ── helpers ────────────────────────────────────────────────────────────
 
 function isYouTubeUrl(url: string) {
@@ -1048,7 +1121,13 @@ export function NotionEditor({
   const handleRecord = useCallback(() => {
     if (!editor) return;
     const { from, to } = editor.state.selection;
-    const text = from !== to ? editor.state.doc.textBetween(from, to, '\n') : '';
+    let text = '';
+    if (from !== to) {
+      const slice = editor.state.doc.slice(from, to);
+      const parts: string[] = [];
+      slice.content.forEach((node) => parts.push(pmToMarkdown(node as PmNode)));
+      text = parts.join('').trim();
+    }
     if (onRecordText) { onRecordText(text); } else { setRecordText(text); }
     setCtxMenu(null);
   }, [editor, onRecordText]);

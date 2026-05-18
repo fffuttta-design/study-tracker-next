@@ -698,16 +698,17 @@ function ItemCard({ item, uid, showReviewAction }: {
         )}
 
         <div className="min-w-0 flex-1 cursor-pointer" onClick={() => setExpanded((v) => !v)}>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="font-semibold text-gray-800 text-base">
-              {item.title || item.content.split('\n')[0].slice(0, 60)}
-            </span>
+          <span className="font-semibold text-gray-800 text-lg leading-snug">
+            {item.title || item.content.split('\n')[0].slice(0, 60)}
+          </span>
+          <div className="mt-1 flex items-center gap-2 text-xs text-gray-400">
+            {item.notionPagePath && (
+              <span className="flex items-center gap-0.5">
+                <span>📁</span><span>{item.notionPagePath}</span>
+              </span>
+            )}
+            <span>{format(new Date(item.dateKey), 'M/d', { locale: ja })} 登録</span>
           </div>
-          {item.notionPagePath && (
-            <div className="mt-1 flex items-center gap-0.5 text-xs text-gray-400">
-              <span>📁</span><span>{item.notionPagePath}</span>
-            </div>
-          )}
           {!expanded && item.content && (
             <p className="mt-1 line-clamp-1 text-xs text-gray-400">
               {item.content.replace(/[#\*`_~>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 80)}
@@ -715,8 +716,7 @@ function ItemCard({ item, uid, showReviewAction }: {
           )}
         </div>
 
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-start gap-1">
             {item.notionPageId && (
               <Link
                 href={`/notion-plus/${item.notionPageId}?hl=${encodeURIComponent((item.content.split('\n').find(l => l.trim().length > 5) ?? item.content).trim().slice(0, 80))}`}
@@ -733,10 +733,6 @@ function ItemCard({ item, uid, showReviewAction }: {
             <button onClick={() => setExpanded((v) => !v)} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500">
               {expanded ? '▲' : '▼'}
             </button>
-          </div>
-          <span className="text-[10px] text-gray-300">
-            {format(new Date(item.dateKey), 'M/d', { locale: ja })} 登録
-          </span>
         </div>
       </div>
 
