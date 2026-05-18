@@ -212,18 +212,6 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
             </button>
             {iconPickerOpen && (
               <div className="absolute left-0 top-full z-50 w-64 rounded-xl border border-gray-200 bg-white p-3 shadow-xl">
-                <p className="mb-1 text-xs font-medium text-gray-400">絵文字</p>
-                <div className="mb-3 grid grid-cols-6 gap-1">
-                  {ICON_PRESETS.map((icon) => (
-                    <button
-                      key={icon}
-                      onClick={() => handleIconChange(icon)}
-                      className={`rounded p-1.5 text-lg hover:bg-gray-100 ${page.icon === icon ? 'bg-brand-50 ring-1 ring-brand-400' : ''}`}
-                    >
-                      {icon}
-                    </button>
-                  ))}
-                </div>
                 <p className="mb-1 text-xs font-medium text-gray-400">画像URL・コピペ</p>
                 <div className="flex gap-1">
                   <input
@@ -232,7 +220,6 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
                     onChange={(e) => setIconUrlDraft(e.target.value)}
                     onPaste={handleIconPaste}
                     onKeyDown={(e) => e.key === 'Enter' && iconUrlDraft && handleIconChange(iconUrlDraft)}
-                    placeholder="https://..."
                     className="min-w-0 flex-1 rounded border border-gray-200 px-2 py-1 text-xs outline-none focus:border-brand-400"
                   />
                   <button
@@ -246,10 +233,22 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
                 {iconUrlDraft.startsWith('http') && (
                   <div className="mt-2 flex items-center gap-2">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={iconUrlDraft} alt="" className="h-8 w-8 rounded object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                    <img src={iconUrlDraft} alt="" className="h-8 w-8 rounded-md object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                     <span className="text-xs text-gray-400">プレビュー</span>
                   </div>
                 )}
+                <p className="mb-1 mt-3 text-xs font-medium text-gray-400">絵文字</p>
+                <div className="grid max-h-52 grid-cols-6 gap-1 overflow-y-auto">
+                  {ICON_PRESETS.map((icon) => (
+                    <button
+                      key={icon}
+                      onClick={() => handleIconChange(icon)}
+                      className={`rounded p-1.5 text-lg hover:bg-gray-100 ${page.icon === icon ? 'bg-brand-50 ring-1 ring-brand-400' : ''}`}
+                    >
+                      {icon}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>

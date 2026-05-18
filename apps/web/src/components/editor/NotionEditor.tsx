@@ -190,28 +190,18 @@ function PageLinkView({ node, updateAttributes }: NodeViewProps) {
           >
             {isImageSrc(icon) ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={icon} alt="" className="block h-[1.1em] w-[1.1em] flex-shrink-0 rounded object-cover" style={{ aspectRatio: '1/1' }} />
+              <img src={icon} alt="" className="block h-[1.1em] w-[1.1em] flex-shrink-0 rounded-md object-cover" style={{ aspectRatio: '1/1' }} />
             ) : (
               <span className="text-[0.95em] leading-none">{icon}</span>
             )}
           </button>
           {pickerOpen && (
             <div className="absolute left-0 top-full z-50 w-72 rounded-xl border border-gray-200 bg-white p-3 shadow-xl">
-              <p className="mb-1 text-xs font-medium text-gray-400">絵文字</p>
-              <div className="mb-2 grid grid-cols-8 gap-0.5 max-h-48 overflow-y-auto">
-                {EMOJI_PRESETS.map((emoji) => (
-                  <button key={emoji} onClick={() => handleIconChange(emoji)}
-                    className={`rounded p-1 text-base hover:bg-gray-100 ${icon === emoji ? 'bg-brand-50 ring-1 ring-brand-400' : ''}`}>
-                    {emoji}
-                  </button>
-                ))}
-              </div>
               <p className="mb-1 text-xs font-medium text-gray-400">画像URL / コピペ</p>
               <div className="flex gap-1">
                 <input type="text" value={iconUrlDraft} onChange={(e) => setIconUrlDraft(e.target.value)}
                   onPaste={handleIconPaste}
                   onKeyDown={(e) => e.key === 'Enter' && iconUrlDraft && handleIconChange(iconUrlDraft)}
-                  placeholder="https://..."
                   className="min-w-0 flex-1 rounded border border-gray-200 px-2 py-1 text-xs outline-none focus:border-brand-400" />
                 <button onClick={() => iconUrlDraft && handleIconChange(iconUrlDraft)} disabled={!iconUrlDraft}
                   className="rounded bg-brand-500 px-2 py-1 text-xs text-white hover:bg-brand-600 disabled:opacity-40">設定</button>
@@ -219,11 +209,20 @@ function PageLinkView({ node, updateAttributes }: NodeViewProps) {
               {isImageSrc(iconUrlDraft) && (
                 <div className="mt-2 flex items-center gap-2">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={iconUrlDraft} alt="" className="block h-8 w-8 rounded object-cover" style={{ aspectRatio: '1/1' }}
+                  <img src={iconUrlDraft} alt="" className="block h-8 w-8 rounded-md object-cover" style={{ aspectRatio: '1/1' }}
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   <span className="text-xs text-gray-400">プレビュー</span>
                 </div>
               )}
+              <p className="mb-1 mt-3 text-xs font-medium text-gray-400">絵文字</p>
+              <div className="grid grid-cols-8 gap-0.5 max-h-48 overflow-y-auto">
+                {EMOJI_PRESETS.map((emoji) => (
+                  <button key={emoji} onClick={() => handleIconChange(emoji)}
+                    className={`rounded p-1 text-base hover:bg-gray-100 ${icon === emoji ? 'bg-brand-50 ring-1 ring-brand-400' : ''}`}>
+                    {emoji}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -938,7 +937,7 @@ export function NotionEditor({
       const tableEl = target.closest('table');
       if (!tableEl) {
         if (tableButtonTimeoutRef.current) clearTimeout(tableButtonTimeoutRef.current);
-        tableButtonTimeoutRef.current = setTimeout(() => setTableButtonInfo(null), 200);
+        tableButtonTimeoutRef.current = setTimeout(() => setTableButtonInfo(null), 600);
         return;
       }
       if (tableButtonTimeoutRef.current) clearTimeout(tableButtonTimeoutRef.current);
@@ -953,7 +952,7 @@ export function NotionEditor({
 
     const handleMouseLeave = () => {
       if (tableButtonTimeoutRef.current) clearTimeout(tableButtonTimeoutRef.current);
-      tableButtonTimeoutRef.current = setTimeout(() => setTableButtonInfo(null), 200);
+      tableButtonTimeoutRef.current = setTimeout(() => setTableButtonInfo(null), 600);
     };
 
     editorEl.addEventListener('mousemove', handleMouseMove);
@@ -1142,22 +1141,32 @@ export function NotionEditor({
       {/* テーブルホバー + ボタン */}
       {tableButtonInfo && (
         <>
-          <button
-            className="fixed z-40 flex h-5 w-5 items-center justify-center rounded-full border border-gray-300 bg-white text-xs text-gray-400 shadow-sm hover:border-brand-400 hover:text-brand-500"
-            style={{ top: tableButtonInfo.rowY + 4, left: tableButtonInfo.centerX - 10 }}
+          {/* 行追加ボタン（テーブル下） - 大きめのpadding で hit area を確保 */}
+          <div
+            className="fixed z-40"
+            style={{ top: tableButtonInfo.rowY, left: tableButtonInfo.centerX - 20, padding: '4px 20px 12px' }}
             onMouseEnter={() => { if (tableButtonTimeoutRef.current) clearTimeout(tableButtonTimeoutRef.current); }}
-            onMouseLeave={() => { tableButtonTimeoutRef.current = setTimeout(() => setTableButtonInfo(null), 200); }}
-            onClick={() => editor?.chain().focus().addRowAfter().run()}
-            title="行を追加"
-          >+</button>
-          <button
-            className="fixed z-40 flex h-5 w-5 items-center justify-center rounded-full border border-gray-300 bg-white text-xs text-gray-400 shadow-sm hover:border-brand-400 hover:text-brand-500"
-            style={{ top: tableButtonInfo.centerY - 10, left: tableButtonInfo.colX + 4 }}
+            onMouseLeave={() => { tableButtonTimeoutRef.current = setTimeout(() => setTableButtonInfo(null), 600); }}
+          >
+            <button
+              className="flex h-5 w-5 items-center justify-center rounded-full border border-gray-300 bg-white text-xs text-gray-500 shadow-sm hover:border-brand-400 hover:text-brand-500"
+              onClick={() => editor?.chain().focus().addRowAfter().run()}
+              title="行を追加"
+            >+</button>
+          </div>
+          {/* 列追加ボタン（テーブル右） */}
+          <div
+            className="fixed z-40"
+            style={{ top: tableButtonInfo.centerY - 20, left: tableButtonInfo.colX, padding: '20px 12px 20px 4px' }}
             onMouseEnter={() => { if (tableButtonTimeoutRef.current) clearTimeout(tableButtonTimeoutRef.current); }}
-            onMouseLeave={() => { tableButtonTimeoutRef.current = setTimeout(() => setTableButtonInfo(null), 200); }}
-            onClick={() => editor?.chain().focus().addColumnAfter().run()}
-            title="列を追加"
-          >+</button>
+            onMouseLeave={() => { tableButtonTimeoutRef.current = setTimeout(() => setTableButtonInfo(null), 600); }}
+          >
+            <button
+              className="flex h-5 w-5 items-center justify-center rounded-full border border-gray-300 bg-white text-xs text-gray-500 shadow-sm hover:border-brand-400 hover:text-brand-500"
+              onClick={() => editor?.chain().focus().addColumnAfter().run()}
+              title="列を追加"
+            >+</button>
+          </div>
         </>
       )}
 

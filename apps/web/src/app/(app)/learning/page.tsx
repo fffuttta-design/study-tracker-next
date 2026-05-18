@@ -422,10 +422,11 @@ function ItemCard({ item, uid, showReviewAction }: {
           {item.notionPageId && (
             <Link
               href={`/notion-plus/${item.notionPageId}?hl=${encodeURIComponent(item.content.slice(0, 60))}`}
-              className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-brand-500"
-              title="ノートで開く"
+              className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs text-brand-500 hover:bg-brand-50"
+              title="ノートで開く（ハイライト表示）"
             >
-              ↗
+              <span>📖</span>
+              <span>開く</span>
             </Link>
           )}
           <button onClick={copyContent} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="コピー">⎘</button>
