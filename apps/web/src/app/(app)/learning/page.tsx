@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/stores/authStore';
 import { useLearningStore } from '@/stores/learningStore';
@@ -124,157 +124,273 @@ export default function LearningPage() {
   );
 }
 
-// ── NotionEditorModal（フルスクリーン NotionEditor）────────────────────
+// ── Step 1: ページ選択 ─────────────────────────────────────────────────
 
-function NotionEditorModal({
-  pageId,
-  onSelect,
-  onClose,
-  onSave,
-}: {
-  pageId: string;
-  onSelect: (text: string) => void;
+function PagePickerScreen({ uid, onSelect, onClose }: {
+  uid: string;
+  onSelect: (pageId: string) => void;
   onClose: () => void;
-  onSave: (title: string, content: string) => Promise<void>;
 }) {
-  const recordTriggerRef = useRef<(() => void) | null>(null);
+  const { pages, add } = useNotionPageStore();
+  const [creating, setCreating] = useState(false);
+
+  const roots = pages
+    .filter((p) => !p.parentId)
+    .sort((a, b) => {
+      if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1;
+      return a.order - b.order;
+    });
+
+  const handleCreate = async () => {
+    setCreating(true);
+    try {
+      const page = await add(uid);
+      onSelect(page.id);
+    } finally {
+      setCreating(false);
+    }
+  };
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-white">
-      <div className="flex items-center justify-between border-b border-gray-100 bg-white px-6 py-3">
-        <button
-          onClick={onClose}
-          className="flex items-center gap-1.5 rounded px-2 py-1 text-sm text-gray-500 hover:bg-gray-100"
-        >
-          <span>←</span>
-          <span>戻る</span>
-        </button>
-        <span className="text-sm font-medium text-gray-500">📝 NotionPlusで書く</span>
-        <button
-          onClick={() => recordTriggerRef.current?.()}
-          className="rounded-lg bg-brand-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-600"
-        >
-          ✓ 選択テキストを反映
-        </button>
+    <div className="fixed inset-0 z-50 flex flex-col bg-white">
+      <div className="flex items-center justify-between border-b border-gray-100 px-6 py-3">
+        <span className="text-sm font-semibold text-gray-700">📚 記録するノートを選択</span>
+        <button onClick={onClose} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">✕</button>
       </div>
-      <div className="flex-1 overflow-hidden">
-        <NotionEditor
-          key={pageId}
-          initialTitle=""
-          initialContent=""
-          onSave={onSave}
-          recordTriggerRef={recordTriggerRef}
-          onRecordText={onSelect}
-          notionPageId={pageId}
-        />
+      <div className="flex-1 overflow-y-auto p-6">
+        <button
+          onClick={handleCreate}
+          disabled={creating}
+          className="mb-5 flex w-full items-center gap-2 rounded-xl border-2 border-dashed border-brand-200 px-4 py-3 text-sm font-medium text-brand-500 hover:bg-brand-50 disabled:opacity-50"
+        >
+          <span className="text-lg">＋</span>
+          <span>{creating ? '作成中...' : '新規ページを作成'}</span>
+        </button>
+
+        {roots.length === 0 ? (
+          <p className="text-center text-sm text-gray-400">ページがありません</p>
+        ) : (
+          <div className="space-y-1">
+            {roots.map((page) => {
+              const children = pages.filter((p) => p.parentId === page.id).sort((a, b) => a.order - b.order);
+              return (
+                <div key={page.id}>
+                  <button
+                    onClick={() => onSelect(page.id)}
+                    className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left hover:bg-gray-50"
+                  >
+                    <span className="text-base leading-none">{page.icon}</span>
+                    <span className="flex-1 truncate text-sm text-gray-700">{page.title || 'Untitled'}</span>
+                    {page.isFavorite && <span className="shrink-0 text-xs text-yellow-400">★</span>}
+                    <span className="shrink-0 text-xs text-gray-300">›</span>
+                  </button>
+                  {children.length > 0 && (
+                    <div className="ml-7 border-l border-gray-200 pl-2">
+                      {children.map((child) => (
+                        <button
+                          key={child.id}
+                          onClick={() => onSelect(child.id)}
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-gray-50"
+                        >
+                          <span className="text-sm leading-none">{child.icon}</span>
+                          <span className="flex-1 truncate text-xs text-gray-600">{child.title || 'Untitled'}</span>
+                          <span className="shrink-0 text-xs text-gray-300">›</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// ── AddItemDialog（学習アイテム追加ポップアップ）────────────────────────
+// ── Step 2: ノートエディタ ─────────────────────────────────────────────
 
-function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
-  const { add: addItem } = useLearningStore();
-  const { add: addPage, update: updatePage } = useNotionPageStore();
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
+function EditorScreen({ pageId, onRecord, onBack }: {
+  pageId: string;
+  onRecord: (text: string) => void;
+  onBack: () => void;
+}) {
+  const { pages, update } = useNotionPageStore();
+  const { user } = useAuthStore();
+  const recordTriggerRef = useRef<(() => void) | null>(null);
+  const page = pages.find((p) => p.id === pageId);
+
+  const handleSave = useCallback(async (title: string, content: string) => {
+    if (!user || !page) return;
+    await update(user.uid, pageId, { title, content });
+  }, [user, page, update, pageId]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-white">
+      <div className="flex items-center justify-between border-b border-gray-100 px-6 py-3">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 rounded px-2 py-1 text-sm text-gray-500 hover:bg-gray-100"
+        >
+          <span>←</span>
+          <span>ページを選び直す</span>
+        </button>
+        <span className="flex items-center gap-1.5 text-sm font-medium text-gray-600">
+          <span>{page?.icon}</span>
+          <span className="max-w-[200px] truncate">{page?.title || 'Untitled'}</span>
+        </span>
+        <button
+          onClick={() => recordTriggerRef.current?.()}
+          className="rounded-lg bg-brand-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-600"
+        >
+          📚 学習アイテムとして記録
+        </button>
+      </div>
+      <div className="flex-1 overflow-hidden">
+        {page ? (
+          <NotionEditor
+            key={pageId}
+            initialTitle={page.title}
+            initialContent={page.content}
+            onSave={handleSave}
+            recordTriggerRef={recordTriggerRef}
+            onRecordText={onRecord}
+            notionPageId={pageId}
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Step 3: 確認ポップアップ ────────────────────────────────────────────
+
+function ConfirmDialog({ text, pageId, onConfirm, onCancel }: {
+  text: string;
+  pageId: string;
+  onConfirm: (title: string, content: string) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const { pages } = useNotionPageStore();
+  const page = pages.find((p) => p.id === pageId);
+  const firstLine = text.split('\n').find((l) => l.trim())?.trim() ?? '';
+  const [title, setTitle] = useState(page?.title || firstLine.slice(0, 80));
+  const [content, setContent] = useState(text);
   const [saving, setSaving] = useState(false);
-  const [notionEditorOpen, setNotionEditorOpen] = useState(false);
-  const [pageId, setPageId] = useState<string | null>(null);
-  const pageTitleRef = useRef('');
 
-  const handleOpenNotion = async () => {
-    let id = pageId;
-    if (!id) {
-      const page = await addPage(uid);
-      id = page.id;
-      setPageId(id);
-    }
-    setNotionEditorOpen(true);
-  };
-
-  const handleNotionSelect = (text: string) => {
-    if (text.trim()) setContent(text);
-    if (!title && pageTitleRef.current) setTitle(pageTitleRef.current.slice(0, 80));
-    setNotionEditorOpen(false);
-  };
-
-  const handlePageSave = async (pageTitle: string, pageContent: string) => {
-    if (!pageId) return;
-    pageTitleRef.current = pageTitle;
-    await updatePage(uid, pageId, { title: pageTitle, content: pageContent });
-  };
-
-  const submit = async () => {
-    if (!content.trim() && !title.trim()) return;
+  const handleSubmit = async () => {
+    if (!title.trim() && !content.trim()) return;
     setSaving(true);
     try {
-      await addItem(uid, {
-        dateKey: new Date().toISOString().slice(0, 10),
-        title: title.trim(),
-        content: content.trim(),
-        sortOrder: 0,
-        notionPageId: pageId ?? undefined,
-        notionPagePath: pageTitleRef.current || undefined,
-      });
-      onClose();
+      await onConfirm(title.trim(), content.trim());
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <>
-      {!notionEditorOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="mb-4 text-sm font-semibold text-gray-800">📚 学習アイテムを追加</h3>
-            <div className="space-y-3">
-              <input
-                placeholder="タイトル（省略可）"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                autoFocus
-                className={cls}
-              />
-              <textarea
-                placeholder="学んだ内容を入力..."
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                rows={4}
-                className={cls}
-              />
-            </div>
-            <button
-              onClick={handleOpenNotion}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50"
-            >
-              <span>📝</span>
-              <span>NotionPlusで書く</span>
-            </button>
-            <div className="mt-5 flex justify-end gap-2">
-              <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-gray-500 hover:bg-gray-100">
-                キャンセル
-              </button>
-              <button
-                onClick={submit}
-                disabled={saving || (!content.trim() && !title.trim())}
-                className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
-              >
-                {saving ? '登録中...' : '登録する'}
-              </button>
-            </div>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40">
+      <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <h3 className="mb-1 text-sm font-semibold text-gray-800">📚 学習アイテムとして登録</h3>
+        {page && (
+          <p className="mb-4 flex items-center gap-1 text-xs text-gray-400">
+            <span>📁</span>
+            <span>{page.title || 'Untitled'}</span>
+          </p>
+        )}
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">タイトル</label>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              autoFocus
+              className={cls}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">内容（選択テキスト）</label>
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              rows={5}
+              className={cls}
+            />
           </div>
         </div>
-      )}
+        <div className="mt-5 flex justify-end gap-2">
+          <button onClick={onCancel} className="rounded-lg px-4 py-2 text-sm text-gray-500 hover:bg-gray-100">
+            キャンセル
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={saving || (!title.trim() && !content.trim())}
+            className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
+          >
+            {saving ? '登録中...' : '登録する'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-      {notionEditorOpen && pageId && (
-        <NotionEditorModal
-          pageId={pageId}
-          onSelect={handleNotionSelect}
-          onClose={() => setNotionEditorOpen(false)}
-          onSave={handlePageSave}
+// ── AddItemDialog（ウィザード統括）──────────────────────────────────────
+
+function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
+  const { add: addItem } = useLearningStore();
+  const { pages } = useNotionPageStore();
+  const [step, setStep] = useState<'picker' | 'editor' | 'confirm'>('picker');
+  const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
+  const [recordedText, setRecordedText] = useState('');
+
+  const handleSelectPage = (pageId: string) => {
+    setSelectedPageId(pageId);
+    setStep('editor');
+  };
+
+  const handleRecord = (text: string) => {
+    setRecordedText(text);
+    setStep('confirm');
+  };
+
+  const handleConfirm = async (title: string, content: string) => {
+    if (!selectedPageId) return;
+    const page = pages.find((p) => p.id === selectedPageId);
+    await addItem(uid, {
+      dateKey: new Date().toISOString().slice(0, 10),
+      title,
+      content,
+      sortOrder: 0,
+      notionPageId: selectedPageId,
+      notionPagePath: page?.title || 'Untitled',
+    });
+    onClose();
+  };
+
+  return (
+    <>
+      {step === 'picker' && (
+        <PagePickerScreen uid={uid} onSelect={handleSelectPage} onClose={onClose} />
+      )}
+      {(step === 'editor' || step === 'confirm') && selectedPageId && (
+        <EditorScreen
+          pageId={selectedPageId}
+          onRecord={handleRecord}
+          onBack={() => setStep('picker')}
+        />
+      )}
+      {step === 'confirm' && selectedPageId && (
+        <ConfirmDialog
+          text={recordedText}
+          pageId={selectedPageId}
+          onConfirm={handleConfirm}
+          onCancel={() => setStep('editor')}
         />
       )}
     </>
