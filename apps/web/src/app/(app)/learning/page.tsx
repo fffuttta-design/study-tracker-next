@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/stores/authStore';
 import { useLearningStore } from '@/stores/learningStore';
@@ -60,7 +60,7 @@ export default function LearningPage() {
   const { items, loading } = useLearningStore();
   const [tab, setTab] = useState(0);
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [quickNoteOpen, setQuickNoteOpen] = useState(false);
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
   const dateKey = toDateKey(selectedDate);
 
   const todayItems = useMemo(
@@ -110,95 +110,174 @@ export default function LearningPage() {
 
       {/* タブコンテンツ */}
       <div className="flex-1 overflow-y-auto">
-        {tab === 0 && <DashboardTab todayItems={todayItems} dueItems={dueItems} uid={user?.uid ?? ''} selectedDate={selectedDate} onAdd={() => setQuickNoteOpen(true)} />}
-        {tab === 1 && <TodayTab items={todayItems} uid={user?.uid ?? ''} onAdd={() => setQuickNoteOpen(true)} />}
+        {tab === 0 && <DashboardTab todayItems={todayItems} dueItems={dueItems} uid={user?.uid ?? ''} selectedDate={selectedDate} onAdd={() => setAddDialogOpen(true)} />}
+        {tab === 1 && <TodayTab items={todayItems} uid={user?.uid ?? ''} onAdd={() => setAddDialogOpen(true)} />}
         {tab === 2 && <ReviewTab dueItems={dueItems} uid={user?.uid ?? ''} />}
         {tab === 3 && <LogTab />}
       </div>
 
-      {/* QuickNoteDialog */}
-      {quickNoteOpen && user && (
-        <QuickNoteDialog uid={user.uid} onClose={() => setQuickNoteOpen(false)} />
+      {/* AddItemDialog */}
+      {addDialogOpen && user && (
+        <AddItemDialog uid={user.uid} onClose={() => setAddDialogOpen(false)} />
       )}
     </div>
   );
 }
 
-// ── QuickNoteDialog（NotionEditor 全画面モーダル）─────────────────────
+// ── NotionEditorModal（フルスクリーン NotionEditor）────────────────────
 
-function QuickNoteDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
-  const { add: addPage, update: updatePage } = useNotionPageStore();
-  const { add: addItem } = useLearningStore();
-  const [pageId, setPageId] = useState<string | null>(null);
-  const [pageTitle, setPageTitle] = useState('');
-  const [recorded, setRecorded] = useState(false);
+function NotionEditorModal({
+  pageId,
+  onSelect,
+  onClose,
+  onSave,
+}: {
+  pageId: string;
+  onSelect: (text: string) => void;
+  onClose: () => void;
+  onSave: (title: string, content: string) => Promise<void>;
+}) {
   const recordTriggerRef = useRef<(() => void) | null>(null);
 
-  useEffect(() => {
-    addPage(uid).then((page) => setPageId(page.id));
-  }, [uid, addPage]);
+  return (
+    <div className="fixed inset-0 z-[60] flex flex-col bg-white">
+      <div className="flex items-center justify-between border-b border-gray-100 bg-white px-6 py-3">
+        <button
+          onClick={onClose}
+          className="flex items-center gap-1.5 rounded px-2 py-1 text-sm text-gray-500 hover:bg-gray-100"
+        >
+          <span>←</span>
+          <span>戻る</span>
+        </button>
+        <span className="text-sm font-medium text-gray-500">📝 NotionPlusで書く</span>
+        <button
+          onClick={() => recordTriggerRef.current?.()}
+          className="rounded-lg bg-brand-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-600"
+        >
+          ✓ 選択テキストを反映
+        </button>
+      </div>
+      <div className="flex-1 overflow-hidden">
+        <NotionEditor
+          key={pageId}
+          initialTitle=""
+          initialContent=""
+          onSave={onSave}
+          recordTriggerRef={recordTriggerRef}
+          onRecordText={onSelect}
+          notionPageId={pageId}
+        />
+      </div>
+    </div>
+  );
+}
 
-  const handleSave = async (title: string, content: string) => {
-    if (!pageId) return;
-    setPageTitle(title);
-    await updatePage(uid, pageId, { title, content });
+// ── AddItemDialog（学習アイテム追加ポップアップ）────────────────────────
+
+function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
+  const { add: addItem } = useLearningStore();
+  const { add: addPage, update: updatePage } = useNotionPageStore();
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [notionEditorOpen, setNotionEditorOpen] = useState(false);
+  const [pageId, setPageId] = useState<string | null>(null);
+  const pageTitleRef = useRef('');
+
+  const handleOpenNotion = async () => {
+    let id = pageId;
+    if (!id) {
+      const page = await addPage(uid);
+      id = page.id;
+      setPageId(id);
+    }
+    setNotionEditorOpen(true);
   };
 
-  const handleRecordText = async (text: string) => {
-    if (!text.trim()) return;
-    const firstLine = text.split('\n').find((l) => l.trim())?.trim() ?? '';
-    await addItem(uid, {
-      dateKey: new Date().toISOString().slice(0, 10),
-      title: firstLine.slice(0, 80),
-      content: text,
-      sortOrder: 0,
-      notionPageId: pageId ?? undefined,
-      notionPagePath: pageTitle || 'Untitled',
-    });
-    setRecorded(true);
-    setTimeout(() => setRecorded(false), 2500);
+  const handleNotionSelect = (text: string) => {
+    if (text.trim()) setContent(text);
+    if (!title && pageTitleRef.current) setTitle(pageTitleRef.current.slice(0, 80));
+    setNotionEditorOpen(false);
+  };
+
+  const handlePageSave = async (pageTitle: string, pageContent: string) => {
+    if (!pageId) return;
+    pageTitleRef.current = pageTitle;
+    await updatePage(uid, pageId, { title: pageTitle, content: pageContent });
+  };
+
+  const submit = async () => {
+    if (!content.trim() && !title.trim()) return;
+    setSaving(true);
+    try {
+      await addItem(uid, {
+        dateKey: new Date().toISOString().slice(0, 10),
+        title: title.trim(),
+        content: content.trim(),
+        sortOrder: 0,
+        notionPageId: pageId ?? undefined,
+        notionPagePath: pageTitleRef.current || undefined,
+      });
+      onClose();
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-white">
-      {/* ヘッダー */}
-      <div className="flex items-center justify-between border-b border-gray-100 bg-white px-6 py-3">
-        <span className="text-sm font-medium text-gray-500">📝 新規ノート</span>
-        <div className="flex items-center gap-3">
-          {recorded && (
-            <span className="rounded-full bg-green-50 px-3 py-0.5 text-xs font-medium text-green-600">
-              ✓ 記録しました
-            </span>
-          )}
-          <button
-            onClick={() => recordTriggerRef.current?.()}
-            className="rounded-lg bg-brand-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-600"
-          >
-            📚 テキストを選択して記録
-          </button>
-          <button onClick={onClose} className="rounded p-1 text-xl text-gray-400 hover:bg-gray-100 hover:text-gray-600">✕</button>
-        </div>
-      </div>
-
-      {/* エディタ */}
-      <div className="flex-1 overflow-hidden">
-        {pageId ? (
-          <NotionEditor
-            key={pageId}
-            initialTitle=""
-            initialContent=""
-            onSave={handleSave}
-            recordTriggerRef={recordTriggerRef}
-            onRecordText={handleRecordText}
-            notionPageId={pageId}
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+    <>
+      {!notionEditorOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-4 text-sm font-semibold text-gray-800">📚 学習アイテムを追加</h3>
+            <div className="space-y-3">
+              <input
+                placeholder="タイトル（省略可）"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                autoFocus
+                className={cls}
+              />
+              <textarea
+                placeholder="学んだ内容を入力..."
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                rows={4}
+                className={cls}
+              />
+            </div>
+            <button
+              onClick={handleOpenNotion}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50"
+            >
+              <span>📝</span>
+              <span>NotionPlusで書く</span>
+            </button>
+            <div className="mt-5 flex justify-end gap-2">
+              <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-gray-500 hover:bg-gray-100">
+                キャンセル
+              </button>
+              <button
+                onClick={submit}
+                disabled={saving || (!content.trim() && !title.trim())}
+                className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
+              >
+                {saving ? '登録中...' : '登録する'}
+              </button>
+            </div>
           </div>
-        )}
-      </div>
-    </div>
+        </div>
+      )}
+
+      {notionEditorOpen && pageId && (
+        <NotionEditorModal
+          pageId={pageId}
+          onSelect={handleNotionSelect}
+          onClose={() => setNotionEditorOpen(false)}
+          onSave={handlePageSave}
+        />
+      )}
+    </>
   );
 }
 
@@ -446,23 +525,23 @@ function ItemCard({ item, uid, showReviewAction }: {
         )}
 
         <div className="min-w-0 flex-1 cursor-pointer" onClick={() => setExpanded((v) => !v)}>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {reviewBadge}
-            <span className="font-medium text-gray-800 text-sm">
-              {item.title || item.content.split('\n')[0].slice(0, 60)}
-            </span>
-          </div>
           {item.notionPageId && (
             <Link
               href={`/notion-plus/${item.notionPageId}?hl=${encodeURIComponent(item.content.slice(0, 60))}`}
               onClick={(e) => e.stopPropagation()}
-              className="mt-1.5 flex w-fit items-center gap-1 rounded-md bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-600 hover:bg-brand-100"
+              className="mb-1.5 flex w-fit items-center gap-1 rounded-md bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-600 hover:bg-brand-100"
               title="ノートで開く（ハイライト表示）"
             >
               <span>📖</span>
               <span>ノートを開く</span>
             </Link>
           )}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {reviewBadge}
+            <span className="font-medium text-gray-800 text-sm">
+              {item.title || item.content.split('\n')[0].slice(0, 60)}
+            </span>
+          </div>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-400">
             {item.notionPagePath && (
               <span className="flex items-center gap-0.5">
