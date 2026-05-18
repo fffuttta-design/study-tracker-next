@@ -267,7 +267,8 @@ function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex bg-white">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
+      <div className="flex h-full w-full overflow-hidden rounded-2xl shadow-2xl bg-white">
         {/* 左パネル: ページリスト */}
         <div className="flex w-60 flex-col border-r border-gray-100 bg-gray-50">
           <div className="flex items-center justify-between border-b border-gray-100 px-3 py-3">
@@ -389,6 +390,7 @@ function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
             )}
           </div>
         </div>
+      </div>
       </div>
 
       {confirming && selectedPageId && (
