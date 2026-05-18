@@ -8,6 +8,7 @@ import { useNotionPageStore, type PageHistorySnapshot } from '@/stores/notionPag
 import { useSettingsStore } from '@/stores/settingsStore';
 import { type NotionPage } from '@study-tracker/core';
 import { NotionEditor } from '@/components/editor/NotionEditor';
+import { DatabaseView } from '@/components/database/DatabaseView';
 
 function buildBreadcrumbs(pages: NotionPage[], currentId: string): NotionPage[] {
   const map = new Map(pages.map((p) => [p.id, p]));
@@ -162,6 +163,14 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
       if (!user || !page) return;
       await update(user.uid, page.id, { title, content });
       setEditorKey((k) => k + 1);
+    },
+    [user, page, update]
+  );
+
+  const handleSaveDbSchema = useCallback(
+    async (content: string) => {
+      if (!user || !page) return;
+      await update(user.uid, page.id, { content });
     },
     [user, page, update]
   );
@@ -386,17 +395,25 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
         </div>
       )}
 
-      <NotionEditor
-        key={`${page.id}-${editorKey}`}
-        initialTitle={page.title}
-        initialContent={page.content}
-        onSave={handleSave}
-        onCreateSubPage={handleCreateSubPage}
-        recordTriggerRef={recordTriggerRef}
-        notionPageId={page.id}
-        notionPagePath={breadcrumbs.map((p) => p.title || 'Untitled').join(' / ')}
-        highlightText={highlightText}
-      />
+      {page.type === 'database' ? (
+        <DatabaseView
+          page={page}
+          uid={user!.uid}
+          onSaveSchema={handleSaveDbSchema}
+        />
+      ) : (
+        <NotionEditor
+          key={`${page.id}-${editorKey}`}
+          initialTitle={page.title}
+          initialContent={page.content}
+          onSave={handleSave}
+          onCreateSubPage={handleCreateSubPage}
+          recordTriggerRef={recordTriggerRef}
+          notionPageId={page.id}
+          notionPagePath={breadcrumbs.map((p) => p.title || 'Untitled').join(' / ')}
+          highlightText={highlightText}
+        />
+      )}
 
       {historyOpen && user && (
         <HistoryModal

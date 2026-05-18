@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
+import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { type User } from 'firebase/auth';
 import { type NotionPage } from '@study-tracker/core';
@@ -62,7 +63,7 @@ function PageTreeEntry({
             : 'text-gray-600 hover:bg-white hover:text-gray-900'
         }`}
       >
-        <PageIcon icon={page.icon} />
+        <PageIcon icon={page.type === 'database' && page.icon === '📄' ? '📊' : page.icon} />
         <span className="min-w-0 flex-1 truncate">{page.title || 'Untitled'}</span>
         {page.isFavorite && <span className="shrink-0 text-[10px] text-yellow-400">★</span>}
       </Link>
@@ -96,6 +97,8 @@ function NotionPageSidebar({ user }: { user: User }) {
   const { pages, add, loading } = useNotionPageStore();
 
   const currentId = pathname.match(/\/notion-plus\/([^/?#]+)/)?.[1];
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const addMenuRef = useRef<HTMLDivElement>(null);
 
   const roots = pages
     .filter((p) => !p.parentId)
@@ -104,8 +107,26 @@ function NotionPageSidebar({ user }: { user: User }) {
       return a.order - b.order;
     });
 
+  useEffect(() => {
+    if (!addMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
+        setAddMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [addMenuOpen]);
+
   const addPage = async () => {
+    setAddMenuOpen(false);
     const page = await add(user.uid);
+    router.push(`/notion-plus/${page.id}`);
+  };
+
+  const addDatabase = async () => {
+    setAddMenuOpen(false);
+    const page = await add(user.uid, { type: 'database' });
     router.push(`/notion-plus/${page.id}`);
   };
 
@@ -117,13 +138,33 @@ function NotionPageSidebar({ user }: { user: User }) {
           <span className="text-base">📝</span>
           <span className="text-sm font-semibold text-gray-800">NotionPlus</span>
         </Link>
-        <button
-          onClick={addPage}
-          title="新規ページ"
-          className="rounded p-1 text-lg leading-none text-gray-400 hover:bg-gray-200 hover:text-brand-500"
-        >
-          +
-        </button>
+        <div ref={addMenuRef} className="relative">
+          <button
+            onClick={() => setAddMenuOpen((v) => !v)}
+            title="新規作成"
+            className="rounded p-1 text-lg leading-none text-gray-400 hover:bg-gray-200 hover:text-brand-500"
+          >
+            +
+          </button>
+          {addMenuOpen && (
+            <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
+              <button
+                onClick={addPage}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+              >
+                <span>📄</span>
+                <span>ページを作成</span>
+              </button>
+              <button
+                onClick={addDatabase}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+              >
+                <span>📊</span>
+                <span>データベースを作成</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ページリスト */}

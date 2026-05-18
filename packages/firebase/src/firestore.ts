@@ -76,6 +76,19 @@ export async function fetchWhere<T>(
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as T);
 }
 
+export function subscribeWhere<T>(
+  uid: string,
+  colName: string,
+  field: string,
+  value: unknown,
+  onData: (items: T[]) => void
+): () => void {
+  const q = query(subCol(uid, colName), where(field, '==', value));
+  return onSnapshot(q, (snap) => {
+    onData(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as T));
+  });
+}
+
 // 500件チャンク分割バッチ（旧Flutter版と同じ制約）
 export async function batchUpsert(
   uid: string,

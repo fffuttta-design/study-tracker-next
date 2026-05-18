@@ -15,7 +15,7 @@ interface NotionPageState {
   pages: NotionPage[];
   loading: boolean;
   subscribe: (uid: string) => () => void;
-  add: (uid: string, params?: { parentId?: string; order?: number }) => Promise<NotionPage>;
+  add: (uid: string, params?: { parentId?: string; order?: number; type?: 'page' | 'database' }) => Promise<NotionPage>;
   update: (uid: string, id: string, data: Partial<NotionPage>) => Promise<void>;
   remove: (uid: string, id: string) => Promise<void>;
   saveHistory: (uid: string, pageId: string, title: string, content: string) => Promise<void>;
@@ -33,7 +33,7 @@ export const useNotionPageStore = create<NotionPageState>((set) => ({
   },
 
   add: async (uid, params) => {
-    const page = createNotionPage(params);
+    const page = createNotionPage(params as Parameters<typeof createNotionPage>[0]);
     await upsertDoc(uid, 'notionPages', page.id, page as unknown as Record<string, unknown>);
     return page;
   },
