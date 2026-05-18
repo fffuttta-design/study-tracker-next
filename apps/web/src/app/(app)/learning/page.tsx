@@ -35,9 +35,9 @@ const DAILY_QUOTES = [
   '今この瞬間の集中が、未来の自分への贈り物になる。',
 ];
 
-function toHHMM(isoDate: string): string {
+function toHHGroup(isoDate: string): string {
   const d = new Date(isoDate);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return `${String(d.getHours()).padStart(2, '0')}:00～`;
 }
 
 const STAGE_LABELS = ['翌日', '3日後', '7日後', '2週間後', '1ヶ月後'];
@@ -484,7 +484,7 @@ function DashboardTab({ todayItems, dueItems, uid, selectedDate, onAdd }: {
   const todayGrouped = hasTimeInfo
     ? Object.entries(
         todayItems.reduce<Record<string, LearningItem[]>>((acc, item) => {
-          const key = item.createdAt ? toHHMM(item.createdAt) : '--:--';
+          const key = item.createdAt ? toHHGroup(item.createdAt) : '--:--';
           (acc[key] ??= []).push(item);
           return acc;
         }, {})
@@ -507,7 +507,7 @@ function DashboardTab({ todayItems, dueItems, uid, selectedDate, onAdd }: {
     <div className="grid grid-cols-1 gap-0 lg:grid-cols-2 lg:divide-x lg:divide-gray-300">
       {/* 今日の登録 */}
       <div className="flex flex-col">
-        <div className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4">
+        <div className="flex h-16 items-center justify-between border-b border-gray-200 bg-white px-6">
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-gray-800">今日の登録</span>
             <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500">{todayItems.length}</span>
@@ -536,7 +536,7 @@ function DashboardTab({ todayItems, dueItems, uid, selectedDate, onAdd }: {
 
       {/* 今日の復習 */}
       <div className="flex flex-col">
-        <div className="flex items-center gap-2 border-b border-gray-200 bg-white px-6 py-4 lg:border-t-0 border-t border-gray-300">
+        <div className="flex h-16 items-center gap-2 border-b border-gray-200 bg-white px-6 lg:border-t-0 border-t border-gray-300">
           <span className="text-sm font-semibold text-gray-800">今日の復習</span>
           {dueItems.length > 0
             ? <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-semibold text-white">{dueItems.length}</span>
