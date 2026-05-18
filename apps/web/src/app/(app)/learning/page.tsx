@@ -220,6 +220,7 @@ function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
   const [confirming, setConfirming] = useState(false);
   const [creating, setCreating] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [pageHistory, setPageHistory] = useState<string[]>([]);
   const recordTriggerRef = useRef<(() => void) | null>(null);
 
   const roots = useMemo(() =>
@@ -234,6 +235,19 @@ function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
 
   // ① デフォルトは一番上の親ページを開いた状態
   const [selectedPageId, setSelectedPageId] = useState<string | null>(() => roots[0]?.id ?? null);
+
+  const navigateTo = (id: string) => {
+    if (selectedPageId) setPageHistory((h) => [...h, selectedPageId]);
+    setSelectedPageId(id);
+  };
+
+  const handleBack = () => {
+    setPageHistory((h) => {
+      const prev = h[h.length - 1];
+      if (prev !== undefined) setSelectedPageId(prev);
+      return h.slice(0, -1);
+    });
+  };
 
   const selectedPage = selectedPageId ? pages.find((p) => p.id === selectedPageId) ?? null : null;
 
@@ -384,7 +398,17 @@ function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
         {/* 右パネル: エディタ */}
         <div className="flex flex-1 flex-col">
           <div className="flex items-center justify-between border-b border-amber-100 bg-amber-50 px-6 py-2.5">
-            <span className="text-sm text-amber-700">テキストを選択して 🔥 ボタンで登録</span>
+            <div className="flex items-center gap-3">
+              {pageHistory.length > 0 && (
+                <button
+                  onClick={handleBack}
+                  className="flex items-center gap-1 rounded px-2 py-1 text-xs text-amber-700 hover:bg-amber-100"
+                >
+                  ← 戻る
+                </button>
+              )}
+              <span className="text-sm text-amber-700">テキストを選択して 🔥 ボタンで登録</span>
+            </div>
             <button
               onClick={() => recordTriggerRef.current?.()}
               disabled={!selectedPageId}
@@ -393,7 +417,7 @@ function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
               📚 学習アイテムとして記録
             </button>
           </div>
-          <div className="flex-1 overflow-hidden">
+          <div className="flex min-h-0 flex-1 flex-col">
             {selectedPage ? (
               <NotionEditor
                 key={selectedPageId ?? ''}
@@ -405,7 +429,7 @@ function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
                 notionPageId={selectedPageId ?? ''}
                 onPageNavigate={(href) => {
                   const id = href.match(/\/notion-plus\/([^/?#]+)/)?.[1];
-                  if (id) setSelectedPageId(id);
+                  if (id) navigateTo(id);
                 }}
               />
             ) : (

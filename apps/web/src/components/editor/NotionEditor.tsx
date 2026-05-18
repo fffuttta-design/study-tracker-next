@@ -907,44 +907,19 @@ export function NotionEditor({
 
   useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
 
-  // ハイライトテキストが指定された場合、エディタ内で検索してハイライト
+  // ハイライトテキストが指定された場合、ブラウザのネイティブ検索でスクロール＆選択
   useEffect(() => {
-    if (!editor || !highlightText) return;
-    // \n はブロック間の区切りなので空白に置換し、前後の空白も除去して検索
+    if (!highlightText) return;
     const search = highlightText.replace(/\n/g, ' ').trim().slice(0, 60);
-
+    if (!search) return;
     const timer = setTimeout(() => {
-      const texts: { text: string; pos: number }[] = [];
-      editor.state.doc.descendants((node, pos) => {
-        if (node.isText && node.text) texts.push({ text: node.text, pos });
-        return true;
-      });
-      const joined = texts.map((t) => t.text).join('');
-      const idx = joined.indexOf(search);
-      if (idx === -1) return;
-
-      let offset = 0;
-      let from = -1;
-      let to = -1;
-      for (const { text, pos } of texts) {
-        const end = offset + text.length;
-        if (from === -1 && idx < end) from = pos + (idx - offset);
-        if (from !== -1 && to === -1 && idx + search.length <= end) {
-          to = pos + (idx + search.length - offset);
-        }
-        offset = end;
-        if (from !== -1 && to !== -1) break;
-      }
-      if (from === -1 || to === -1) return;
-
-      editor.chain().focus().setTextSelection({ from, to }).setHighlight({ color: '#FDE68A' }).scrollIntoView().run();
-
-      const clearHighlight = () => editor.chain().focus().unsetHighlight().run();
-      setTimeout(() => document.addEventListener('click', clearHighlight, { once: true }), 100);
-    }, 600);
-
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any).find?.(search, false, false, true, false, false, false);
+      } catch { /* not supported */ }
+    }, 800);
     return () => clearTimeout(timer);
-  }, [editor, highlightText]);
+  }, [highlightText]);
 
   // テーブルホバーで + ボタン表示
   useEffect(() => {
