@@ -20,6 +20,7 @@ import TextStyle from '@tiptap/extension-text-style';
 import Color from '@tiptap/extension-color';
 import Underline from '@tiptap/extension-underline';
 import Youtube from '@tiptap/extension-youtube';
+import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useLearningStore } from '@/stores/learningStore';
@@ -41,6 +42,10 @@ function getYoutubeEmbedUrl(src: string): string {
   return src;
 }
 
+function isImageSrc(s: string) {
+  return s.startsWith('http://') || s.startsWith('https://') || s.startsWith('data:');
+}
+
 // ── PageLink ノード ──────────────────────────────────────────────────
 
 function PageLinkView({ node }: NodeViewProps) {
@@ -51,7 +56,6 @@ function PageLinkView({ node }: NodeViewProps) {
   const livePage = pageId ? pages.find((p) => p.id === pageId) : null;
   const title = livePage?.title || storedTitle || 'Untitled';
   const icon = livePage?.icon || storedIcon || '📄';
-  const isUrl = icon.startsWith('http://') || icon.startsWith('https://');
   return (
     <NodeViewWrapper>
       <div
@@ -62,7 +66,7 @@ function PageLinkView({ node }: NodeViewProps) {
         className="flex w-fit cursor-pointer items-center gap-1 py-0.5 hover:opacity-70"
         contentEditable={false}
       >
-        {isUrl ? (
+        {isImageSrc(icon) ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={icon} alt="" className="h-[1.1em] w-[1.1em] flex-shrink-0 rounded object-cover" />
         ) : (
@@ -133,7 +137,7 @@ const UrlMentionNode = Node.create({
   addNodeView() { return ReactNodeViewRenderer(UrlMentionView); },
 });
 
-// ── コールアウト（絵文字なし・背景色のみ）──────────────────────────
+// ── コールアウト ──────────────────────────────────────────────────────
 
 const CALLOUT_BG_COLORS = [
   { label: '黄', value: '#FEF9CD' },
@@ -147,7 +151,6 @@ const CALLOUT_BG_COLORS = [
 function CalloutView({ node, updateAttributes }: NodeViewProps) {
   const { background } = node.attrs as { background: string };
   const [colorOpen, setColorOpen] = useState(false);
-
   return (
     <NodeViewWrapper>
       <div className="relative my-2 rounded-lg px-4 py-3" style={{ background }} data-type="callout">
@@ -161,9 +164,7 @@ function CalloutView({ node, updateAttributes }: NodeViewProps) {
           {colorOpen && (
             <div className="absolute right-0 top-5 z-50 flex gap-1 rounded-lg border border-gray-200 bg-white p-2 shadow-xl">
               {CALLOUT_BG_COLORS.map((c) => (
-                <button
-                  key={c.value}
-                  title={c.label}
+                <button key={c.value} title={c.label}
                   onClick={() => { updateAttributes({ background: c.value }); setColorOpen(false); }}
                   className="h-5 w-5 rounded hover:ring-2 hover:ring-brand-400"
                   style={{ background: c.value, border: background === c.value ? '2px solid #7c3aed' : '1px solid #e5e7eb' }}
@@ -183,9 +184,7 @@ const CalloutNode = Node.create({
   group: 'block',
   content: 'block+',
   defining: true,
-  addAttributes() {
-    return { background: { default: '#FEF9CD' } };
-  },
+  addAttributes() { return { background: { default: '#FEF9CD' } }; },
   parseHTML() { return [{ tag: 'div[data-type="callout"]' }]; },
   renderHTML({ HTMLAttributes }) { return ['div', { ...HTMLAttributes, 'data-type': 'callout' }, 0]; },
   addNodeView() { return ReactNodeViewRenderer(CalloutView); },
@@ -206,10 +205,7 @@ function ResizableImageView({ node, selected, updateAttributes }: NodeViewProps)
     const onMove = (ev: MouseEvent) => {
       updateAttributes({ width: Math.max(80, Math.round(startW.current + (ev.clientX - startX.current))) });
     };
-    const onUp = () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
+    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
   };
@@ -250,21 +246,14 @@ function ResizableYoutubeView({ node, selected, updateAttributes }: NodeViewProp
     e.preventDefault();
     startX.current = e.clientX;
     startW.current = containerRef.current?.offsetWidth ?? width;
-
-    // iframe 上でマウスイベントを取れるように透明オーバーレイを追加
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;cursor:se-resize;';
     document.body.appendChild(overlay);
-
     const onMove = (ev: MouseEvent) => {
       const newW = Math.max(280, Math.round(startW.current + (ev.clientX - startX.current)));
       updateAttributes({ width: newW, height: Math.round(newW * 9 / 16) });
     };
-    const onUp = () => {
-      overlay.remove();
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
+    const onUp = () => { overlay.remove(); window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
   };
@@ -272,18 +261,11 @@ function ResizableYoutubeView({ node, selected, updateAttributes }: NodeViewProp
   return (
     <NodeViewWrapper>
       <div ref={containerRef} className="relative my-2" style={{ width: `${width}px`, maxWidth: '100%' }} contentEditable={false}>
-        <iframe
-          src={embedUrl}
-          style={{ width: '100%', height: `${height}px` }}
+        <iframe src={embedUrl} style={{ width: '100%', height: `${height}px` }}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-          className={`block rounded-lg ${selected ? 'ring-2 ring-brand-400' : ''}`}
-        />
+          allowFullScreen className={`block rounded-lg ${selected ? 'ring-2 ring-brand-400' : ''}`} />
         {selected && (
-          <div
-            className="absolute bottom-1 right-1 h-4 w-4 cursor-se-resize rounded-sm bg-brand-500 opacity-80 hover:opacity-100"
-            onMouseDown={onResizeStart}
-          />
+          <div className="absolute bottom-1 right-1 h-4 w-4 cursor-se-resize rounded-sm bg-brand-500 opacity-80 hover:opacity-100" onMouseDown={onResizeStart} />
         )}
       </div>
     </NodeViewWrapper>
@@ -292,6 +274,158 @@ function ResizableYoutubeView({ node, selected, updateAttributes }: NodeViewProp
 
 const ResizableYoutube = Youtube.extend({
   addNodeView() { return ReactNodeViewRenderer(ResizableYoutubeView); },
+});
+
+// ── トグル見出し ──────────────────────────────────────────────────────
+
+function ToggleHeadingView({ node, updateAttributes }: NodeViewProps) {
+  const { isOpen } = node.attrs as { isOpen: boolean };
+  const [open, setOpen] = useState(isOpen);
+
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    updateAttributes({ isOpen: next });
+  };
+
+  return (
+    <NodeViewWrapper>
+      <div className="relative pl-5 my-1">
+        <button
+          contentEditable={false}
+          onClick={toggle}
+          className="absolute left-0 top-[3px] text-[10px] text-gray-400 hover:text-gray-600 select-none leading-none"
+          style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}
+        >
+          ▶
+        </button>
+        <NodeViewContent className={open ? 'tg-open' : 'tg-closed'} />
+      </div>
+    </NodeViewWrapper>
+  );
+}
+
+const ToggleHeadingNode = Node.create({
+  name: 'toggleHeading',
+  group: 'block',
+  content: 'block+',
+  defining: true,
+  addAttributes() {
+    return {
+      level: { default: 1 },
+      isOpen: { default: true },
+    };
+  },
+  parseHTML() { return [{ tag: 'div[data-type="toggle-heading"]' }]; },
+  renderHTML({ HTMLAttributes }) { return ['div', { ...HTMLAttributes, 'data-type': 'toggle-heading' }, 0]; },
+  addNodeView() { return ReactNodeViewRenderer(ToggleHeadingView); },
+});
+
+// ── 目次 ─────────────────────────────────────────────────────────────
+
+function TocView({ editor }: NodeViewProps) {
+  const [headings, setHeadings] = useState<{ level: number; text: string }[]>([]);
+
+  useEffect(() => {
+    if (!editor) return;
+    const update = () => {
+      const items: { level: number; text: string }[] = [];
+      editor.state.doc.descendants((node) => {
+        if (node.type.name === 'heading') {
+          items.push({ level: node.attrs.level as number, text: node.textContent });
+        }
+      });
+      setHeadings(items);
+    };
+    update();
+    editor.on('update', update);
+    return () => { editor.off('update', update); };
+  }, [editor]);
+
+  const scrollTo = (text: string, level: number) => {
+    if (!editor) return;
+    let targetPos = -1;
+    editor.state.doc.descendants((node, pos) => {
+      if (targetPos !== -1) return false;
+      if (node.type.name === 'heading' && node.attrs.level === level && node.textContent === text) {
+        targetPos = pos;
+      }
+    });
+    if (targetPos === -1) return;
+    editor.commands.setTextSelection(targetPos + 1);
+    const domNode = editor.view.domAtPos(targetPos + 1).node as HTMLElement;
+    domNode?.closest?.('h1,h2,h3,h4,p')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  return (
+    <NodeViewWrapper contentEditable={false}>
+      <div className="toc-block" contentEditable={false}>
+        <p className="toc-block-title">目次</p>
+        {headings.length === 0 ? (
+          <p className="text-xs text-gray-400">見出しがありません</p>
+        ) : (
+          headings.map((h, i) => (
+            <button key={i} onClick={() => scrollTo(h.text, h.level)}
+              className={`toc-item toc-item-h${h.level} block w-full text-left`}>
+              {h.text || '(見出しなし)'}
+            </button>
+          ))
+        )}
+      </div>
+    </NodeViewWrapper>
+  );
+}
+
+const TocNode = Node.create({
+  name: 'toc',
+  group: 'block',
+  atom: true,
+  parseHTML() { return [{ tag: 'div[data-type="toc"]' }]; },
+  renderHTML({ HTMLAttributes }) { return ['div', { ...HTMLAttributes, 'data-type': 'toc' }]; },
+  addNodeView() { return ReactNodeViewRenderer(TocView); },
+});
+
+// ── テーブル拡張（セル背景色対応）───────────────────────────────────
+
+const TABLE_CELL_COLORS = [
+  { label: 'なし', value: '' },
+  { label: 'グレー', value: '#F1F1EF' },
+  { label: '黄', value: '#FEF9CD' },
+  { label: '緑', value: '#D8F3DC' },
+  { label: '青', value: '#D8EEF9' },
+  { label: '赤', value: '#FEE2E2' },
+  { label: '紫', value: '#EDE9FE' },
+  { label: 'ピンク', value: '#FCE7F3' },
+];
+
+const CustomTableCell = TableCell.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      backgroundColor: {
+        default: null,
+        parseHTML: (el) => el.getAttribute('data-bg') || null,
+        renderHTML: (attrs) => attrs.backgroundColor
+          ? { 'data-bg': attrs.backgroundColor, style: `background-color: ${attrs.backgroundColor}` }
+          : {},
+      },
+    };
+  },
+});
+
+const CustomTableHeader = TableHeader.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      backgroundColor: {
+        default: null,
+        parseHTML: (el) => el.getAttribute('data-bg') || null,
+        renderHTML: (attrs) => attrs.backgroundColor
+          ? { 'data-bg': attrs.backgroundColor, style: `background-color: ${attrs.backgroundColor}` }
+          : {},
+      },
+    };
+  },
 });
 
 // ── スラッシュコマンド ──────────────────────────────────────────────
@@ -304,17 +438,21 @@ interface SlashCommand {
 }
 
 const SLASH_COMMANDS: SlashCommand[] = [
-  { label: 'テキスト',       description: '通常のテキスト',     icon: '¶',   action: (e) => e?.chain().focus().setParagraph().run() },
-  { label: '見出し 1',       description: '大見出し',           icon: 'H1',  action: (e) => e?.chain().focus().toggleHeading({ level: 1 }).run() },
-  { label: '見出し 2',       description: '中見出し',           icon: 'H2',  action: (e) => e?.chain().focus().toggleHeading({ level: 2 }).run() },
-  { label: '見出し 3',       description: '小見出し',           icon: 'H3',  action: (e) => e?.chain().focus().toggleHeading({ level: 3 }).run() },
-  { label: '箇条書き',       description: '・リスト',           icon: '•',   action: (e) => e?.chain().focus().toggleBulletList().run() },
-  { label: '番号付きリスト', description: '1. 2. 3. ...',      icon: '1.',  action: (e) => e?.chain().focus().toggleOrderedList().run() },
-  { label: 'チェックリスト', description: 'Todoリスト',         icon: '☑',  action: (e) => e?.chain().focus().toggleTaskList().run() },
-  { label: 'コールアウト',   description: '目立つ注釈ブロック', icon: '💡',  action: (e) => e?.chain().focus().insertContent({ type: 'callout', attrs: { background: '#FEF9CD' }, content: [{ type: 'paragraph' }] }).run() },
-  { label: '引用',           description: 'ブロック引用',       icon: '❝',  action: (e) => e?.chain().focus().toggleBlockquote().run() },
-  { label: 'コード',         description: 'コードブロック',     icon: '</>', action: (e) => e?.chain().focus().toggleCodeBlock().run() },
-  { label: '区切り線',       description: '水平線',             icon: '—',  action: (e) => e?.chain().focus().setHorizontalRule().run() },
+  { label: 'テキスト',           description: '通常のテキスト',       icon: '¶',   action: (e) => e?.chain().focus().setParagraph().run() },
+  { label: '見出し 1',           description: '大見出し',             icon: 'H1',  action: (e) => e?.chain().focus().toggleHeading({ level: 1 }).run() },
+  { label: '見出し 2',           description: '中見出し',             icon: 'H2',  action: (e) => e?.chain().focus().toggleHeading({ level: 2 }).run() },
+  { label: '見出し 3',           description: '小見出し',             icon: 'H3',  action: (e) => e?.chain().focus().toggleHeading({ level: 3 }).run() },
+  { label: '見出し 4',           description: '小小見出し',           icon: 'H4',  action: (e) => e?.chain().focus().toggleHeading({ level: 4 }).run() },
+  { label: 'トグル見出し',       description: '折りたたみ可能な見出し', icon: '▶',  action: (e) => e?.chain().focus().insertContent({ type: 'toggleHeading', attrs: { level: 1, isOpen: true }, content: [{ type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: '' }] }, { type: 'paragraph' }] }).run() },
+  { label: '箇条書き',           description: '・リスト',             icon: '•',   action: (e) => e?.chain().focus().toggleBulletList().run() },
+  { label: '番号付きリスト',     description: '1. 2. 3. ...',        icon: '1.',  action: (e) => e?.chain().focus().toggleOrderedList().run() },
+  { label: 'チェックリスト',     description: 'Todoリスト',           icon: '☑',  action: (e) => e?.chain().focus().toggleTaskList().run() },
+  { label: 'テーブル',           description: '表を挿入',             icon: '⊞',   action: (e) => e?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
+  { label: '目次',               description: '見出しから目次を生成', icon: '≡',   action: (e) => e?.chain().focus().insertContent({ type: 'toc' }).run() },
+  { label: 'コールアウト',       description: '目立つ注釈ブロック',   icon: '💡',  action: (e) => e?.chain().focus().insertContent({ type: 'callout', attrs: { background: '#FEF9CD' }, content: [{ type: 'paragraph' }] }).run() },
+  { label: '引用',               description: 'ブロック引用',         icon: '❝',  action: (e) => e?.chain().focus().toggleBlockquote().run() },
+  { label: 'コード',             description: 'コードブロック',       icon: '</>', action: (e) => e?.chain().focus().toggleCodeBlock().run() },
+  { label: '区切り線',           description: '水平線',               icon: '—',  action: (e) => e?.chain().focus().setHorizontalRule().run() },
 ];
 
 // ── カラーパレット ────────────────────────────────────────────────────
@@ -346,12 +484,7 @@ const BG_COLORS = [
 
 // ── 学習記録ダイアログ ────────────────────────────────────────────────
 
-function RecordDialog({
-  initialContent,
-  notionPageId,
-  notionPagePath,
-  onClose,
-}: {
+function RecordDialog({ initialContent, notionPageId, notionPagePath, onClose }: {
   initialContent: string;
   notionPageId?: string;
   notionPagePath?: string;
@@ -363,7 +496,6 @@ function RecordDialog({
   const [title, setTitle] = useState(firstLine.slice(0, 80));
   const [content, setContent] = useState(initialContent);
   const [saving, setSaving] = useState(false);
-
   const dateKey = new Date().toISOString().slice(0, 10);
   const inputCls = 'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-500';
 
@@ -372,29 +504,16 @@ function RecordDialog({
     if (!user) return;
     setSaving(true);
     try {
-      await add(user.uid, {
-        dateKey,
-        title: title.trim(),
-        content: content.trim(),
-        sortOrder: 0,
-        notionPageId,
-        notionPagePath,
-      });
+      await add(user.uid, { dateKey, title: title.trim(), content: content.trim(), sortOrder: 0, notionPageId, notionPagePath });
       onClose();
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
       <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <h3 className="mb-1 text-sm font-semibold text-gray-800">📚 学習リストに記録</h3>
-        {notionPagePath && (
-          <p className="mb-3 flex items-center gap-1 text-xs text-gray-400">
-            <span>📁</span><span>{notionPagePath}</span>
-          </p>
-        )}
+        {notionPagePath && <p className="mb-3 flex items-center gap-1 text-xs text-gray-400"><span>📁</span><span>{notionPagePath}</span></p>}
         <div className="space-y-3">
           <input placeholder="タイトル" value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} />
           <textarea placeholder="内容" value={content} onChange={(e) => setContent(e.target.value)} rows={5} className={inputCls} />
@@ -417,13 +536,9 @@ interface NotionEditorProps {
   initialContent: string;
   onSave: (title: string, content: string) => Promise<void>;
   onCreateSubPage?: () => Promise<{ id: string; title: string }>;
-  /** 外部から記録アクションをトリガーするための ref */
   recordTriggerRef?: React.MutableRefObject<(() => void) | null>;
-  /** 記録ダイアログの代わりにテキストを受け取るコールバック（QuickNoteDialog 用） */
   onRecordText?: (text: string) => void;
-  /** 現在のページ ID（記録時に紐付け） */
   notionPageId?: string;
-  /** 現在のページ階層パス（記録ダイアログに表示） */
   notionPagePath?: string;
 }
 
@@ -434,14 +549,8 @@ interface PastePopup {
 }
 
 export function NotionEditor({
-  initialTitle,
-  initialContent,
-  onSave,
-  onCreateSubPage,
-  recordTriggerRef,
-  onRecordText,
-  notionPageId,
-  notionPagePath,
+  initialTitle, initialContent, onSave, onCreateSubPage,
+  recordTriggerRef, onRecordText, notionPageId, notionPagePath,
 }: NotionEditorProps) {
   const notionPlusLayout = useSettingsStore((s) => s.notionPlusLayout);
   const router = useRouter();
@@ -471,7 +580,7 @@ export function NotionEditor({
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
+      StarterKit.configure({ heading: { levels: [1, 2, 3, 4] } }),
       Placeholder.configure({ placeholder: '書き始めるか、「/」でコマンドを入力...' }),
       TaskList,
       TaskItem.configure({ nested: true }),
@@ -483,9 +592,15 @@ export function NotionEditor({
       Color,
       Underline,
       ResizableYoutube.configure({ width: 640, height: 360, nocookie: true }),
+      Table.configure({ resizable: true }),
+      TableRow,
+      CustomTableCell,
+      CustomTableHeader,
       PageLinkNode,
       UrlMentionNode,
       CalloutNode,
+      ToggleHeadingNode,
+      TocNode,
     ],
     content: (() => {
       if (!initialContent) return '';
@@ -495,7 +610,6 @@ export function NotionEditor({
       attributes: { class: 'notion-editor' },
       handlePaste(view, event) {
         const items = event.clipboardData?.items;
-
         if (items) {
           for (const item of items) {
             if (item.type.startsWith('image/')) {
@@ -505,16 +619,13 @@ export function NotionEditor({
               const reader = new FileReader();
               reader.onload = (e) => {
                 const src = e.target?.result as string;
-                if (src) view.dispatch(view.state.tr.replaceSelectionWith(
-                  view.state.schema.nodes.image.create({ src })
-                ));
+                if (src) view.dispatch(view.state.tr.replaceSelectionWith(view.state.schema.nodes.image.create({ src })));
               };
               reader.readAsDataURL(file);
               return true;
             }
           }
         }
-
         const text = event.clipboardData?.getData('text/plain').trim() ?? '';
         if (/^https?:\/\//.test(text) && !text.includes('\n')) {
           event.preventDefault();
@@ -522,7 +633,26 @@ export function NotionEditor({
           pasteUrlCallbackRef.current?.(text, coords);
           return true;
         }
-
+        return false;
+      },
+      handleKeyDown(view, event) {
+        // '>' キーで見出しをトグル見出しに変換
+        if (event.key === '>' && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
+          const { state } = view;
+          const { $from } = state.selection;
+          if ($from.parent.type.name === 'heading' && $from.parentOffset === 0) {
+            const level = $from.parent.attrs.level as number;
+            const headingNode = $from.parent;
+            const from = $from.before();
+            const to = $from.after();
+            const toggleNode = state.schema.nodes.toggleHeading.create(
+              { level, isOpen: true },
+              [headingNode.copy(headingNode.content), state.schema.nodes.paragraph.create()]
+            );
+            view.dispatch(state.tr.replaceWith(from, to, toggleNode));
+            return true;
+          }
+        }
         return false;
       },
     },
@@ -571,9 +701,7 @@ export function NotionEditor({
 
   useEffect(() => {
     if (!ctxMenu && !pastePopup) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { setCtxMenu(null); setPastePopup(null); }
-    };
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') { setCtxMenu(null); setPastePopup(null); } };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [ctxMenu, pastePopup]);
@@ -588,28 +716,17 @@ export function NotionEditor({
 
   useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
 
-  // ── 記録アクション ─────────────────────────────────────────────────
-
   const handleRecord = useCallback(() => {
     if (!editor) return;
     const { from, to } = editor.state.selection;
     const text = from !== to ? editor.state.doc.textBetween(from, to, '\n') : '';
-    if (onRecordText) {
-      onRecordText(text);
-    } else {
-      setRecordText(text);
-    }
+    if (onRecordText) { onRecordText(text); } else { setRecordText(text); }
     setCtxMenu(null);
   }, [editor, onRecordText]);
 
-  // 外部トリガー用 ref の登録
   useEffect(() => {
-    if (recordTriggerRef) {
-      recordTriggerRef.current = handleRecord;
-    }
+    if (recordTriggerRef) { recordTriggerRef.current = handleRecord; }
   }, [recordTriggerRef, handleRecord]);
-
-  // ── コンテキストメニュー ────────────────────────────────────────────
 
   const handleCtxCreatePage = useCallback(async () => {
     setCtxMenu(null);
@@ -625,12 +742,8 @@ export function NotionEditor({
 
   const handleCtxCallout = useCallback(() => {
     setCtxMenu(null);
-    editor?.chain().focus().insertContent({
-      type: 'callout', attrs: { background: '#FEF9CD' }, content: [{ type: 'paragraph' }],
-    }).run();
+    editor?.chain().focus().insertContent({ type: 'callout', attrs: { background: '#FEF9CD' }, content: [{ type: 'paragraph' }] }).run();
   }, [editor]);
-
-  // ── URL ペーストポップアップ ────────────────────────────────────────
 
   const handlePasteMention = useCallback(async () => {
     if (!pastePopup || !editor) return;
@@ -640,26 +753,17 @@ export function NotionEditor({
     try {
       const res = await fetch(`/api/url-preview?url=${encodeURIComponent(url)}`);
       const data = await res.json() as { title?: string; favicon?: string };
-      editor.chain().focus().insertContent({
-        type: 'urlMention',
-        attrs: { href: url, title: data.title ?? url, favicon: data.favicon ?? '' },
-      }).run();
+      editor.chain().focus().insertContent({ type: 'urlMention', attrs: { href: url, title: data.title ?? url, favicon: data.favicon ?? '' } }).run();
     } catch {
-      editor.chain().focus().insertContent({
-        type: 'text', text: url, marks: [{ type: 'link', attrs: { href: url, target: '_blank' } }],
-      }).run();
-    } finally {
-      setPasteLoading(false);
-    }
+      editor.chain().focus().insertContent({ type: 'text', text: url, marks: [{ type: 'link', attrs: { href: url, target: '_blank' } }] }).run();
+    } finally { setPasteLoading(false); }
   }, [pastePopup, editor]);
 
   const handlePasteUrl = useCallback(() => {
     if (!pastePopup || !editor) return;
     const url = pastePopup.url;
     setPastePopup(null);
-    editor.chain().focus().insertContent({
-      type: 'text', text: url, marks: [{ type: 'link', attrs: { href: url, target: '_blank', rel: 'noopener noreferrer' } }],
-    }).run();
+    editor.chain().focus().insertContent({ type: 'text', text: url, marks: [{ type: 'link', attrs: { href: url, target: '_blank', rel: 'noopener noreferrer' } }] }).run();
   }, [pastePopup, editor]);
 
   const handlePasteYoutube = useCallback(() => {
@@ -669,15 +773,10 @@ export function NotionEditor({
     editor.chain().focus().setYoutubeVideo({ src: url }).run();
   }, [pastePopup, editor]);
 
-  const outerClass = `relative flex flex-1 overflow-y-auto py-8 ${
-    notionPlusLayout === 'center' ? 'justify-center px-6' : 'pl-16 pr-8'
-  }`;
+  const outerClass = `relative flex flex-1 overflow-y-auto py-8 ${notionPlusLayout === 'center' ? 'justify-center px-6' : 'pl-16 pr-8'}`;
 
   return (
-    <div
-      className={outerClass}
-      onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }); }}
-    >
+    <div className={outerClass} onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }); }}>
       <div className="w-full max-w-3xl">
         <input
           ref={titleRef}
@@ -695,11 +794,8 @@ export function NotionEditor({
         <div className="fixed z-50 w-64 rounded-xl border border-gray-200 bg-white py-1 shadow-xl" style={{ top: menuPos.top, left: menuPos.left }}>
           <p className="px-3 py-1 text-xs font-medium text-gray-400">コマンド</p>
           {filteredCommands.map((cmd, i) => (
-            <button
-              key={cmd.label}
-              onMouseDown={(e) => { e.preventDefault(); applyCommand(cmd); }}
-              className={`flex w-full items-center gap-3 px-3 py-2 text-left transition ${i === slashIndex ? 'bg-brand-50' : 'hover:bg-gray-50'}`}
-            >
+            <button key={cmd.label} onMouseDown={(e) => { e.preventDefault(); applyCommand(cmd); }}
+              className={`flex w-full items-center gap-3 px-3 py-2 text-left transition ${i === slashIndex ? 'bg-brand-50' : 'hover:bg-gray-50'}`}>
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-xs font-bold text-gray-500">{cmd.icon}</span>
               <div>
                 <p className="text-sm font-medium text-gray-700">{cmd.label}</p>
@@ -732,12 +828,7 @@ export function NotionEditor({
 
       {/* 学習記録ダイアログ */}
       {recordText !== null && (
-        <RecordDialog
-          initialContent={recordText}
-          notionPageId={notionPageId}
-          notionPagePath={notionPagePath}
-          onClose={() => setRecordText(null)}
-        />
+        <RecordDialog initialContent={recordText} notionPageId={notionPageId} notionPagePath={notionPagePath} onClose={() => setRecordText(null)} />
       )}
 
       {/* URL ペーストポップアップ */}
@@ -746,31 +837,19 @@ export function NotionEditor({
           <div className="fixed inset-0 z-40" onClick={() => setPastePopup(null)} />
           <div className="fixed z-50 overflow-hidden rounded-xl border border-gray-100 bg-white py-1 shadow-2xl" style={{ top: pastePopup.pos.top, left: pastePopup.pos.left }}>
             <p className="px-3 py-1.5 text-xs font-medium text-gray-400">貼り付け方法を選択</p>
-            <button
-              onClick={handlePasteMention}
-              disabled={pasteLoading}
-              className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-            >
+            <button onClick={handlePasteMention} disabled={pasteLoading}
+              className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
               <span className="text-base">🔗</span>
-              <div>
-                <p className="font-medium">メンション</p>
-                <p className="text-xs text-gray-400">ページタイトル＋アイコン</p>
-              </div>
+              <div><p className="font-medium">メンション</p><p className="text-xs text-gray-400">ページタイトル＋アイコン</p></div>
             </button>
             <button onClick={handlePasteUrl} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
               <span className="text-base">🌐</span>
-              <div>
-                <p className="font-medium">URL</p>
-                <p className="text-xs text-gray-400">リンク付きテキスト</p>
-              </div>
+              <div><p className="font-medium">URL</p><p className="text-xs text-gray-400">リンク付きテキスト</p></div>
             </button>
             {pastePopup.isYoutube && (
               <button onClick={handlePasteYoutube} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
                 <span className="text-base">▶</span>
-                <div>
-                  <p className="font-medium">YouTube 埋め込み</p>
-                  <p className="text-xs text-gray-400">プレイヤーを挿入</p>
-                </div>
+                <div><p className="font-medium">YouTube 埋め込み</p><p className="text-xs text-gray-400">プレイヤーを挿入</p></div>
               </button>
             )}
           </div>
@@ -785,12 +864,23 @@ export function NotionEditor({
 function Toolbar({ editor }: { editor: NonNullable<ReturnType<typeof useEditor>> }) {
   const [colorOpen, setColorOpen] = useState(false);
   const [bgColorOpen, setBgColorOpen] = useState(false);
+  const [cellColorOpen, setCellColorOpen] = useState(false);
 
   const btn = (active: boolean) =>
     `rounded px-2 py-1 text-xs transition ${active ? 'bg-gray-200 text-gray-900 font-semibold' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'}`;
 
   const currentColor = editor.getAttributes('textStyle').color as string | undefined;
   const currentBg = editor.getAttributes('highlight').color as string | undefined;
+  const inTable = editor.isActive('table');
+
+  const setCellBg = (color: string) => {
+    setCellColorOpen(false);
+    if (editor.isActive('tableHeader')) {
+      editor.chain().focus().updateAttributes('tableHeader', { backgroundColor: color || null }).run();
+    } else {
+      editor.chain().focus().updateAttributes('tableCell', { backgroundColor: color || null }).run();
+    }
+  };
 
   return (
     <div className="mb-4 flex flex-wrap gap-0.5 rounded-lg border border-gray-100 bg-gray-50 p-1">
@@ -802,13 +892,15 @@ function Toolbar({ editor }: { editor: NonNullable<ReturnType<typeof useEditor>>
 
       {/* 文字色 */}
       <div className="relative">
-        <button onClick={() => { setColorOpen((v) => !v); setBgColorOpen(false); }} className={`rounded px-2 py-1 text-xs transition ${colorOpen ? 'bg-gray-200' : 'text-gray-500 hover:bg-gray-100'}`} title="文字色">
+        <button onClick={() => { setColorOpen((v) => !v); setBgColorOpen(false); setCellColorOpen(false); }}
+          className={`rounded px-2 py-1 text-xs transition ${colorOpen ? 'bg-gray-200' : 'text-gray-500 hover:bg-gray-100'}`} title="文字色">
           <span style={{ color: currentColor || '#111', borderBottom: `2px solid ${currentColor || '#111'}` }}>A</span>
         </button>
         {colorOpen && (
           <div className="absolute left-0 top-full z-50 mt-1 flex flex-wrap gap-1 rounded-lg border border-gray-200 bg-white p-2 shadow-xl" style={{ width: 160 }}>
             {TEXT_COLORS.map((c) => (
-              <button key={c.value} title={c.label} onClick={() => { c.value ? editor.chain().focus().setColor(c.value).run() : editor.chain().focus().unsetColor().run(); setColorOpen(false); }}
+              <button key={c.value} title={c.label}
+                onClick={() => { c.value ? editor.chain().focus().setColor(c.value).run() : editor.chain().focus().unsetColor().run(); setColorOpen(false); }}
                 className="flex h-6 w-6 items-center justify-center rounded text-xs font-bold hover:ring-2 hover:ring-brand-400"
                 style={{ color: c.value || '#111', border: '1px solid #e5e7eb', background: currentColor === c.value ? '#f3f4f6' : 'white' }}>A</button>
             ))}
@@ -818,7 +910,8 @@ function Toolbar({ editor }: { editor: NonNullable<ReturnType<typeof useEditor>>
 
       {/* 背景色 */}
       <div className="relative">
-        <button onClick={() => { setBgColorOpen((v) => !v); setColorOpen(false); }} className={`rounded px-2 py-1 text-xs transition ${bgColorOpen ? 'bg-gray-200' : 'text-gray-500 hover:bg-gray-100'}`} title="背景色">
+        <button onClick={() => { setBgColorOpen((v) => !v); setColorOpen(false); setCellColorOpen(false); }}
+          className={`rounded px-2 py-1 text-xs transition ${bgColorOpen ? 'bg-gray-200' : 'text-gray-500 hover:bg-gray-100'}`} title="背景色">
           <span style={{ background: currentBg || 'transparent', padding: '1px 3px', borderRadius: 2, border: currentBg ? 'none' : '1px solid #d1d5db' }}>A</span>
         </button>
         {bgColorOpen && (
@@ -826,7 +919,8 @@ function Toolbar({ editor }: { editor: NonNullable<ReturnType<typeof useEditor>>
             <p className="mb-1.5 text-xs text-gray-400">背景色</p>
             <div className="flex flex-wrap gap-1">
               {BG_COLORS.map((c) => (
-                <button key={c.value} title={c.label} onClick={() => { c.value ? editor.chain().focus().toggleHighlight({ color: c.value }).run() : editor.chain().focus().unsetHighlight().run(); setBgColorOpen(false); }}
+                <button key={c.value} title={c.label}
+                  onClick={() => { c.value ? editor.chain().focus().toggleHighlight({ color: c.value }).run() : editor.chain().focus().unsetHighlight().run(); setBgColorOpen(false); }}
                   className="flex h-6 w-6 rounded hover:ring-2 hover:ring-brand-400"
                   style={{ background: c.value || 'white', border: currentBg === c.value ? '2px solid #7c3aed' : '1px solid #e5e7eb' }} />
               ))}
@@ -839,6 +933,7 @@ function Toolbar({ editor }: { editor: NonNullable<ReturnType<typeof useEditor>>
       <button onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} className={btn(editor.isActive('heading', { level: 1 }))}>H1</button>
       <button onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} className={btn(editor.isActive('heading', { level: 2 }))}>H2</button>
       <button onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} className={btn(editor.isActive('heading', { level: 3 }))}>H3</button>
+      <button onClick={() => editor.chain().focus().toggleHeading({ level: 4 }).run()} className={btn(editor.isActive('heading', { level: 4 }))}>H4</button>
       <Sep />
       <button onClick={() => editor.chain().focus().toggleBulletList().run()} className={btn(editor.isActive('bulletList'))}>• リスト</button>
       <button onClick={() => editor.chain().focus().toggleOrderedList().run()} className={btn(editor.isActive('orderedList'))}>1. リスト</button>
@@ -851,6 +946,34 @@ function Toolbar({ editor }: { editor: NonNullable<ReturnType<typeof useEditor>>
       <button onClick={() => editor.chain().focus().setTextAlign('left').run()} className={btn(editor.isActive({ textAlign: 'left' }))}>左</button>
       <button onClick={() => editor.chain().focus().setTextAlign('center').run()} className={btn(editor.isActive({ textAlign: 'center' }))}>中</button>
       <button onClick={() => editor.chain().focus().setTextAlign('right').run()} className={btn(editor.isActive({ textAlign: 'right' }))}>右</button>
+
+      {/* テーブル操作（テーブル内のみ表示） */}
+      {inTable && (
+        <>
+          <Sep />
+          <button onClick={() => editor.chain().focus().addRowAfter().run()} className={btn(false)} title="行を追加">行↓</button>
+          <button onClick={() => editor.chain().focus().addColumnAfter().run()} className={btn(false)} title="列を追加">列→</button>
+          <button onClick={() => editor.chain().focus().deleteRow().run()} className={btn(false)} title="行を削除">行✕</button>
+          <button onClick={() => editor.chain().focus().deleteColumn().run()} className={btn(false)} title="列を削除">列✕</button>
+          <button onClick={() => editor.chain().focus().deleteTable().run()} className={btn(false)} title="テーブルを削除">表✕</button>
+          {/* セル背景色 */}
+          <div className="relative">
+            <button onClick={() => { setCellColorOpen((v) => !v); setColorOpen(false); setBgColorOpen(false); }}
+              className={`rounded px-2 py-1 text-xs transition ${cellColorOpen ? 'bg-gray-200' : 'text-gray-500 hover:bg-gray-100'}`} title="セル背景色">
+              セル色
+            </button>
+            {cellColorOpen && (
+              <div className="absolute left-0 top-full z-50 mt-1 flex flex-wrap gap-1 rounded-lg border border-gray-200 bg-white p-2 shadow-xl" style={{ width: 160 }}>
+                {TABLE_CELL_COLORS.map((c) => (
+                  <button key={c.value} title={c.label} onClick={() => setCellBg(c.value)}
+                    className="h-6 w-6 rounded hover:ring-2 hover:ring-brand-400"
+                    style={{ background: c.value || 'white', border: '1px solid #e5e7eb' }} />
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

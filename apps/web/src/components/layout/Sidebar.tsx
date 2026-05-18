@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { type User } from 'firebase/auth';
 import { useAuthStore } from '@/stores/authStore';
+import { APP_VERSION } from '@/lib/version';
 
 interface SidebarProps {
   user: User;
@@ -24,6 +25,7 @@ export function Sidebar({ user }: SidebarProps) {
       {/* アプリ名 */}
       <div className="px-4 py-5">
         <span className="text-sm font-semibold text-gray-800">Study Tracker</span>
+        <p className="text-xs text-gray-400">{APP_VERSION}</p>
       </div>
 
       {/* ナビゲーション */}
