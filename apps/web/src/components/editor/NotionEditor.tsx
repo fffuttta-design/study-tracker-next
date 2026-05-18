@@ -689,6 +689,7 @@ function RecordDialog({ initialContent, notionPageId, notionPagePath, onClose }:
 }) {
   const { user } = useAuthStore();
   const add = useLearningStore((s) => s.add);
+  const router = useRouter();
   const firstLine = initialContent.split('\n').find((l) => l.trim())?.trim() ?? '';
   const [title, setTitle] = useState(firstLine.slice(0, 80));
   const [content, setContent] = useState(initialContent);
@@ -703,6 +704,7 @@ function RecordDialog({ initialContent, notionPageId, notionPagePath, onClose }:
     try {
       await add(user.uid, { dateKey, title: title.trim(), content: content.trim(), sortOrder: 0, notionPageId, notionPagePath });
       onClose();
+      router.push('/learning');
     } finally { setSaving(false); }
   };
 
@@ -756,6 +758,7 @@ export function NotionEditor({
   const titleRef = useRef<HTMLInputElement>(null);
   const titleValue = useRef(initialTitle);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const highlightingRef = useRef(false);
 
   const [slashOpen, setSlashOpen] = useState(false);
   const [slashQuery, setSlashQuery] = useState('');
@@ -898,6 +901,7 @@ export function NotionEditor({
   }, [ctxMenu, pastePopup]);
 
   const scheduleSave = useCallback(() => {
+    if (highlightingRef.current) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       if (!editor) return;
@@ -907,33 +911,53 @@ export function NotionEditor({
 
   useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
 
-  // highlightText が指定された場合、ブロック単位で検索してハイライト＆スクロール
+  // highlightText が指定された場合、ブロック単位で検索して一時ハイライト（保存対象外、フォーカスなし）
   useEffect(() => {
     if (!editor || !highlightText) return;
     const search = highlightText.trim().slice(0, 80);
     if (!search) return;
 
     const timer = setTimeout(() => {
-      let found = false;
+      let from = -1, to = -1;
       editor.state.doc.descendants((node, pos) => {
-        if (found) return false;
+        if (from !== -1) return false;
         if (!node.isBlock) return true;
-        const text = node.textContent;
-        const idx = text.indexOf(search);
+        const idx = node.textContent.indexOf(search);
         if (idx === -1) return true;
-        const from = pos + 1 + idx;
-        const to = from + search.length;
-        editor.chain().focus().setTextSelection({ from, to }).setHighlight({ color: '#FDE68A' }).scrollIntoView().run();
-        found = true;
+        from = pos + 1 + idx;
+        to = from + search.length;
         return false;
       });
-      if (!found) return;
+      if (from === -1) return;
+
+      const capturedFrom = from;
+      const capturedTo = to;
+
+      // フォーカス・選択なしでハイライトマークを適用
+      const highlightMark = editor.state.schema.marks.highlight?.create({ color: '#FDE68A' });
+      if (!highlightMark) return;
+      highlightingRef.current = true;
+      editor.view.dispatch(editor.state.tr.addMark(capturedFrom, capturedTo, highlightMark));
+
+      // フォーカスなしでDOMスクロール
+      try {
+        const { node } = editor.view.domAtPos(capturedFrom + 1);
+        const el = (node instanceof HTMLElement ? node : (node as ChildNode).parentElement) as HTMLElement | null;
+        el?.closest('p,h1,h2,h3,h4,li,blockquote,div')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } catch { /* ignore */ }
+
+      // クリック or 2秒後に解除
+      const removeHighlight = () => {
+        highlightingRef.current = false;
+        const mark = editor.state.schema.marks.highlight;
+        if (!mark) return;
+        editor.view.dispatch(editor.state.tr.removeMark(capturedFrom, capturedTo, mark));
+      };
+      const autoTimer = setTimeout(removeHighlight, 2000);
       setTimeout(() => {
-        document.addEventListener('click', () => {
-          editor.chain().unsetHighlight().run();
-        }, { once: true });
+        document.addEventListener('click', () => { clearTimeout(autoTimer); removeHighlight(); }, { once: true });
       }, 100);
-    }, 800);
+    }, 600);
 
     return () => clearTimeout(timer);
   }, [editor, highlightText]);

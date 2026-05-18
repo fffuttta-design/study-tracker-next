@@ -35,6 +35,11 @@ const DAILY_QUOTES = [
   '今この瞬間の集中が、未来の自分への贈り物になる。',
 ];
 
+function toHHMM(isoDate: string): string {
+  const d = new Date(isoDate);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
 const STAGE_LABELS = ['翌日', '3日後', '7日後', '2週間後', '1ヶ月後'];
 const STAGE_COLORS = [
   'bg-red-50 text-red-500 border-red-200',
@@ -457,18 +462,6 @@ function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
 
 // ── ダッシュボードタブ ───────────────────────────────────────────────
 
-function getTimeSection(item: LearningItem): string {
-  if (!item.createdAt) return '';
-  const hour = new Date(item.createdAt).getHours();
-  if (hour >= 5 && hour < 9)   return '早朝';
-  if (hour >= 9 && hour < 12)  return '午前';
-  if (hour >= 12 && hour < 17) return '午後';
-  if (hour >= 17 && hour < 21) return '夜';
-  return '深夜';
-}
-
-const TIME_SECTION_ORDER = ['早朝', '午前', '午後', '夜', '深夜', ''];
-
 function DashboardTab({ todayItems, dueItems, uid, selectedDate, onAdd }: {
   todayItems: LearningItem[];
   dueItems: LearningItem[];
@@ -479,9 +472,15 @@ function DashboardTab({ todayItems, dueItems, uid, selectedDate, onAdd }: {
   // 今日の登録を時間帯でグループ化
   const hasTimeInfo = todayItems.some((i) => i.createdAt);
   const todayGrouped = hasTimeInfo
-    ? TIME_SECTION_ORDER
-        .map((label) => ({ label, items: todayItems.filter((i) => getTimeSection(i) === label) }))
-        .filter((g) => g.items.length > 0)
+    ? Object.entries(
+        todayItems.reduce<Record<string, LearningItem[]>>((acc, item) => {
+          const key = item.createdAt ? toHHMM(item.createdAt) : '--:--';
+          (acc[key] ??= []).push(item);
+          return acc;
+        }, {})
+      )
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([label, items]) => ({ label, items }))
     : null;
 
   // 復習待ちをステージでグループ化
@@ -699,17 +698,6 @@ function ItemCard({ item, uid, showReviewAction }: {
         )}
 
         <div className="min-w-0 flex-1 cursor-pointer" onClick={() => setExpanded((v) => !v)}>
-          {item.notionPageId && (
-            <Link
-              href={`/notion-plus/${item.notionPageId}?hl=${encodeURIComponent((item.content.split('\n').find(l => l.trim().length > 5) ?? item.content).trim().slice(0, 80))}`}
-              onClick={(e) => e.stopPropagation()}
-              className="mb-1.5 flex w-fit items-center gap-1 rounded-md bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-600 hover:bg-brand-100"
-              title="ノートで開く（ハイライト表示）"
-            >
-              <span>📖</span>
-              <span>ノートを開く</span>
-            </Link>
-          )}
           <div className="flex flex-wrap items-center gap-1.5">
             {reviewBadge}
             <span className="font-medium text-gray-800 text-sm">
@@ -726,6 +714,17 @@ function ItemCard({ item, uid, showReviewAction }: {
               <span>次: {format(new Date(nextReview.scheduledDate), 'M/d', { locale: ja })}</span>
             )}
             <span>{format(new Date(item.dateKey), 'M/d', { locale: ja })} 登録</span>
+            {item.notionPageId && (
+              <Link
+                href={`/notion-plus/${item.notionPageId}?hl=${encodeURIComponent((item.content.split('\n').find(l => l.trim().length > 5) ?? item.content).trim().slice(0, 80))}`}
+                onClick={(e) => e.stopPropagation()}
+                className="flex items-center gap-0.5 rounded bg-brand-50 px-1.5 py-0.5 text-brand-600 hover:bg-brand-100"
+                title="ノートで開く（ハイライト表示）"
+              >
+                <span>📖</span>
+                <span>ノートを開く</span>
+              </Link>
+            )}
           </div>
           {!expanded && item.content && (
             <p className="mt-1 line-clamp-1 text-xs text-gray-400">
