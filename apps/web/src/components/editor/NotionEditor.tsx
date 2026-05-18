@@ -48,19 +48,35 @@ function isImageSrc(s: string) {
 // ── 絵文字プリセット ──────────────────────────────────────────────────
 
 const EMOJI_PRESETS = [
-  '📄','📝','📚','📖','📓','📔','📒','📃','📜','📑','🗒️','🗓️',
-  '💡','🎯','🔖','✅','📌','📍','🗂️','📁','📂','🗃️','📋','🗄️',
-  '🧠','🔍','🔎','💭','🤔','📊','📈','📉','🗺️','🧩','🔬','🔭',
-  '🚀','🌟','⭐','🔥','💎','🏆','🥇','🎖️','👑','🎉','✨','🎊',
-  '🎨','🖌️','🎵','🎶','🎸','🎹','📸','🎬','🎭','🖼️','🎮','🎲',
-  '💼','🖥️','💻','📱','⌨️','🖱️','📡','📞','📠','🔐','🔒','🗝️',
-  '🛠️','⚙️','🔧','🔨','🔩','💰','💵','💳','📊','🏢','🏪','🏫',
-  '👤','👥','🤝','👍','✌️','💪','🙌','👏','🧑‍💻','👨‍🎓','👩‍💼','🧑‍🔬',
-  '🌿','🌱','🍀','🌸','🌻','🌙','☀️','⚡','❄️','🌊','🌈','🌪️',
-  '🏠','🏡','🌍','🌏','✈️','🚂','🚗','⛰️','🌅','🏝️','🗼','⛩️',
-  '☕','🍵','🍎','🍊','🍋','🍇','🥑','🍕','🍜','🍣','🍰','🎂',
-  '❤️','💚','💙','💜','🧡','💛','🤍','🖤','🔴','🟠','🟡','🟢',
-  '🔵','🟣','⬛','⬜','🔲','🎪','🦋','🦁','🐯','🦊','🐸','🐺',
+  // 顔・感情
+  '😀','😃','😄','😁','😆','😅','🤣','😂','🙂','😉',
+  '😊','😇','🥰','😍','🤩','😘','😋','😛','😜','🤪',
+  '😝','🤑','🤗','🤭','🤫','🤔','🤐','🤨','😐','😑',
+  '😶','😏','😒','🙄','😬','🤥','😌','😔','😪','🤤',
+  '😴','😷','🤒','🤕','🤢','🤧','🥵','🥶','🥴','😵',
+  '🤯','🤠','🥳','😎','🤓','🧐','😕','😟','🙁','☹️',
+  '😮','😯','😲','😳','🥺','😦','😧','😨','😰','😥',
+  '😢','😭','😱','😖','😣','😞','😓','😩','😫','😤',
+  '😡','😠','🤬','😈','👿','💀','☠️','💩','🤡','👹',
+  // ジェスチャー・人
+  '👋','🤚','✋','🖐','🖖','👌','✌️','🤞','🤟','🤘',
+  '🤙','👈','👉','👆','👇','☝️','👍','👎','✊','👊',
+  '🤛','🤜','👏','🙌','🤝','🙏','💪','🦾',
+  // ハート・よく使う記号
+  '❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔',
+  '❣️','💕','💞','💓','💗','💖','💘','💝',
+  '⭐','🌟','✨','🔥','💥','💫','❄️','🌈','💯','🎉',
+  '🎊','🎁','🎈','🥳','🏆','🥇','👑','💎','🎯','✅',
+  // ドキュメント・仕事
+  '📄','📝','📚','📖','📓','📒','📋','📊','📈','💡',
+  '🎯','🔖','📌','🗂️','📁','💼','🖥️','💻','📱','🔐',
+  '🛠️','⚙️','🔑','🧠','🔍','🔬','🎓','💰','🏢','🚀',
+  // 自然・動物・食べ物
+  '🌿','🌸','🌙','☀️','🌊','🌈','🌍','✈️','🏠','⛩️',
+  '🐶','🐱','🐻','🦊','🦁','🐸','🦋','🐝',
+  '☕','🍎','🍕','🍜','🍣','🍰','🥂',
+  // クリエイティブ
+  '🎨','🎵','🎶','📸','🎬','🎮','🎲','🖼️','🎭','🎪',
 ];
 
 // ── PageLink ノード ──────────────────────────────────────────────────
@@ -536,7 +552,19 @@ const SLASH_COMMANDS: SlashCommand[] = [
   { label: '見出し 2',           description: '中見出し',             icon: 'H2',  action: (e) => e?.chain().focus().toggleHeading({ level: 2 }).run() },
   { label: '見出し 3',           description: '小見出し',             icon: 'H3',  action: (e) => e?.chain().focus().toggleHeading({ level: 3 }).run() },
   { label: '見出し 4',           description: '小小見出し',           icon: 'H4',  action: (e) => e?.chain().focus().toggleHeading({ level: 4 }).run() },
-  { label: 'トグル見出し',       description: '折りたたみ可能な見出し', icon: '▶',  action: (e) => e?.chain().focus().insertContent({ type: 'toggleHeading', attrs: { level: 1, isOpen: true }, content: [{ type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: '' }] }, { type: 'paragraph' }] }).run() },
+  { label: 'トグル見出し',       description: '折りたたみ可能な見出し', icon: '▶',  action: (e) => {
+    if (!e) return;
+    const { state, view } = e;
+    const { $from } = state.selection;
+    const { schema } = state;
+    const from = $from.before($from.depth > 0 ? 1 : 0);
+    const to = $from.after($from.depth > 0 ? 1 : 0);
+    const toggleNode = schema.nodes.toggleHeading.create(
+      { level: 1, isOpen: true },
+      [schema.nodes.heading.create({ level: 1 }), schema.nodes.paragraph.create()]
+    );
+    view.dispatch(state.tr.replaceWith(from, to, toggleNode));
+  } },
   { label: '箇条書き',           description: '・リスト',             icon: '•',   action: (e) => e?.chain().focus().toggleBulletList().run() },
   { label: '番号付きリスト',     description: '1. 2. 3. ...',        icon: '1.',  action: (e) => e?.chain().focus().toggleOrderedList().run() },
   { label: 'チェックリスト',     description: 'Todoリスト',           icon: '☑',  action: (e) => e?.chain().focus().toggleTaskList().run() },
@@ -762,7 +790,12 @@ export function NotionEditor({
           setSlashIndex(0);
           slashStartPos.current = from - query.length - 1;
           const coords = editor.view.coordsAtPos(from);
-          setMenuPos({ top: coords.bottom + 8, left: coords.left });
+          const MENU_H = Math.min(filteredCommands.length * 54 + 40, 400);
+          const spaceBelow = window.innerHeight - coords.bottom - 12;
+          const top = spaceBelow >= MENU_H
+            ? coords.bottom + 8
+            : Math.max(8, coords.top - MENU_H - 8);
+          setMenuPos({ top, left: coords.left });
           setSlashOpen(true);
           return;
         }
@@ -911,7 +944,7 @@ export function NotionEditor({
 
       {/* スラッシュコマンドメニュー */}
       {slashOpen && filteredCommands.length > 0 && (
-        <div className="fixed z-50 w-64 rounded-xl border border-gray-200 bg-white py-1 shadow-xl" style={{ top: menuPos.top, left: menuPos.left }}>
+        <div className="fixed z-50 w-64 overflow-y-auto rounded-xl border border-gray-200 bg-white py-1 shadow-xl" style={{ top: menuPos.top, left: menuPos.left, maxHeight: 'min(400px, 80vh)' }}>
           <p className="px-3 py-1 text-xs font-medium text-gray-400">コマンド</p>
           {filteredCommands.map((cmd, i) => (
             <button key={cmd.label} onMouseDown={(e) => { e.preventDefault(); applyCommand(cmd); }}

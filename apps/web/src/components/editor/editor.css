@@ -14,17 +14,17 @@
 
 /* 箇条書き インデント別マーカー */
 .notion-editor ul { list-style: none; padding-left: 1.5rem; margin: 0.25rem 0; }
-.notion-editor ul li { position: relative; margin: 0.125rem 0; padding-left: 1.25rem; }
-.notion-editor ul li::before { position: absolute; left: 0; }
+.notion-editor ul li { position: relative; margin: 0.125rem 0; padding-left: 1.5rem; }
+.notion-editor ul li::before { position: absolute; left: 0.1rem; top: 0; }
 
-/* 1階層目: 黒丸 */
-.notion-editor ul > li::before { content: '●'; font-size: 0.55em; line-height: 2.8; color: #111; }
+/* 1階層目: 中黒 */
+.notion-editor ul > li::before { content: '•'; font-size: 1.4em; line-height: 1.3; color: #374151; }
 /* 2階層目: 白丸 */
-.notion-editor ul ul > li::before { content: '○'; font-size: 0.6em; line-height: 2.6; color: #111; }
-/* 3階層目: 黒四角 */
-.notion-editor ul ul ul > li::before { content: '■'; font-size: 0.5em; line-height: 3; color: #111; }
-/* 4階層目以降: 黒丸に戻る */
-.notion-editor ul ul ul ul > li::before { content: '●'; font-size: 0.55em; line-height: 2.8; color: #111; }
+.notion-editor ul ul > li::before { content: '◦'; font-size: 1.4em; line-height: 1.3; color: #374151; }
+/* 3階層目: 小四角 */
+.notion-editor ul ul ul > li::before { content: '▪'; font-size: 0.95em; line-height: 1.85; color: #374151; }
+/* 4階層目以降: 中黒に戻る */
+.notion-editor ul ul ul ul > li::before { content: '•'; font-size: 1.4em; line-height: 1.3; color: #374151; }
 
 .notion-editor ol { list-style: decimal; padding-left: 1.5rem; margin: 0.25rem 0; }
 .notion-editor ol li { margin: 0.125rem 0; }
