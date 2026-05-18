@@ -57,6 +57,8 @@ const STAGE_CARD_BG = [
   'bg-purple-50',
 ];
 
+const STAGE_BADGE_COUNT_BG = ['bg-red-500', 'bg-yellow-500', 'bg-green-600', 'bg-blue-500', 'bg-purple-500'];
+
 function dailyQuote(): string {
   const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
   return DAILY_QUOTES[dayOfYear % DAILY_QUOTES.length];
@@ -518,10 +520,10 @@ function DashboardTab({ todayItems, dueItems, uid, selectedDate, onAdd }: {
           {todayItems.length === 0 ? (
             <Empty text="今日の学習はまだありません" />
           ) : todayGrouped ? (
-            <div className="space-y-4">
+            <div>
               {todayGrouped.map((g) => (
                 <div key={g.label}>
-                  {g.label && <p className="mb-1.5 text-xs font-medium text-gray-400">{g.label}</p>}
+                  <BadgeDivider label={g.label} count={g.items.length} />
                   <ItemList items={g.items} uid={uid} />
                 </div>
               ))}
@@ -545,13 +547,15 @@ function DashboardTab({ todayItems, dueItems, uid, selectedDate, onAdd }: {
           {dueItems.length === 0 ? (
             <Empty text="復習待ちのアイテムはありません 🎉" />
           ) : (
-            <div className="space-y-6">
+            <div>
               {dueGrouped.map((g) => (
                 <div key={g.index}>
-                  <div className="mb-2 flex items-center gap-2">
-                    <span className={`text-xs font-semibold ${STAGE_COLORS[g.index].split(' ')[1]}`}>{g.label}</span>
-                    <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${STAGE_COLORS[g.index]}`}>{g.items.length}</span>
-                  </div>
+                  <BadgeDivider
+                    label={g.label}
+                    count={g.items.length}
+                    badgeClass={STAGE_COLORS[g.index]}
+                    countBg={STAGE_BADGE_COUNT_BG[g.index]}
+                  />
                   <ItemList items={g.items} uid={uid} showReviewAction />
                 </div>
               ))}
@@ -633,9 +637,12 @@ function ReviewTab({ dueItems, uid }: {
         ? <Empty text="復習待ちのアイテムはありません 🎉" />
         : grouped.map((g) => (
           <div key={g.index}>
-            <h2 className={`mb-2 text-xs font-semibold ${STAGE_COLORS[g.index].split(' ')[1]}`}>
-              {g.label}（{g.items.length}件）
-            </h2>
+            <BadgeDivider
+              label={g.label}
+              count={g.items.length}
+              badgeClass={STAGE_COLORS[g.index]}
+              countBg={STAGE_BADGE_COUNT_BG[g.index]}
+            />
             <ItemList items={g.items} uid={uid} showReviewAction />
           </div>
         ))}
@@ -711,16 +718,20 @@ function ItemCard({ item, uid, showReviewAction }: {
 
   return (
     <div className={`rounded-lg border transition-shadow ${cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}>
-      <div className="flex items-start gap-3 px-4 py-3">
+      {/* ② カードヘッダー全体をクリックで開閉 */}
+      <div
+        className="flex cursor-pointer items-start gap-3 px-4 py-3"
+        onClick={() => setExpanded((v) => !v)}
+      >
         {showReviewAction && nextReview && !fullyDone && (
           <button
-            onClick={completeReview}
+            onClick={(e) => { e.stopPropagation(); completeReview(); }}
             className="mt-0.5 h-4 w-4 shrink-0 rounded border-2 border-gray-300 hover:border-brand-500 hover:bg-brand-50"
             title="この復習を完了"
           />
         )}
 
-        <div className="min-w-0 flex-1 cursor-pointer" onClick={() => setExpanded((v) => !v)}>
+        <div className="min-w-0 flex-1">
           <p className="truncate font-semibold text-gray-800 text-lg leading-snug">
             {item.title || item.content.split('\n')[0].slice(0, 60)}
           </p>
@@ -731,8 +742,17 @@ function ItemCard({ item, uid, showReviewAction }: {
           )}
         </div>
 
-        <div className="flex shrink-0 flex-col items-end gap-1.5">
+        <div className="flex shrink-0 flex-col items-end gap-1.5" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center gap-1">
+            {item.notionPageId && (
+              <Link
+                href={`/notion-plus/${item.notionPageId}?hl=${encodeURIComponent((item.content.split('\n').find(l => l.trim().length > 5) ?? item.content).trim().slice(0, 80))}`}
+                className="flex items-center gap-1 rounded-md bg-brand-50 px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-100"
+                title="ノートを開く（ハイライト表示）"
+              >
+                <span>📖</span><span>ノートを開く</span>
+              </Link>
+            )}
             <button onClick={copyContent} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="コピー">⎘</button>
             <button onClick={() => setEditing(true)} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="編集">✎</button>
             <button onClick={handleDelete} className="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-400" title="削除">✕</button>
@@ -740,16 +760,6 @@ function ItemCard({ item, uid, showReviewAction }: {
               {expanded ? '▲' : '▼'}
             </button>
           </div>
-          {item.notionPageId && (
-            <Link
-              href={`/notion-plus/${item.notionPageId}?hl=${encodeURIComponent((item.content.split('\n').find(l => l.trim().length > 5) ?? item.content).trim().slice(0, 80))}`}
-              onClick={(e) => e.stopPropagation()}
-              className="flex items-center gap-1 rounded-md bg-brand-50 px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-100"
-              title="ノートを開く（ハイライト表示）"
-            >
-              <span>📖</span><span>ノートを開く</span>
-            </Link>
-          )}
           <div className="flex items-center gap-2 text-right text-xs text-gray-400">
             {item.notionPagePath && (
               <span className="flex items-center gap-0.5">
@@ -761,8 +771,9 @@ function ItemCard({ item, uid, showReviewAction }: {
         </div>
       </div>
 
+      {/* ② 本文エリアはダブルクリックで閉じる */}
       {expanded && (
-        <div className="border-t border-gray-100 px-4 pb-4 pt-3">
+        <div className="border-t border-gray-100 px-4 pb-4 pt-3" onDoubleClick={() => setExpanded(false)}>
           {item.content && (
             <div className="mb-3 max-w-none text-sm text-gray-700
               [&_strong]:font-bold [&_em]:italic [&_del]:line-through
@@ -854,6 +865,27 @@ function EditModal({ item, uid, onClose }: {
 }
 
 // ── 共通UIパーツ ─────────────────────────────────────────────────────
+
+function BadgeDivider({
+  label, count, badgeClass = 'border-gray-200 bg-white text-gray-500', countBg = 'bg-gray-400',
+}: {
+  label: string; count?: number; badgeClass?: string; countBg?: string;
+}) {
+  return (
+    <div className="my-3 flex items-center gap-2">
+      <div className="h-px flex-1 bg-gray-200" />
+      <div className={`flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap ${badgeClass}`}>
+        {label}
+        {count !== undefined && (
+          <span className={`flex h-4 min-w-[1rem] items-center justify-center rounded-full px-0.5 text-[10px] text-white ${countBg}`}>
+            {count}
+          </span>
+        )}
+      </div>
+      <div className="h-px flex-1 bg-gray-200" />
+    </div>
+  );
+}
 
 function Empty({ text }: { text: string }) {
   return <div className="py-12 text-center text-sm text-gray-300">{text}</div>;
