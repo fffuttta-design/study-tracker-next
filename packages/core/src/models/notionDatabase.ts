@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 
-export type DbPropertyType = 'title' | 'text' | 'number' | 'select' | 'checkbox';
+export type DbPropertyType = 'title' | 'text' | 'number' | 'select' | 'checkbox' | 'date';
 
 export interface DbSelectOption {
   id: string;

@@ -30,6 +30,7 @@ const TYPE_ICONS: Record<DbPropertyType, string> = {
   number: '#',
   select: '◯',
   checkbox: '☑',
+  date: '📅',
 };
 
 const COLOR_NAMES = Object.keys(SELECT_COLORS);
@@ -212,24 +213,70 @@ function CheckboxCell({ value, onSave }: { value: boolean; onSave: (v: boolean) 
   );
 }
 
+function DateCell({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
+
+  const formatDisplay = (iso: string) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric' });
+  };
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        type="date"
+        defaultValue={value}
+        onBlur={(e) => { onSave(e.target.value); setEditing(false); }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') setEditing(false);
+          if (e.key === 'Enter') { onSave((e.target as HTMLInputElement).value); setEditing(false); }
+        }}
+        className="w-full bg-transparent outline-none text-sm px-1"
+      />
+    );
+  }
+
+  return (
+    <div
+      onClick={() => setEditing(true)}
+      className="w-full min-h-[22px] cursor-text text-sm px-1 text-gray-800"
+    >
+      {value ? formatDisplay(value) : <span className="text-gray-300 select-none"></span>}
+    </div>
+  );
+}
+
 // ─── プロパティヘッダー ──────────────────────────────────────────────────────
 
 function PropertyHeader({
   prop,
+  sortState,
   onRename,
   onDelete,
   onUpdateOptions,
+  onSort,
 }: {
   prop: DbProperty;
+  sortState: { propId: string; dir: 'asc' | 'desc' } | null;
   onRename: (name: string) => void;
   onDelete: () => void;
   onUpdateOptions: (opts: DbSelectOption[]) => void;
+  onSort: (propId: string, dir: 'asc' | 'desc' | null) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState(prop.name);
   const [newOptName, setNewOptName] = useState('');
   const [newOptColor, setNewOptColor] = useState('gray');
   const ref = useRef<HTMLDivElement>(null);
+  const isActive = sortState?.propId === prop.id;
 
   useEffect(() => {
     if (!open) return;
@@ -255,14 +302,27 @@ function PropertyHeader({
     onUpdateOptions((prop.options ?? []).filter((o) => o.id !== id));
   };
 
+  const cycleSort = () => {
+    if (!isActive) { onSort(prop.id, 'asc'); return; }
+    if (sortState?.dir === 'asc') { onSort(prop.id, 'desc'); return; }
+    onSort(prop.id, null);
+  };
+
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative flex items-center">
       <button
         onClick={() => { setNameDraft(prop.name); setOpen((v) => !v); }}
-        className="flex items-center gap-1 w-full px-2 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50 whitespace-nowrap"
+        className="flex flex-1 items-center gap-1 px-2 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50 whitespace-nowrap overflow-hidden"
       >
         <span className="text-[11px]">{TYPE_ICONS[prop.type]}</span>
         <span className="truncate">{prop.name}</span>
+      </button>
+      <button
+        onClick={cycleSort}
+        className={`shrink-0 px-1 py-2 text-[10px] transition ${isActive ? 'text-brand-500' : 'text-gray-300 hover:text-gray-500'}`}
+        title="並び替え"
+      >
+        {isActive && sortState?.dir === 'asc' ? '▲' : isActive && sortState?.dir === 'desc' ? '▼' : '⇅'}
       </button>
 
       {open && (
@@ -340,6 +400,153 @@ function PropertyHeader({
   );
 }
 
+// ─── 行詳細サイドパネル ──────────────────────────────────────────────────────
+
+function RowDetailPanel({
+  row,
+  schema,
+  onSave,
+  onClose,
+}: {
+  row: DbRow;
+  schema: { properties: DbProperty[] };
+  onSave: (propId: string, val: string | number | boolean | null) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="flex w-72 shrink-0 flex-col border-l border-gray-200 bg-white">
+      <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+        <p className="text-sm font-semibold text-gray-700">行の詳細</p>
+        <button onClick={onClose} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 text-lg leading-none">
+          ✕
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+        {schema.properties.map((prop) => {
+          const raw = row.cells[prop.id] ?? null;
+          return (
+            <div key={prop.id}>
+              <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                <span>{TYPE_ICONS[prop.type]}</span>
+                <span>{prop.name}</span>
+              </p>
+              <div className="rounded-lg border border-gray-200 px-2 py-1.5 min-h-[36px] flex items-center">
+                {(prop.type === 'title' || prop.type === 'text') && (
+                  <TextCell
+                    value={typeof raw === 'string' ? raw : ''}
+                    onSave={(v) => onSave(prop.id, v)}
+                    placeholder={prop.type === 'title' ? 'Untitled' : ''}
+                  />
+                )}
+                {prop.type === 'number' && (
+                  <NumberCell
+                    value={typeof raw === 'number' ? raw : null}
+                    onSave={(v) => onSave(prop.id, v)}
+                  />
+                )}
+                {prop.type === 'select' && (
+                  <SelectCell
+                    value={typeof raw === 'string' ? raw : ''}
+                    options={prop.options ?? []}
+                    onSave={(v) => onSave(prop.id, v)}
+                  />
+                )}
+                {prop.type === 'checkbox' && (
+                  <CheckboxCell
+                    value={typeof raw === 'boolean' ? raw : false}
+                    onSave={(v) => onSave(prop.id, v)}
+                  />
+                )}
+                {prop.type === 'date' && (
+                  <DateCell
+                    value={typeof raw === 'string' ? raw : ''}
+                    onSave={(v) => onSave(prop.id, v)}
+                  />
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── フィルターバー ──────────────────────────────────────────────────────────
+
+function FilterBar({
+  schema,
+  filter,
+  onChange,
+  onClear,
+}: {
+  schema: { properties: DbProperty[] };
+  filter: { propId: string; value: string } | null;
+  onChange: (f: { propId: string; value: string }) => void;
+  onClear: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [propId, setPropId] = useState(schema.properties[0]?.id ?? '');
+  const [value, setValue] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const apply = () => {
+    if (value.trim()) { onChange({ propId, value: value.trim() }); }
+    setOpen(false);
+  };
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`flex items-center gap-1 rounded px-2.5 py-1 text-xs transition ${filter ? 'bg-brand-50 text-brand-600 border border-brand-200' : 'text-gray-500 hover:bg-gray-100'}`}
+      >
+        <span>⊟</span>
+        <span>フィルター</span>
+        {filter && <span className="ml-0.5 text-[10px]">●</span>}
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-1 w-64 rounded-xl border border-gray-200 bg-white p-3 shadow-xl">
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">列</p>
+          <select
+            value={propId}
+            onChange={(e) => setPropId(e.target.value)}
+            className="w-full rounded border border-gray-200 px-2 py-1 text-sm outline-none focus:border-brand-400 mb-2"
+          >
+            {schema.properties.map((p) => (
+              <option key={p.id} value={p.id}>{TYPE_ICONS[p.type]} {p.name}</option>
+            ))}
+          </select>
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">値を含む</p>
+          <input
+            autoFocus
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') apply(); if (e.key === 'Escape') setOpen(false); }}
+            placeholder="フィルター値"
+            className="w-full rounded border border-gray-200 px-2 py-1 text-sm outline-none focus:border-brand-400 mb-2"
+          />
+          <div className="flex gap-2">
+            <button onClick={apply} className="flex-1 rounded bg-brand-500 py-1.5 text-xs text-white hover:bg-brand-600">適用</button>
+            {filter && (
+              <button onClick={() => { onClear(); setValue(''); setOpen(false); }} className="flex-1 rounded border border-gray-200 py-1.5 text-xs text-gray-500 hover:bg-gray-50">クリア</button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── メインコンポーネント ────────────────────────────────────────────────────
 
 export function DatabaseView({ page, uid, onSaveSchema }: DatabaseViewProps) {
@@ -349,20 +556,20 @@ export function DatabaseView({ page, uid, onSaveSchema }: DatabaseViewProps) {
   const [newPropName, setNewPropName] = useState('');
   const [newPropType, setNewPropType] = useState<DbPropertyType>('text');
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
+  const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
+  const [sortState, setSortState] = useState<{ propId: string; dir: 'asc' | 'desc' } | null>(null);
+  const [filterState, setFilterState] = useState<{ propId: string; value: string } | null>(null);
   const addPropRef = useRef<HTMLTableHeaderCellElement>(null);
 
-  // ページが変わったらスキーマを再パース
   useEffect(() => {
     setSchema(parseDbSchema(page.content));
   }, [page.id, page.content]);
 
-  // 行サブスクリプション
   useEffect(() => {
     const unsub = subscribeRows(uid, page.id);
     return unsub;
   }, [uid, page.id, subscribeRows]);
 
-  // プロパティ追加フォームの外クリック閉じ
   useEffect(() => {
     if (!addingProp) return;
     const handler = (e: MouseEvent) => {
@@ -374,7 +581,6 @@ export function DatabaseView({ page, uid, onSaveSchema }: DatabaseViewProps) {
     return () => document.removeEventListener('mousedown', handler);
   }, [addingProp]);
 
-  // スキーマ保存
   const saveSchema = async (newSchema: typeof schema) => {
     setSchema(newSchema);
     await onSaveSchema(JSON.stringify(newSchema));
@@ -407,154 +613,240 @@ export function DatabaseView({ page, uid, onSaveSchema }: DatabaseViewProps) {
   };
 
   const handleCellSave = async (row: DbRow, propId: string, val: string | number | boolean | null) => {
-    const newCells = { ...row.cells, [propId]: val };
-    await updateRow(uid, row.id, newCells);
+    await updateRow(uid, row.id, { ...row.cells, [propId]: val });
   };
 
   const handleAddRow = async () => {
     await addRow(uid, page.id);
   };
 
+  const handleSort = (propId: string, dir: 'asc' | 'desc' | null) => {
+    setSortState(dir === null ? null : { propId, dir });
+  };
+
   const getCellValue = (row: DbRow, propId: string) => row.cells[propId] ?? null;
 
+  const getCellText = (row: DbRow, propId: string): string => {
+    const val = row.cells[propId];
+    if (val == null) return '';
+    if (typeof val === 'boolean') return val ? '1' : '0';
+    return String(val);
+  };
+
+  // フィルタリング
+  let displayRows = filterState
+    ? rows.filter((row) => {
+        const text = getCellText(row, filterState.propId).toLowerCase();
+        const prop = schema.properties.find((p) => p.id === filterState.propId);
+        if (prop?.type === 'select') {
+          const opt = prop.options?.find((o) => o.id === row.cells[filterState.propId]);
+          return (opt?.name ?? '').toLowerCase().includes(filterState.value.toLowerCase());
+        }
+        return text.includes(filterState.value.toLowerCase());
+      })
+    : rows;
+
+  // ソート
+  if (sortState) {
+    const { propId, dir } = sortState;
+    displayRows = [...displayRows].sort((a, b) => {
+      const av = getCellText(a, propId);
+      const bv = getCellText(b, propId);
+      return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+    });
+  }
+
+  const selectedRow = selectedRowId ? rows.find((r) => r.id === selectedRowId) ?? null : null;
+
   return (
-    <div className="flex flex-col h-full overflow-auto">
+    <div className="flex h-full overflow-hidden">
       {/* テーブルエリア */}
-      <div className="flex-1 overflow-auto px-6 py-4">
-        <table className="border-collapse text-sm w-full min-w-max">
-          {/* ヘッダー */}
-          <thead>
-            <tr className="border-b border-gray-200">
-              {schema.properties.map((prop) => (
-                <th
-                  key={prop.id}
-                  className="relative border-r border-gray-100 bg-gray-50 text-left font-normal min-w-[140px] max-w-[280px]"
-                  style={{ width: prop.type === 'checkbox' ? 80 : prop.type === 'number' ? 100 : 180 }}
-                >
-                  <PropertyHeader
-                    prop={prop}
-                    onRename={(name) => handleRenameProp(prop.id, name)}
-                    onDelete={() => handleDeleteProp(prop.id)}
-                    onUpdateOptions={(opts) => handleUpdateOptions(prop.id, opts)}
-                  />
-                </th>
-              ))}
-              {/* + 列追加ボタン */}
-              <th className="relative bg-gray-50 px-2 py-1 w-10" ref={addPropRef}>
-                <button
-                  onClick={() => setAddingProp((v) => !v)}
-                  className="flex items-center justify-center w-6 h-6 rounded text-gray-400 hover:bg-gray-200 hover:text-brand-500 text-base font-semibold"
-                  title="列を追加"
-                >
-                  +
-                </button>
-                {addingProp && (
-                  <div className="absolute right-0 top-full z-40 w-52 rounded-xl border border-gray-200 bg-white p-3 shadow-xl mt-0.5">
-                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">列名</p>
-                    <input
-                      autoFocus
-                      value={newPropName}
-                      onChange={(e) => setNewPropName(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleAddProp(); if (e.key === 'Escape') setAddingProp(false); }}
-                      placeholder="列名"
-                      className="w-full rounded border border-gray-200 px-2 py-1 text-sm outline-none focus:border-brand-400 mb-2"
-                    />
-                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">タイプ</p>
-                    <div className="space-y-0.5 mb-2">
-                      {(Object.keys(TYPE_ICONS) as DbPropertyType[]).filter((t) => t !== 'title').map((t) => (
-                        <button
-                          key={t}
-                          onClick={() => setNewPropType(t)}
-                          className={`flex w-full items-center gap-2 rounded px-2 py-1 text-xs transition ${newPropType === t ? 'bg-brand-50 text-brand-600 font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
-                        >
-                          <span>{TYPE_ICONS[t]}</span>
-                          <span>{t}</span>
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      onClick={handleAddProp}
-                      disabled={!newPropName.trim()}
-                      className="w-full rounded bg-brand-500 py-1.5 text-xs font-medium text-white hover:bg-brand-600 disabled:opacity-40"
-                    >
-                      追加
-                    </button>
-                  </div>
-                )}
-              </th>
-              {/* 削除列ヘッダー（空） */}
-              <th className="bg-gray-50 w-8" />
-            </tr>
-          </thead>
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {/* ツールバー */}
+        <div className="flex items-center gap-2 border-b border-gray-100 px-6 py-2">
+          <FilterBar
+            schema={schema}
+            filter={filterState}
+            onChange={setFilterState}
+            onClear={() => setFilterState(null)}
+          />
+          {sortState && (
+            <button
+              onClick={() => setSortState(null)}
+              className="flex items-center gap-1 rounded px-2.5 py-1 text-xs bg-brand-50 text-brand-600 border border-brand-200"
+            >
+              <span>{sortState.dir === 'asc' ? '▲' : '▼'}</span>
+              <span>{schema.properties.find((p) => p.id === sortState.propId)?.name}</span>
+              <span className="ml-0.5 text-[10px]">✕</span>
+            </button>
+          )}
+          <span className="ml-auto text-[11px] text-gray-400">{displayRows.length} 件</span>
+        </div>
 
-          {/* ボディ */}
-          <tbody>
-            {rows.map((row) => (
-              <tr
-                key={row.id}
-                className="border-b border-gray-100 hover:bg-gray-50 group"
-                onMouseEnter={() => setHoveredRow(row.id)}
-                onMouseLeave={() => setHoveredRow(null)}
-              >
-                {schema.properties.map((prop) => {
-                  const raw = getCellValue(row, prop.id);
-                  return (
-                    <td key={prop.id} className="border-r border-gray-100 px-1 py-1 align-middle">
-                      {(prop.type === 'title' || prop.type === 'text') && (
-                        <TextCell
-                          value={typeof raw === 'string' ? raw : ''}
-                          onSave={(v) => handleCellSave(row, prop.id, v)}
-                          placeholder={prop.type === 'title' ? 'Untitled' : ''}
-                        />
-                      )}
-                      {prop.type === 'number' && (
-                        <NumberCell
-                          value={typeof raw === 'number' ? raw : null}
-                          onSave={(v) => handleCellSave(row, prop.id, v)}
-                        />
-                      )}
-                      {prop.type === 'select' && (
-                        <SelectCell
-                          value={typeof raw === 'string' ? raw : ''}
-                          options={prop.options ?? []}
-                          onSave={(v) => handleCellSave(row, prop.id, v)}
-                        />
-                      )}
-                      {prop.type === 'checkbox' && (
-                        <CheckboxCell
-                          value={typeof raw === 'boolean' ? raw : false}
-                          onSave={(v) => handleCellSave(row, prop.id, v)}
-                        />
-                      )}
-                    </td>
-                  );
-                })}
-                {/* + 列分の空セル */}
-                <td className="border-r border-gray-100" />
-                {/* 削除ボタン */}
-                <td className="px-1 py-1 text-center align-middle w-8">
-                  <button
-                    onClick={() => removeRow(uid, row.id)}
-                    className={`text-gray-300 hover:text-red-400 text-sm transition ${hoveredRow === row.id ? 'opacity-100' : 'opacity-0'}`}
-                    title="行を削除"
+        <div className="flex-1 overflow-auto px-6 py-4">
+          <table className="border-collapse text-sm w-full min-w-max">
+            <thead>
+              <tr className="border-b border-gray-200">
+                {schema.properties.map((prop) => (
+                  <th
+                    key={prop.id}
+                    className="relative border-r border-gray-100 bg-gray-50 text-left font-normal min-w-[140px] max-w-[280px]"
+                    style={{ width: prop.type === 'checkbox' ? 80 : prop.type === 'number' ? 100 : prop.type === 'date' ? 140 : 180 }}
                   >
-                    🗑
+                    <PropertyHeader
+                      prop={prop}
+                      sortState={sortState}
+                      onRename={(name) => handleRenameProp(prop.id, name)}
+                      onDelete={() => handleDeleteProp(prop.id)}
+                      onUpdateOptions={(opts) => handleUpdateOptions(prop.id, opts)}
+                      onSort={handleSort}
+                    />
+                  </th>
+                ))}
+                <th className="relative bg-gray-50 px-2 py-1 w-10" ref={addPropRef}>
+                  <button
+                    onClick={() => setAddingProp((v) => !v)}
+                    className="flex items-center justify-center w-6 h-6 rounded text-gray-400 hover:bg-gray-200 hover:text-brand-500 text-base font-semibold"
+                    title="列を追加"
+                  >
+                    +
                   </button>
-                </td>
+                  {addingProp && (
+                    <div className="absolute right-0 top-full z-40 w-52 rounded-xl border border-gray-200 bg-white p-3 shadow-xl mt-0.5">
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">列名</p>
+                      <input
+                        autoFocus
+                        value={newPropName}
+                        onChange={(e) => setNewPropName(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleAddProp(); if (e.key === 'Escape') setAddingProp(false); }}
+                        placeholder="列名"
+                        className="w-full rounded border border-gray-200 px-2 py-1 text-sm outline-none focus:border-brand-400 mb-2"
+                      />
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">タイプ</p>
+                      <div className="space-y-0.5 mb-2">
+                        {(Object.keys(TYPE_ICONS) as DbPropertyType[]).filter((t) => t !== 'title').map((t) => (
+                          <button
+                            key={t}
+                            onClick={() => setNewPropType(t)}
+                            className={`flex w-full items-center gap-2 rounded px-2 py-1 text-xs transition ${newPropType === t ? 'bg-brand-50 text-brand-600 font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
+                          >
+                            <span>{TYPE_ICONS[t]}</span>
+                            <span>{t}</span>
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={handleAddProp}
+                        disabled={!newPropName.trim()}
+                        className="w-full rounded bg-brand-500 py-1.5 text-xs font-medium text-white hover:bg-brand-600 disabled:opacity-40"
+                      >
+                        追加
+                      </button>
+                    </div>
+                  )}
+                </th>
+                <th className="bg-gray-50 w-8" />
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
 
-        {/* フッター: 行追加 */}
-        <button
-          onClick={handleAddRow}
-          className="mt-1 flex items-center gap-1.5 rounded px-3 py-1.5 text-xs text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition"
-        >
-          <span className="text-base leading-none font-semibold">+</span>
-          <span>新規</span>
-        </button>
+            <tbody>
+              {displayRows.map((row) => (
+                <tr
+                  key={row.id}
+                  className={`border-b border-gray-100 hover:bg-gray-50 group ${selectedRowId === row.id ? 'bg-brand-50' : ''}`}
+                  onMouseEnter={() => setHoveredRow(row.id)}
+                  onMouseLeave={() => setHoveredRow(null)}
+                >
+                  {schema.properties.map((prop, propIdx) => {
+                    const raw = getCellValue(row, prop.id);
+                    return (
+                      <td key={prop.id} className="border-r border-gray-100 px-1 py-1 align-middle">
+                        {propIdx === 0 && (
+                          <div className="flex items-center">
+                            <div className="flex-1 min-w-0">
+                              <TextCell
+                                value={typeof raw === 'string' ? raw : ''}
+                                onSave={(v) => handleCellSave(row, prop.id, v)}
+                                placeholder="Untitled"
+                              />
+                            </div>
+                            <button
+                              onClick={() => setSelectedRowId(selectedRowId === row.id ? null : row.id)}
+                              className={`shrink-0 ml-1 rounded px-1 py-0.5 text-[10px] transition ${selectedRowId === row.id ? 'text-brand-500' : 'text-gray-300 hover:text-brand-400'} ${hoveredRow === row.id || selectedRowId === row.id ? 'opacity-100' : 'opacity-0'}`}
+                              title="詳細を開く"
+                            >
+                              ↗
+                            </button>
+                          </div>
+                        )}
+                        {propIdx > 0 && (prop.type === 'title' || prop.type === 'text') && (
+                          <TextCell
+                            value={typeof raw === 'string' ? raw : ''}
+                            onSave={(v) => handleCellSave(row, prop.id, v)}
+                          />
+                        )}
+                        {prop.type === 'number' && propIdx > 0 && (
+                          <NumberCell
+                            value={typeof raw === 'number' ? raw : null}
+                            onSave={(v) => handleCellSave(row, prop.id, v)}
+                          />
+                        )}
+                        {prop.type === 'select' && (
+                          <SelectCell
+                            value={typeof raw === 'string' ? raw : ''}
+                            options={prop.options ?? []}
+                            onSave={(v) => handleCellSave(row, prop.id, v)}
+                          />
+                        )}
+                        {prop.type === 'checkbox' && (
+                          <CheckboxCell
+                            value={typeof raw === 'boolean' ? raw : false}
+                            onSave={(v) => handleCellSave(row, prop.id, v)}
+                          />
+                        )}
+                        {prop.type === 'date' && (
+                          <DateCell
+                            value={typeof raw === 'string' ? raw : ''}
+                            onSave={(v) => handleCellSave(row, prop.id, v)}
+                          />
+                        )}
+                      </td>
+                    );
+                  })}
+                  <td className="border-r border-gray-100" />
+                  <td className="px-1 py-1 text-center align-middle w-8">
+                    <button
+                      onClick={() => removeRow(uid, row.id)}
+                      className={`text-gray-300 hover:text-red-400 text-sm transition ${hoveredRow === row.id ? 'opacity-100' : 'opacity-0'}`}
+                      title="行を削除"
+                    >
+                      🗑
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <button
+            onClick={handleAddRow}
+            className="mt-1 flex items-center gap-1.5 rounded px-3 py-1.5 text-xs text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition"
+          >
+            <span className="text-base leading-none font-semibold">+</span>
+            <span>新規</span>
+          </button>
+        </div>
       </div>
+
+      {/* 行詳細サイドパネル */}
+      {selectedRow && (
+        <RowDetailPanel
+          row={selectedRow}
+          schema={schema}
+          onSave={(propId, val) => handleCellSave(selectedRow, propId, val)}
+          onClose={() => setSelectedRowId(null)}
+        />
+      )}
     </div>
   );
 }
