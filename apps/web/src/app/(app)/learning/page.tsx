@@ -701,7 +701,7 @@ function ItemCard({ item, uid, showReviewAction }: {
         <div className="min-w-0 flex-1 cursor-pointer" onClick={() => setExpanded((v) => !v)}>
           {item.notionPageId && (
             <Link
-              href={`/notion-plus/${item.notionPageId}?hl=${encodeURIComponent(item.content.slice(0, 60))}`}
+              href={`/notion-plus/${item.notionPageId}?hl=${encodeURIComponent((item.content.split('\n').find(l => l.trim().length > 5) ?? item.content).trim().slice(0, 80))}`}
               onClick={(e) => e.stopPropagation()}
               className="mb-1.5 flex w-fit items-center gap-1 rounded-md bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-600 hover:bg-brand-100"
               title="ノートで開く（ハイライト表示）"

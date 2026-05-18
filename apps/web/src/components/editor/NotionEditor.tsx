@@ -907,19 +907,36 @@ export function NotionEditor({
 
   useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
 
-  // ハイライトテキストが指定された場合、ブラウザのネイティブ検索でスクロール＆選択
+  // highlightText が指定された場合、ブロック単位で検索してハイライト＆スクロール
   useEffect(() => {
-    if (!highlightText) return;
-    const search = highlightText.replace(/\n/g, ' ').trim().slice(0, 60);
+    if (!editor || !highlightText) return;
+    const search = highlightText.trim().slice(0, 80);
     if (!search) return;
+
     const timer = setTimeout(() => {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (window as any).find?.(search, false, false, true, false, false, false);
-      } catch { /* not supported */ }
+      let found = false;
+      editor.state.doc.descendants((node, pos) => {
+        if (found) return false;
+        if (!node.isBlock) return true;
+        const text = node.textContent;
+        const idx = text.indexOf(search);
+        if (idx === -1) return true;
+        const from = pos + 1 + idx;
+        const to = from + search.length;
+        editor.chain().focus().setTextSelection({ from, to }).setHighlight({ color: '#FDE68A' }).scrollIntoView().run();
+        found = true;
+        return false;
+      });
+      if (!found) return;
+      setTimeout(() => {
+        document.addEventListener('click', () => {
+          editor.chain().unsetHighlight().run();
+        }, { once: true });
+      }, 100);
     }, 800);
+
     return () => clearTimeout(timer);
-  }, [highlightText]);
+  }, [editor, highlightText]);
 
   // テーブルホバーで + ボタン表示
   useEffect(() => {
