@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { type User } from 'firebase/auth';
+import { type NotionPage } from '@study-tracker/core';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotionPageStore } from '@/stores/notionPageStore';
 import { APP_VERSION } from '@/lib/version';
@@ -23,6 +24,55 @@ function PageIcon({ icon }: { icon: string }) {
     return <img src={icon} alt="" className="h-4 w-4 shrink-0 rounded object-cover" style={{ aspectRatio: '1/1' }} />;
   }
   return <span className="shrink-0 text-sm leading-none">{icon}</span>;
+}
+
+// currentId が parentId の子孫かどうかを確認し、直接の子ページIDを返す
+function findActiveChild(pages: NotionPage[], parentId: string, currentId: string): string | null {
+  for (const p of pages) {
+    if (p.parentId !== parentId) continue;
+    if (p.id === currentId) return p.id;
+    const found = findActiveChild(pages, p.id, currentId);
+    if (found !== null) return p.id;
+  }
+  return null;
+}
+
+// 現在のページまでのパスを再帰的に表示するコンポーネント
+function PageTreeEntry({
+  page, pages, currentId,
+}: {
+  page: NotionPage;
+  pages: NotionPage[];
+  currentId: string | undefined;
+}) {
+  const isActive = page.id === currentId;
+  const activeChildId = currentId && currentId !== page.id
+    ? findActiveChild(pages, page.id, currentId)
+    : null;
+  const activeChild = activeChildId ? pages.find((p) => p.id === activeChildId) : null;
+
+  return (
+    <div>
+      <Link
+        href={`/notion-plus/${page.id}`}
+        className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors ${
+          isActive
+            ? 'bg-white font-semibold text-gray-900 shadow-sm'
+            : 'text-gray-600 hover:bg-white hover:text-gray-900'
+        }`}
+      >
+        <PageIcon icon={page.icon} />
+        <span className="min-w-0 flex-1 truncate">{page.title || 'Untitled'}</span>
+        {page.isFavorite && <span className="shrink-0 text-[10px] text-yellow-400">★</span>}
+      </Link>
+      {/* 現在いるページへのパス上にある子ページを再帰表示 */}
+      {activeChild && (
+        <div className="ml-4 border-l border-gray-200 pl-2 pt-0.5">
+          <PageTreeEntry page={activeChild} pages={pages} currentId={currentId} />
+        </div>
+      )}
+    </div>
+  );
 }
 
 function UserFooter({ user }: { user: User }) {
@@ -101,43 +151,11 @@ function NotionPageSidebar({ user }: { user: User }) {
           </div>
         )}
 
-        {/* 全ページツリー */}
+        {/* 全ページツリー（再帰的にアクティブパスを表示） */}
         <div className="space-y-0.5">
-          {roots.map((page) => {
-            const isActive = page.id === currentId;
-            // 現在いる子ページだけ表示（他の子は非表示）
-            const activeChild = pages.find((p) => p.parentId === page.id && p.id === currentId);
-
-            return (
-              <div key={page.id}>
-                <Link
-                  href={`/notion-plus/${page.id}`}
-                  className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors ${
-                    isActive
-                      ? 'bg-white font-semibold text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:bg-white hover:text-gray-900'
-                  }`}
-                >
-                  <PageIcon icon={page.icon} />
-                  <span className="min-w-0 flex-1 truncate">{page.title || 'Untitled'}</span>
-                  {page.isFavorite && <span className="shrink-0 text-[10px] text-yellow-400">★</span>}
-                </Link>
-
-                {/* 現在いる子ページのみ表示 */}
-                {activeChild && (
-                  <div className="ml-4 border-l border-gray-200 pl-2 pt-0.5">
-                    <Link
-                      href={`/notion-plus/${activeChild.id}`}
-                      className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold text-gray-800 bg-white shadow-sm"
-                    >
-                      <PageIcon icon={activeChild.icon} />
-                      <span className="min-w-0 flex-1 truncate">{activeChild.title || 'Untitled'}</span>
-                    </Link>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          {roots.map((page) => (
+            <PageTreeEntry key={page.id} page={page} pages={pages} currentId={currentId} />
+          ))}
         </div>
       </nav>
 

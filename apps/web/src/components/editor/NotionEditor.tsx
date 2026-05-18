@@ -910,8 +910,8 @@ export function NotionEditor({
   // ハイライトテキストが指定された場合、エディタ内で検索してハイライト
   useEffect(() => {
     if (!editor || !highlightText) return;
-    // \n はブロック間の区切りなので空白に置換して検索（テキストノードには \n が含まれない）
-    const search = highlightText.replace(/\n/g, ' ').slice(0, 60);
+    // \n はブロック間の区切りなので空白に置換し、前後の空白も除去して検索
+    const search = highlightText.replace(/\n/g, ' ').trim().slice(0, 60);
 
     const timer = setTimeout(() => {
       const texts: { text: string; pos: number }[] = [];
@@ -1123,8 +1123,8 @@ export function NotionEditor({
       {/* コンテキストメニュー */}
       {ctxMenu && (
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setCtxMenu(null)} />
-          <div className="fixed z-50 w-52 overflow-hidden rounded-xl border border-gray-100 bg-white py-1 shadow-2xl" style={{ top: ctxMenu.y, left: ctxMenu.x, transform: 'translateY(-50%)' }}>
+          <div className="fixed inset-0 z-[65]" onClick={() => setCtxMenu(null)} />
+          <div className="fixed z-[70] w-52 overflow-hidden rounded-xl border border-gray-100 bg-white py-1 shadow-2xl" style={{ top: ctxMenu.y, left: ctxMenu.x, transform: 'translateY(-50%)' }}>
             {onCreateSubPage && (
               <button onClick={handleCtxCreatePage} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
                 <span className="text-base">📄</span>新規ページを作成
