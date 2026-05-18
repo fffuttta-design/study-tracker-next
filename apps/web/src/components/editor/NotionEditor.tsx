@@ -718,7 +718,18 @@ const SLASH_COMMANDS: SlashCommand[] = [
   { label: '番号付きリスト',     description: '1. 2. 3. ...',        icon: '1.',  action: (e) => e?.chain().focus().toggleOrderedList().run() },
   { label: 'チェックリスト',     description: 'Todoリスト',           icon: '☑',  action: (e) => e?.chain().focus().toggleTaskList().run() },
   { label: 'テーブル',           description: '表を挿入',             icon: '⊞',   action: (e) => e?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
-  { label: '目次',               description: '見出しから目次を生成', icon: '≡',   action: (e) => e?.chain().focus().insertContent({ type: 'toc' }).run() },
+  { label: '目次',               description: '見出しから目次を生成', icon: '≡',   action: (e) => {
+    if (!e) return;
+    const { state, view } = e;
+    let tr = state.tr;
+    // 既存の目次ノードを逆順で削除
+    const tocPos: { pos: number; size: number }[] = [];
+    state.doc.descendants((node, pos) => { if (node.type.name === 'toc') tocPos.unshift({ pos, size: node.nodeSize }); });
+    for (const { pos, size } of tocPos) tr = tr.delete(pos, pos + size);
+    // ページ最上部（position 0）に挿入
+    tr = tr.insert(0, state.schema.nodes.toc.create());
+    view.dispatch(tr);
+  } },
   { label: 'コールアウト',       description: '目立つ注釈ブロック',   icon: '💡',  action: (e) => e?.chain().focus().insertContent({ type: 'callout', attrs: { background: '#FEF9CD' }, content: [{ type: 'paragraph' }] }).run() },
   { label: '引用',               description: 'ブロック引用',         icon: '❝',  action: (e) => e?.chain().focus().toggleBlockquote().run() },
   { label: 'コード',             description: 'コードブロック',       icon: '</>', action: (e) => e?.chain().focus().toggleCodeBlock().run() },
@@ -1125,7 +1136,7 @@ export function NotionEditor({
     if (from !== to) {
       const slice = editor.state.doc.slice(from, to);
       const parts: string[] = [];
-      slice.content.forEach((node) => parts.push(pmToMarkdown(node as PmNode)));
+      slice.content.forEach((node) => parts.push(pmToMarkdown(node as unknown as PmNode)));
       text = parts.join('').trim();
     }
     if (onRecordText) { onRecordText(text); } else { setRecordText(text); }

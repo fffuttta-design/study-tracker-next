@@ -1,7 +1,15 @@
 ﻿
 import { create } from 'zustand';
 import { type NotionPage, createNotionPage } from '@study-tracker/core';
-import { subscribeCol, upsertDoc, deleteDocById } from '@study-tracker/firebase';
+import { subscribeCol, upsertDoc, deleteDocById, fetchWhere } from '@study-tracker/firebase';
+
+export interface PageHistorySnapshot {
+  id: string;
+  pageId: string;
+  title: string;
+  content: string;
+  savedAt: string;
+}
 
 interface NotionPageState {
   pages: NotionPage[];
@@ -10,6 +18,8 @@ interface NotionPageState {
   add: (uid: string, params?: { parentId?: string; order?: number }) => Promise<NotionPage>;
   update: (uid: string, id: string, data: Partial<NotionPage>) => Promise<void>;
   remove: (uid: string, id: string) => Promise<void>;
+  saveHistory: (uid: string, pageId: string, title: string, content: string) => Promise<void>;
+  loadPageHistory: (uid: string, pageId: string) => Promise<PageHistorySnapshot[]>;
 }
 
 export const useNotionPageStore = create<NotionPageState>((set) => ({
@@ -35,5 +45,15 @@ export const useNotionPageStore = create<NotionPageState>((set) => ({
 
   remove: async (uid, id) => {
     await deleteDocById(uid, 'notionPages', id);
+  },
+
+  saveHistory: async (uid, pageId, title, content) => {
+    const id = `${pageId}_${Date.now()}`;
+    await upsertDoc(uid, 'notionPageHistory', id, { pageId, title, content, savedAt: new Date().toISOString() });
+  },
+
+  loadPageHistory: async (uid, pageId) => {
+    const all = await fetchWhere<PageHistorySnapshot>(uid, 'notionPageHistory', 'pageId', pageId);
+    return all.sort((a, b) => b.savedAt.localeCompare(a.savedAt)).slice(0, 20);
   },
 }));

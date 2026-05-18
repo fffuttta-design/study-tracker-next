@@ -7,6 +7,8 @@ import {
   deleteDoc,
   onSnapshot,
   writeBatch,
+  query,
+  where,
   type Firestore,
   type QuerySnapshot,
   type DocumentData,
@@ -61,6 +63,17 @@ export async function deleteDocById(
   id: string
 ): Promise<void> {
   await deleteDoc(doc(getDb(), 'users', uid, colName, id));
+}
+
+export async function fetchWhere<T>(
+  uid: string,
+  colName: string,
+  field: string,
+  value: unknown,
+): Promise<T[]> {
+  const q = query(subCol(uid, colName), where(field, '==', value));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as T);
 }
 
 // 500件チャンク分割バッチ（旧Flutter版と同じ制約）

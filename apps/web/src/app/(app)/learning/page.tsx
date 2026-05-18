@@ -125,7 +125,7 @@ export default function LearningPage() {
 
       {/* タブコンテンツ */}
       <div className="flex-1 overflow-y-auto bg-gray-100">
-        {tab === 0 && <DashboardTab todayItems={todayItems} dueItems={dueItems} uid={user?.uid ?? ''} selectedDate={selectedDate} onAdd={() => setAddDialogOpen(true)} />}
+        {tab === 0 && <DashboardTab todayItems={todayItems} dueItems={dueItems} uid={user?.uid ?? ''} onAdd={() => setAddDialogOpen(true)} />}
         {tab === 1 && <TodayTab items={todayItems} uid={user?.uid ?? ''} onAdd={() => setAddDialogOpen(true)} />}
         {tab === 2 && <ReviewTab dueItems={dueItems} uid={user?.uid ?? ''} />}
         {tab === 3 && <LogTab />}
@@ -472,11 +472,10 @@ function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
 
 // ── ダッシュボードタブ ───────────────────────────────────────────────
 
-function DashboardTab({ todayItems, dueItems, uid, selectedDate, onAdd }: {
+function DashboardTab({ todayItems, dueItems, uid, onAdd }: {
   todayItems: LearningItem[];
   dueItems: LearningItem[];
   uid: string;
-  selectedDate: Date;
   onAdd: () => void;
 }) {
   // 今日の登録を時間帯でグループ化
@@ -688,7 +687,6 @@ function ItemCard({ item, uid, showReviewAction }: {
   const { update, remove } = useLearningStore();
   const nextReview = item.reviews.find((r) => !r.completed);
   const fullyDone = isFullyCompleted(item);
-  const due = hasDueReview(item);
 
   const completeReview = async () => {
     const updated = item.reviews.map((r) =>
@@ -706,15 +704,7 @@ function ItemCard({ item, uid, showReviewAction }: {
     navigator.clipboard.writeText([item.title, item.content].filter(Boolean).join('\n'));
   };
 
-  const reviewBadge = fullyDone
-    ? <span className="rounded border border-green-200 bg-green-50 px-1.5 py-0.5 text-xs text-green-600">完了</span>
-    : due
-    ? <span className="rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-xs text-red-500">復習待ち</span>
-    : nextReview
-    ? <span className="rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-xs text-blue-500">次: {STAGE_LABELS[nextReview.stageIndex]}</span>
-    : null;
-
-  const cardBg = showReviewAction && nextReview ? (STAGE_CARD_BG[nextReview.stageIndex] ?? 'bg-white') : 'bg-white';
+const cardBg = showReviewAction && nextReview ? (STAGE_CARD_BG[nextReview.stageIndex] ?? 'bg-white') : 'bg-white';
 
   return (
     <div className={`rounded-lg border transition-shadow ${cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}>

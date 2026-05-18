@@ -4,7 +4,7 @@ import { Fragment, use, useEffect, useCallback, useState, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
-import { useNotionPageStore } from '@/stores/notionPageStore';
+import { useNotionPageStore, type PageHistorySnapshot } from '@/stores/notionPageStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { type NotionPage } from '@study-tracker/core';
 import { NotionEditor } from '@/components/editor/NotionEditor';
@@ -104,7 +104,7 @@ const ICON_PRESETS = [
 export default function NotionPageDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { user } = useAuthStore();
-  const { pages, update, add, remove } = useNotionPageStore();
+  const { pages, update, add, remove, saveHistory, loadPageHistory } = useNotionPageStore();
   const router = useRouter();
   const searchParams = useSearchParams();
   const highlightText = searchParams.get('hl') ?? undefined;
@@ -113,9 +113,12 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [iconUrlDraft, setIconUrlDraft] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [editorKey, setEditorKey] = useState(0);
   const iconPickerRef = useRef<HTMLDivElement>(null);
   const settingsRef = useRef<HTMLDivElement>(null);
   const recordTriggerRef = useRef<(() => void) | null>(null);
+  const lastHistorySavedAtRef = useRef(0);
 
   const page = pages.find((p) => p.id === id);
   const breadcrumbs = buildBreadcrumbs(pages, id);
@@ -141,9 +144,24 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
       setSaving(true);
       try {
         await update(user.uid, page.id, { title, content });
+        // 5分に1回履歴を保存
+        const now = Date.now();
+        if (now - lastHistorySavedAtRef.current > 5 * 60 * 1000) {
+          lastHistorySavedAtRef.current = now;
+          saveHistory(user.uid, page.id, title, content).catch(() => {});
+        }
       } finally {
         setSaving(false);
       }
+    },
+    [user, page, update, saveHistory]
+  );
+
+  const handleHistoryRestore = useCallback(
+    async (title: string, content: string) => {
+      if (!user || !page) return;
+      await update(user.uid, page.id, { title, content });
+      setEditorKey((k) => k + 1);
     },
     [user, page, update]
   );
@@ -279,6 +297,13 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
           >
             📚 記録
           </button>
+          <button
+            onClick={() => setHistoryOpen(true)}
+            className="rounded-lg border border-gray-200 px-3 py-1 text-xs font-medium text-gray-500 hover:bg-gray-50"
+            title="変更履歴"
+          >
+            🕐 履歴
+          </button>
           <span className="text-xs text-gray-400">{saving ? '保存中...' : '自動保存'}</span>
           {/* 設定ボタン */}
           <div className="relative" ref={settingsRef}>
@@ -362,7 +387,7 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
       )}
 
       <NotionEditor
-        key={page.id}
+        key={`${page.id}-${editorKey}`}
         initialTitle={page.title}
         initialContent={page.content}
         onSave={handleSave}
@@ -372,6 +397,144 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
         notionPagePath={breadcrumbs.map((p) => p.title || 'Untitled').join(' / ')}
         highlightText={highlightText}
       />
+
+      {historyOpen && user && (
+        <HistoryModal
+          uid={user.uid}
+          pageId={page.id}
+          loadHistory={loadPageHistory}
+          onRestore={handleHistoryRestore}
+          onClose={() => setHistoryOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── 変更履歴モーダル ──────────────────────────────────────────────────
+
+function extractPreviewText(content: string): string {
+  try {
+    const json = JSON.parse(content) as { content?: unknown[] };
+    const lines: string[] = [];
+    function traverse(node: { type?: string; text?: string; content?: unknown[]; attrs?: { level?: number } }) {
+      if (typeof node.text === 'string') {
+        lines.push(node.text);
+      } else if (Array.isArray(node.content)) {
+        if (node.type === 'heading') {
+          const prefix = '#'.repeat(node.attrs?.level ?? 1);
+          const text = (node.content as { text?: string }[]).map((c) => c.text ?? '').join('');
+          if (text.trim()) lines.push(`${prefix} ${text}`);
+        } else if (node.type === 'paragraph') {
+          const text = (node.content as { text?: string }[]).map((c) => c.text ?? '').join('');
+          if (text.trim()) { lines.push(text); lines.push(''); }
+        } else {
+          (node.content as typeof node[]).forEach(traverse);
+        }
+      }
+    }
+    if (json.content) (json.content as typeof json[]).forEach(traverse);
+    return lines.join('\n').trim();
+  } catch {
+    return content.slice(0, 500);
+  }
+}
+
+function HistoryModal({ uid, pageId, loadHistory, onRestore, onClose }: {
+  uid: string;
+  pageId: string;
+  loadHistory: (uid: string, pageId: string) => Promise<PageHistorySnapshot[]>;
+  onRestore: (title: string, content: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [snapshots, setSnapshots] = useState<PageHistorySnapshot[]>([]);
+  const [selected, setSelected] = useState<PageHistorySnapshot | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [restoring, setRestoring] = useState(false);
+
+  useEffect(() => {
+    loadHistory(uid, pageId).then((snaps) => {
+      setSnapshots(snaps);
+      if (snaps.length > 0) setSelected(snaps[0]);
+      setLoading(false);
+    });
+  }, [uid, pageId, loadHistory]);
+
+  const handleRestore = async () => {
+    if (!selected) return;
+    setRestoring(true);
+    try {
+      await onRestore(selected.title, selected.content);
+      onClose();
+    } finally {
+      setRestoring(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-8">
+      <div className="flex w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl" style={{ height: 'calc(100vh - 8rem)' }}>
+        {/* サイドバー: タイムスタンプ一覧 */}
+        <div className="flex w-56 shrink-0 flex-col border-r border-gray-100 bg-gray-50">
+          <div className="border-b border-gray-100 px-4 py-3">
+            <p className="text-sm font-semibold text-gray-700">🕐 変更履歴</p>
+          </div>
+          <div className="flex-1 overflow-y-auto py-1">
+            {loading ? (
+              <p className="px-4 py-3 text-xs text-gray-400">読込中...</p>
+            ) : snapshots.length === 0 ? (
+              <p className="px-4 py-3 text-xs text-gray-400">履歴がありません</p>
+            ) : snapshots.map((snap) => {
+              const d = new Date(snap.savedAt);
+              return (
+                <button
+                  key={snap.id}
+                  onClick={() => setSelected(snap)}
+                  className={`flex w-full flex-col gap-0.5 px-4 py-2.5 text-left text-xs transition ${selected?.id === snap.id ? 'bg-brand-50 text-brand-700' : 'text-gray-600 hover:bg-gray-100'}`}
+                >
+                  <span className="font-medium">{d.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}</span>
+                  <span className="text-gray-400">{d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* プレビューエリア */}
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <div className="flex items-center justify-between border-b border-gray-100 px-6 py-3">
+            <p className="text-sm font-semibold text-gray-700">
+              {selected
+                ? `${new Date(selected.savedAt).toLocaleString('ja-JP')} のバージョン`
+                : 'バージョンを選択してください'}
+            </p>
+          </div>
+          <div className="flex-1 overflow-y-auto px-8 py-6">
+            {selected ? (
+              <>
+                <h1 className="mb-4 text-2xl font-bold text-gray-900">{selected.title || 'Untitled'}</h1>
+                <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-gray-600">
+                  {extractPreviewText(selected.content)}
+                </pre>
+              </>
+            ) : (
+              <p className="text-sm text-gray-400">左から履歴を選択してください</p>
+            )}
+          </div>
+          <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-6 py-3">
+            <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-gray-500 hover:bg-gray-100">
+              キャンセル
+            </button>
+            <button
+              onClick={handleRestore}
+              disabled={!selected || restoring}
+              className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
+            >
+              {restoring ? '復元中...' : 'この時点に復元'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
