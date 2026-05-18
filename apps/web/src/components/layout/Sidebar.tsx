@@ -103,61 +103,87 @@ function NotionPageSidebar({ user }: { user: User }) {
       </div>
 
       {/* ページリスト */}
-      <nav className="flex-1 space-y-0.5 overflow-y-auto px-1 py-1">
+      <nav className="flex-1 overflow-y-auto px-1 py-1">
         {loading && <p className="px-3 py-2 text-xs text-gray-400">読込中...</p>}
-        {roots.map((page) => {
-          const children = pages.filter((p) => p.parentId === page.id).sort((a, b) => a.order - b.order);
-          const isActive = page.id === currentId;
-          const isExpanded = expandedIds.has(page.id);
 
-          return (
-            <div key={page.id}>
-              <div className="flex items-center gap-0.5">
-                {/* 開閉ボタン */}
-                <button
-                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-[9px] text-gray-400 hover:bg-gray-200 hover:text-gray-600 ${children.length === 0 ? 'invisible' : ''}`}
-                  style={{ transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}
-                  onClick={() => toggle(page.id)}
-                  title={isExpanded ? '閉じる' : '開く'}
-                >
-                  ▶
-                </button>
-                <Link
-                  href={`/notion-plus/${page.id}`}
-                  className={`flex flex-1 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors ${
-                    isActive
-                      ? 'bg-white font-semibold text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:bg-white hover:text-gray-900'
-                  }`}
-                >
-                  <PageIcon icon={page.icon} />
-                  <span className="min-w-0 flex-1 truncate">{page.title || 'Untitled'}</span>
-                  {page.isFavorite && <span className="shrink-0 text-xs text-yellow-400">★</span>}
-                </Link>
-              </div>
+        {/* お気に入りセクション */}
+        {roots.some((p) => p.isFavorite) && (
+          <div className="mb-1">
+            <p className="px-2 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-yellow-500">★ お気に入り</p>
+            {roots.filter((p) => p.isFavorite).map((page) => (
+              <Link
+                key={`fav-${page.id}`}
+                href={`/notion-plus/${page.id}`}
+                className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 pl-4 text-xs transition-colors ${
+                  page.id === currentId
+                    ? 'bg-white font-semibold text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:bg-white hover:text-gray-900'
+                }`}
+              >
+                <PageIcon icon={page.icon} />
+                <span className="min-w-0 flex-1 truncate">{page.title || 'Untitled'}</span>
+              </Link>
+            ))}
+            <div className="mx-2 mb-1 mt-1 border-b border-gray-200" />
+          </div>
+        )}
 
-              {/* 子ページ */}
-              {isExpanded && children.length > 0 && (
-                <div className="ml-5 space-y-0.5 border-l border-gray-200 pl-2 pt-0.5">
-                  {children.map((child) => (
-                    <Link
-                      key={child.id}
-                      href={`/notion-plus/${child.id}`}
-                      className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors ${
-                        child.id === currentId
-                          ? 'bg-white font-semibold text-gray-800 shadow-sm'
-                          : 'text-gray-500 hover:bg-white hover:text-gray-700'
-                      }`}
-                    >
-                      <PageIcon icon={child.icon} />
-                      <span className="min-w-0 flex-1 truncate">{child.title || 'Untitled'}</span>
-                    </Link>
-                  ))}
+        {/* 全ページツリー */}
+        <div className="space-y-0.5">
+          {roots.map((page) => {
+            const children = pages.filter((p) => p.parentId === page.id).sort((a, b) => a.order - b.order);
+            const isActive = page.id === currentId;
+            const isExpanded = expandedIds.has(page.id);
+
+            return (
+              <div key={page.id}>
+                <div className="flex items-center gap-0.5">
+                  {/* 開閉ボタン */}
+                  <button
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-[9px] text-gray-400 hover:bg-gray-200 hover:text-gray-600 ${children.length === 0 ? 'invisible' : ''}`}
+                    style={{ transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}
+                    onClick={() => toggle(page.id)}
+                    title={isExpanded ? '閉じる' : '開く'}
+                  >
+                    ▶
+                  </button>
+                  <Link
+                    href={`/notion-plus/${page.id}`}
+                    className={`flex flex-1 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors ${
+                      isActive
+                        ? 'bg-white font-semibold text-gray-900 shadow-sm'
+                        : 'text-gray-600 hover:bg-white hover:text-gray-900'
+                    }`}
+                  >
+                    <PageIcon icon={page.icon} />
+                    <span className="min-w-0 flex-1 truncate">{page.title || 'Untitled'}</span>
+                    {page.isFavorite && <span className="shrink-0 text-[10px] text-yellow-400">★</span>}
+                  </Link>
                 </div>
-              )}
-            </div>
-          );
-        })}
+
+                {/* 子ページ */}
+                {isExpanded && children.length > 0 && (
+                  <div className="ml-5 space-y-0.5 border-l border-gray-200 pl-2 pt-0.5">
+                    {children.map((child) => (
+                      <Link
+                        key={child.id}
+                        href={`/notion-plus/${child.id}`}
+                        className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors ${
+                          child.id === currentId
+                            ? 'bg-white font-semibold text-gray-800 shadow-sm'
+                            : 'text-gray-500 hover:bg-white hover:text-gray-700'
+                        }`}
+                      >
+                        <PageIcon icon={child.icon} />
+                        <span className="min-w-0 flex-1 truncate">{child.title || 'Untitled'}</span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </nav>
 
       {/* フッター: 学習リストに戻る + ユーザー */}

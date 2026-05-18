@@ -104,7 +104,7 @@ const ICON_PRESETS = [
 export default function NotionPageDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { user } = useAuthStore();
-  const { pages, update, add } = useNotionPageStore();
+  const { pages, update, add, remove } = useNotionPageStore();
   const router = useRouter();
   const searchParams = useSearchParams();
   const highlightText = searchParams.get('hl') ?? undefined;
@@ -181,6 +181,14 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
   const handleFavoriteToggle = async () => {
     if (!user || !page) return;
     await update(user.uid, page.id, { isFavorite: !page.isFavorite });
+  };
+
+  const handleDelete = async () => {
+    if (!user || !page) return;
+    if (!confirm(`「${page.title || 'Untitled'}」を削除しますか？\nこの操作は取り消せません。`)) return;
+    setSettingsOpen(false);
+    await remove(user.uid, page.id);
+    router.replace('/notion-plus');
   };
 
   if (!page) {
@@ -298,6 +306,15 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
                   >
                     <span className="text-base">▤</span>
                     左寄せ
+                  </button>
+                </div>
+                <div className="mt-2 border-t border-gray-100 pt-2">
+                  <button
+                    onClick={handleDelete}
+                    className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-red-500 hover:bg-red-50"
+                  >
+                    <span>🗑️</span>
+                    <span>このページを削除</span>
                   </button>
                 </div>
               </div>
