@@ -699,8 +699,7 @@ function ItemCard({ item, uid, showReviewAction }: {
 
         <div className="min-w-0 flex-1 cursor-pointer" onClick={() => setExpanded((v) => !v)}>
           <div className="flex flex-wrap items-center gap-1.5">
-            {reviewBadge}
-            <span className="font-medium text-gray-800 text-sm">
+            <span className="font-semibold text-gray-800 text-base">
               {item.title || item.content.split('\n')[0].slice(0, 60)}
             </span>
           </div>
@@ -722,9 +721,11 @@ function ItemCard({ item, uid, showReviewAction }: {
               <Link
                 href={`/notion-plus/${item.notionPageId}?hl=${encodeURIComponent((item.content.split('\n').find(l => l.trim().length > 5) ?? item.content).trim().slice(0, 80))}`}
                 onClick={(e) => e.stopPropagation()}
-                className="rounded p-1 text-gray-300 hover:bg-brand-50 hover:text-brand-500"
+                className="flex items-center gap-1 rounded-md bg-brand-50 px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-100"
                 title="ノートを開く（ハイライト表示）"
-              >📖</Link>
+              >
+                <span>📖</span><span>ノートを開く</span>
+              </Link>
             )}
             <button onClick={copyContent} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="コピー">⎘</button>
             <button onClick={() => setEditing(true)} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="編集">✎</button>
