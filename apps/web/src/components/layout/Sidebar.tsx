@@ -41,11 +41,12 @@ function findActiveChild(pages: NotionPage[], parentId: string, currentId: strin
 
 // 現在のページまでのパスを再帰的に表示するコンポーネント
 function PageTreeEntry({
-  page, pages, currentId,
+  page, pages, currentId, onCtxMenu,
 }: {
   page: NotionPage;
   pages: NotionPage[];
   currentId: string | undefined;
+  onCtxMenu: (e: React.MouseEvent, page: NotionPage) => void;
 }) {
   const isActive = page.id === currentId;
   const activeChildId = currentId && currentId !== page.id
@@ -57,6 +58,7 @@ function PageTreeEntry({
     <div>
       <Link
         href={`/notion-plus/${page.id}`}
+        onContextMenu={(e) => { e.preventDefault(); onCtxMenu(e, page); }}
         className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors ${
           isActive
             ? 'bg-white font-semibold text-gray-900 shadow-sm'
@@ -70,7 +72,7 @@ function PageTreeEntry({
       {/* 現在いるページへのパス上にある子ページを再帰表示 */}
       {activeChild && (
         <div className="ml-4 border-l border-gray-200 pl-2 pt-0.5">
-          <PageTreeEntry page={activeChild} pages={pages} currentId={currentId} />
+          <PageTreeEntry page={activeChild} pages={pages} currentId={currentId} onCtxMenu={onCtxMenu} />
         </div>
       )}
     </div>
@@ -94,7 +96,8 @@ function UserFooter({ user }: { user: User }) {
 function NotionPageSidebar({ user }: { user: User }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { pages, add, loading } = useNotionPageStore();
+  const { pages, add, remove, loading } = useNotionPageStore();
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; page: NotionPage } | null>(null);
 
   const currentId = pathname.match(/\/notion-plus\/([^/?#]+)/)?.[1];
   const [addMenuOpen, setAddMenuOpen] = useState(false);
@@ -128,6 +131,10 @@ function NotionPageSidebar({ user }: { user: User }) {
     setAddMenuOpen(false);
     const page = await add(user.uid, { type: 'database' });
     router.push(`/notion-plus/${page.id}`);
+  };
+
+  const handleCtxMenu = (e: React.MouseEvent, page: NotionPage) => {
+    setCtxMenu({ x: e.clientX, y: e.clientY, page });
   };
 
   return (
@@ -179,6 +186,7 @@ function NotionPageSidebar({ user }: { user: User }) {
               <Link
                 key={`fav-${page.id}`}
                 href={`/notion-plus/${page.id}`}
+                onContextMenu={(e) => { e.preventDefault(); handleCtxMenu(e, page); }}
                 className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 pl-4 text-xs transition-colors ${
                   page.id === currentId
                     ? 'bg-white font-semibold text-gray-900 shadow-sm'
@@ -196,9 +204,33 @@ function NotionPageSidebar({ user }: { user: User }) {
         {/* 全ページツリー（再帰的にアクティブパスを表示） */}
         <div className="space-y-0.5">
           {roots.map((page) => (
-            <PageTreeEntry key={page.id} page={page} pages={pages} currentId={currentId} />
+            <PageTreeEntry key={page.id} page={page} pages={pages} currentId={currentId} onCtxMenu={handleCtxMenu} />
           ))}
         </div>
+
+        {/* コンテキストメニュー */}
+        {ctxMenu && (
+          <>
+            <div className="fixed inset-0 z-[80]" onClick={() => setCtxMenu(null)} />
+            <div
+              className="fixed z-[90] w-44 rounded-xl border border-gray-100 bg-white py-1 shadow-2xl"
+              style={{ top: ctxMenu.y, left: ctxMenu.x }}
+            >
+              <button
+                onClick={async () => {
+                  const target = ctxMenu.page;
+                  setCtxMenu(null);
+                  if (!confirm(`「${target.title || 'Untitled'}」を削除しますか？`)) return;
+                  await remove(user.uid, target.id);
+                  if (currentId === target.id) router.replace('/notion-plus');
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-500 hover:bg-red-50"
+              >
+                <span>🗑️</span><span>削除</span>
+              </button>
+            </div>
+          </>
+        )}
       </nav>
 
       {/* フッター: 学習リストに戻る + ユーザー */}

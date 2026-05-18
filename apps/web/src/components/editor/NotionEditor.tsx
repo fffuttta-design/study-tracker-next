@@ -1,12 +1,16 @@
 'use client';
 
-import { useEffect, useRef, useCallback, useState, createContext, useContext } from 'react';
+import { useEffect, useRef, useCallback, useState, createContext, useContext, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 
 // ── ページ遷移インターセプトコンテキスト ─────────────────────────────────
 // モーダル内でページリンクをクリックした際、router.push の代わりに
 // このコンテキストのコールバックを呼ぶことでモーダル内でページを切り替える
 export const PageNavigationContext = createContext<((href: string) => void) | null>(null);
+
+// ── エディタUID コンテキスト ──────────────────────────────────────────
+export const EditorUidContext = createContext<string>('');
+
 import { Node as TiptapNode, InputRule } from '@tiptap/core';
 import {
   useEditor, EditorContent,
@@ -29,6 +33,8 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useLearningStore } from '@/stores/learningStore';
 import { useNotionPageStore } from '@/stores/notionPageStore';
+import { useDbRowStore } from '@/stores/notionDatabaseRowStore';
+import { parseDbSchema } from '@study-tracker/core';
 import './editor.css';
 
 // ── ProseMirror → Markdown 変換 ──────────────────────────────────────
@@ -643,6 +649,116 @@ const TocNode = TiptapNode.create({
   addNodeView() { return ReactNodeViewRenderer(TocView); },
 });
 
+// ── インラインデータベース埋め込み ────────────────────────────────────
+
+function InlineDatabaseEmbed({ node }: NodeViewProps) {
+  const router = useRouter();
+  const onPageNavigate = useContext(PageNavigationContext);
+  const uid = useContext(EditorUidContext);
+  const { databaseId, title: nodeTitle } = node.attrs as { databaseId: string; title: string };
+  const pages = useNotionPageStore((s) => s.pages);
+  const { rows, subscribeRows } = useDbRowStore();
+  const page = pages.find((p) => p.id === databaseId);
+  const schema = useMemo(() => parseDbSchema(page?.content ?? ''), [page?.content]);
+
+  useEffect(() => {
+    if (!uid || !databaseId) return;
+    const unsub = subscribeRows(uid, databaseId);
+    return unsub;
+  }, [uid, databaseId, subscribeRows]);
+
+  const displayTitle = page?.title || nodeTitle || 'データベース';
+  const href = `/notion-plus/${databaseId}`;
+  const PREVIEW_LIMIT = 5;
+  const previewRows = rows.slice(0, PREVIEW_LIMIT);
+  const extraRows = rows.length - PREVIEW_LIMIT;
+
+  return (
+    <NodeViewWrapper contentEditable={false}>
+      <div className="border rounded-lg overflow-hidden my-2 text-xs" contentEditable={false}>
+        {/* ヘッダーバー */}
+        <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-3 py-1.5">
+          <span className="flex items-center gap-1.5 font-medium text-gray-700">
+            <span>📊</span>
+            <span>{displayTitle}</span>
+          </span>
+          <button
+            onClick={() => href && (onPageNavigate ? onPageNavigate(href) : router.push(href))}
+            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-gray-400 hover:bg-gray-200 hover:text-gray-600"
+          >
+            ↗ 開く
+          </button>
+        </div>
+        {/* テーブル */}
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50">
+                {schema.properties.map((prop) => (
+                  <th key={prop.id} className="px-2 py-1 text-left text-[10px] font-semibold text-gray-400 border-r border-gray-100 last:border-r-0 whitespace-nowrap">
+                    {prop.name}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {previewRows.length === 0 ? (
+                <tr>
+                  <td colSpan={schema.properties.length} className="px-2 py-2 text-center text-gray-300">
+                    データなし
+                  </td>
+                </tr>
+              ) : (
+                previewRows.map((row) => (
+                  <tr key={row.id} className="border-b border-gray-50 last:border-b-0">
+                    {schema.properties.map((prop) => {
+                      const val = row.cells[prop.id] ?? null;
+                      let display = '';
+                      if (val === null || val === undefined) display = '';
+                      else if (typeof val === 'boolean') display = val ? '✓' : '';
+                      else if (prop.type === 'select') {
+                        const opt = prop.options?.find((o) => o.id === val);
+                        display = opt?.name ?? '';
+                      } else display = String(val);
+                      return (
+                        <td key={prop.id} className="px-2 py-1 border-r border-gray-50 last:border-r-0 truncate max-w-[120px] text-gray-700">
+                          {display}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))
+              )}
+              {extraRows > 0 && (
+                <tr>
+                  <td colSpan={schema.properties.length} className="px-2 py-1 text-center text-[10px] text-gray-400">
+                    +{extraRows}行
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </NodeViewWrapper>
+  );
+}
+
+const InlineDatabaseNode = TiptapNode.create({
+  name: 'inlineDatabase',
+  group: 'block',
+  atom: true,
+  addAttributes() {
+    return {
+      databaseId: { default: '' },
+      title: { default: '' },
+    };
+  },
+  parseHTML() { return [{ tag: 'div[data-type="inline-database"]' }]; },
+  renderHTML({ HTMLAttributes }) { return ['div', { ...HTMLAttributes, 'data-type': 'inline-database' }]; },
+  addNodeView() { return ReactNodeViewRenderer(InlineDatabaseEmbed); },
+});
+
 // ── テーブル拡張（セル背景色対応）───────────────────────────────────
 
 const TABLE_CELL_COLORS = [
@@ -692,7 +808,8 @@ interface SlashCommand {
   label: string;
   description: string;
   icon: string;
-  action: (editor: ReturnType<typeof useEditor>) => void;
+  action?: (editor: ReturnType<typeof useEditor>) => void;
+  asyncAction?: (editor: ReturnType<typeof useEditor>) => Promise<void>;
 }
 
 const SLASH_COMMANDS: SlashCommand[] = [
@@ -867,7 +984,27 @@ export function NotionEditor({
     setPastePopup({ url, pos: { top: coords.bottom + 8, left: coords.left }, isYoutube: isYouTubeUrl(url) });
   };
 
-  const filteredCommands = SLASH_COMMANDS.filter((c) =>
+  const { user } = useAuthStore();
+  const { add: addPage } = useNotionPageStore();
+
+  const inlineDbCommand: SlashCommand = useMemo(() => ({
+    label: 'データベース',
+    description: 'インラインデータベース（テーブル）',
+    icon: '📊',
+    asyncAction: async (e) => {
+      if (!e || !user) return;
+      const newPage = await addPage(user.uid, { type: 'database' });
+      e.chain().focus().insertContent({
+        type: 'inlineDatabase',
+        attrs: { databaseId: newPage.id, title: newPage.title || 'データベース' },
+      }).run();
+    },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [user, addPage]);
+
+  const ALL_COMMANDS = useMemo(() => [...SLASH_COMMANDS, inlineDbCommand], [inlineDbCommand]);
+
+  const filteredCommands = ALL_COMMANDS.filter((c) =>
     !slashQuery || c.label.toLowerCase().includes(slashQuery.toLowerCase())
   );
 
@@ -894,6 +1031,7 @@ export function NotionEditor({
       CalloutNode,
       ToggleHeadingNode,
       TocNode,
+      InlineDatabaseNode,
     ],
     content: (() => {
       if (!initialContent) return '';
@@ -956,11 +1094,15 @@ export function NotionEditor({
     },
   });
 
-  const applyCommand = useCallback((cmd: SlashCommand) => {
+  const applyCommand = useCallback(async (cmd: SlashCommand) => {
     if (!editor || slashStartPos.current === null) return;
     const { from } = editor.state.selection;
     editor.chain().focus().deleteRange({ from: slashStartPos.current, to: from }).run();
-    cmd.action(editor);
+    if (cmd.asyncAction) {
+      await cmd.asyncAction(editor);
+    } else if (cmd.action) {
+      cmd.action(editor);
+    }
     setSlashOpen(false);
     slashStartPos.current = null;
   }, [editor]);
@@ -1195,6 +1337,7 @@ export function NotionEditor({
   const outerClass = `relative flex flex-1 overflow-y-auto py-8 ${notionPlusLayout === 'center' ? 'justify-center px-6' : 'pl-16 pr-8'}`;
 
   return (
+    <EditorUidContext.Provider value={user?.uid ?? ''}>
     <PageNavigationContext.Provider value={onPageNavigate ?? null}>
     <div className={outerClass} onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }); }} onMouseDown={handleOuterMouseDown}>
       <div className="w-full max-w-3xl" ref={contentDivRef}>
@@ -1322,6 +1465,7 @@ export function NotionEditor({
       )}
     </div>
     </PageNavigationContext.Provider>
+    </EditorUidContext.Provider>
   );
 }
 

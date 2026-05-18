@@ -13,6 +13,7 @@ export interface DbProperty {
   name: string;
   type: DbPropertyType;
   options?: DbSelectOption[];
+  width?: number;
 }
 
 export interface DbSchema {

@@ -547,10 +547,20 @@ function FilterBar({
   );
 }
 
+// ─── デフォルト列幅 ──────────────────────────────────────────────────────────
+
+function defaultWidth(type: DbPropertyType): number {
+  if (type === 'checkbox') return 80;
+  if (type === 'number') return 100;
+  if (type === 'date') return 140;
+  return 180;
+}
+
 // ─── メインコンポーネント ────────────────────────────────────────────────────
 
 export function DatabaseView({ page, uid, onSaveSchema }: DatabaseViewProps) {
   const [schema, setSchema] = useState(() => parseDbSchema(page.content));
+  const schemaRef = useRef(schema);
   const { rows, subscribeRows, addRow, updateRow, removeRow } = useDbRowStore();
   const [addingProp, setAddingProp] = useState(false);
   const [newPropName, setNewPropName] = useState('');
@@ -564,6 +574,8 @@ export function DatabaseView({ page, uid, onSaveSchema }: DatabaseViewProps) {
   useEffect(() => {
     setSchema(parseDbSchema(page.content));
   }, [page.id, page.content]);
+
+  useEffect(() => { schemaRef.current = schema; }, [schema]);
 
   useEffect(() => {
     const unsub = subscribeRows(uid, page.id);
@@ -580,6 +592,41 @@ export function DatabaseView({ page, uid, onSaveSchema }: DatabaseViewProps) {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [addingProp]);
+
+  const resizingRef = useRef<{ propId: string; startX: number; startW: number } | null>(null);
+
+  const handleColResizeStart = (e: React.MouseEvent, propId: string, startW: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizingRef.current = { propId, startX: e.clientX, startW };
+
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;cursor:col-resize;';
+    document.body.appendChild(overlay);
+
+    const onMove = (ev: MouseEvent) => {
+      if (!resizingRef.current) return;
+      const newW = Math.max(60, resizingRef.current.startW + (ev.clientX - resizingRef.current.startX));
+      setSchema((prev) => ({
+        properties: prev.properties.map((p) =>
+          p.id === resizingRef.current!.propId ? { ...p, width: Math.round(newW) } : p
+        ),
+      }));
+    };
+
+    const onUp = () => {
+      overlay.remove();
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      if (resizingRef.current) {
+        onSaveSchema(JSON.stringify(schemaRef.current)).catch(() => {});
+      }
+      resizingRef.current = null;
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
 
   const saveSchema = async (newSchema: typeof schema) => {
     setSchema(newSchema);
@@ -690,8 +737,8 @@ export function DatabaseView({ page, uid, onSaveSchema }: DatabaseViewProps) {
                 {schema.properties.map((prop) => (
                   <th
                     key={prop.id}
-                    className="relative border-r border-gray-100 bg-gray-50 text-left font-normal min-w-[140px] max-w-[280px]"
-                    style={{ width: prop.type === 'checkbox' ? 80 : prop.type === 'number' ? 100 : prop.type === 'date' ? 140 : 180 }}
+                    className="relative group border-r border-gray-100 bg-gray-50 text-left font-normal min-w-[60px]"
+                    style={{ width: prop.width ?? defaultWidth(prop.type) }}
                   >
                     <PropertyHeader
                       prop={prop}
@@ -700,6 +747,10 @@ export function DatabaseView({ page, uid, onSaveSchema }: DatabaseViewProps) {
                       onDelete={() => handleDeleteProp(prop.id)}
                       onUpdateOptions={(opts) => handleUpdateOptions(prop.id, opts)}
                       onSort={handleSort}
+                    />
+                    <div
+                      className="absolute right-0 top-0 h-full w-1 cursor-col-resize opacity-0 hover:opacity-100 hover:bg-brand-400 group-hover:opacity-30"
+                      onMouseDown={(e) => handleColResizeStart(e, prop.id, prop.width ?? defaultWidth(prop.type))}
                     />
                   </th>
                 ))}
