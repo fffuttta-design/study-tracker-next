@@ -204,6 +204,18 @@ function QuickNoteDialog({ uid, onClose }: { uid: string; onClose: () => void })
 
 // ── ダッシュボードタブ ───────────────────────────────────────────────
 
+function getTimeSection(item: LearningItem): string {
+  if (!item.createdAt) return '';
+  const hour = new Date(item.createdAt).getHours();
+  if (hour >= 5 && hour < 9)   return '早朝';
+  if (hour >= 9 && hour < 12)  return '午前';
+  if (hour >= 12 && hour < 17) return '午後';
+  if (hour >= 17 && hour < 21) return '夜';
+  return '深夜';
+}
+
+const TIME_SECTION_ORDER = ['早朝', '午前', '午後', '夜', '深夜', ''];
+
 function DashboardTab({ todayItems, dueItems, uid, selectedDate, onAdd }: {
   todayItems: LearningItem[];
   dueItems: LearningItem[];
@@ -211,6 +223,24 @@ function DashboardTab({ todayItems, dueItems, uid, selectedDate, onAdd }: {
   selectedDate: Date;
   onAdd: () => void;
 }) {
+  // 今日の登録を時間帯でグループ化
+  const hasTimeInfo = todayItems.some((i) => i.createdAt);
+  const todayGrouped = hasTimeInfo
+    ? TIME_SECTION_ORDER
+        .map((label) => ({ label, items: todayItems.filter((i) => getTimeSection(i) === label) }))
+        .filter((g) => g.items.length > 0)
+    : null;
+
+  // 復習待ちをステージでグループ化
+  const dueGrouped = STAGE_LABELS.map((label, i) => ({
+    label,
+    index: i,
+    items: dueItems.filter((item) => {
+      const next = item.reviews.find((r) => !r.completed);
+      return next?.stageIndex === i;
+    }),
+  })).filter((g) => g.items.length > 0);
+
   return (
     <div className="grid grid-cols-1 gap-0 lg:grid-cols-2 lg:divide-x lg:divide-gray-100">
       <div className="p-6">
@@ -222,17 +252,39 @@ function DashboardTab({ todayItems, dueItems, uid, selectedDate, onAdd }: {
             + 追加
           </button>
         </div>
-        {todayItems.length === 0
-          ? <Empty text="今日の学習はまだありません" />
-          : <ItemList items={todayItems} uid={uid} />}
+        {todayItems.length === 0 ? (
+          <Empty text="今日の学習はまだありません" />
+        ) : todayGrouped ? (
+          <div className="space-y-4">
+            {todayGrouped.map((g) => (
+              <div key={g.label}>
+                {g.label && <p className="mb-1.5 text-xs font-medium text-gray-400">{g.label}</p>}
+                <ItemList items={g.items} uid={uid} />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <ItemList items={todayItems} uid={uid} />
+        )}
       </div>
       <div className="p-6">
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
           復習待ち ({dueItems.length})
         </h2>
-        {dueItems.length === 0
-          ? <Empty text="復習待ちのアイテムはありません 🎉" />
-          : <ItemList items={dueItems.slice(0, 10)} uid={uid} showReviewAction />}
+        {dueItems.length === 0 ? (
+          <Empty text="復習待ちのアイテムはありません 🎉" />
+        ) : (
+          <div className="space-y-4">
+            {dueGrouped.map((g) => (
+              <div key={g.index}>
+                <p className={`mb-1.5 text-xs font-medium ${STAGE_COLORS[g.index].split(' ')[1]}`}>
+                  {g.label}（{g.items.length}件）
+                </p>
+                <ItemList items={g.items} uid={uid} showReviewAction />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -400,7 +452,18 @@ function ItemCard({ item, uid, showReviewAction }: {
               {item.title || item.content.split('\n')[0].slice(0, 60)}
             </span>
           </div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-gray-400">
+          {item.notionPageId && (
+            <Link
+              href={`/notion-plus/${item.notionPageId}?hl=${encodeURIComponent(item.content.slice(0, 60))}`}
+              onClick={(e) => e.stopPropagation()}
+              className="mt-1.5 flex w-fit items-center gap-1 rounded-md bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-600 hover:bg-brand-100"
+              title="ノートで開く（ハイライト表示）"
+            >
+              <span>📖</span>
+              <span>ノートを開く</span>
+            </Link>
+          )}
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-400">
             {item.notionPagePath && (
               <span className="flex items-center gap-0.5">
                 <span>📁</span><span>{item.notionPagePath}</span>
@@ -419,16 +482,6 @@ function ItemCard({ item, uid, showReviewAction }: {
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
-          {item.notionPageId && (
-            <Link
-              href={`/notion-plus/${item.notionPageId}?hl=${encodeURIComponent(item.content.slice(0, 60))}`}
-              className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs text-brand-500 hover:bg-brand-50"
-              title="ノートで開く（ハイライト表示）"
-            >
-              <span>📖</span>
-              <span>開く</span>
-            </Link>
-          )}
           <button onClick={copyContent} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="コピー">⎘</button>
           <button onClick={() => setEditing(true)} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="編集">✎</button>
           <button onClick={handleDelete} className="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-400" title="削除">✕</button>

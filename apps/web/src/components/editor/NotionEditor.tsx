@@ -904,26 +904,39 @@ export function NotionEditor({
   useEffect(() => {
     if (!editor || !highlightText) return;
     const search = highlightText.slice(0, 60);
+
     const timer = setTimeout(() => {
-      let found = false;
+      // テキストノードを収集して位置マップを構築（複数ノードにまたがるテキストに対応）
+      const texts: { text: string; pos: number }[] = [];
       editor.state.doc.descendants((node, pos) => {
-        if (found) return false;
-        if (node.isText && node.text) {
-          const idx = node.text.indexOf(search);
-          if (idx !== -1) {
-            const from = pos + idx;
-            const to = from + search.length;
-            editor.chain()
-              .setTextSelection({ from, to })
-              .setHighlight({ color: '#FDE68A' })
-              .scrollIntoView()
-              .run();
-            found = true;
-          }
-        }
+        if (node.isText && node.text) texts.push({ text: node.text, pos });
         return;
       });
+      const joined = texts.map((t) => t.text).join('');
+      const idx = joined.indexOf(search);
+      if (idx === -1) return;
+
+      // テキストインデックスからドキュメント位置へ変換
+      let offset = 0;
+      let from = -1;
+      let to = -1;
+      for (const { text, pos } of texts) {
+        const end = offset + text.length;
+        if (from === -1 && idx < end) from = pos + (idx - offset);
+        if (from !== -1 && to === -1 && idx + search.length <= end) to = pos + (idx + search.length - offset);
+        offset = end;
+      }
+      if (from === -1 || to === -1) return;
+
+      editor.chain().setTextSelection({ from, to }).setHighlight({ color: '#FDE68A' }).scrollIntoView().run();
+
+      // クリックで別の場所をクリックするとハイライトを解除
+      const clearHighlight = () => {
+        editor.chain().focus().unsetHighlight().run();
+      };
+      setTimeout(() => document.addEventListener('click', clearHighlight, { once: true }), 100);
     }, 600);
+
     return () => clearTimeout(timer);
   }, [editor, highlightText]);
 
