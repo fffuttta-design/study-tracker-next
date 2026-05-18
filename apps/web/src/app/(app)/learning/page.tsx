@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
+import Link from 'next/link';
 import { useAuthStore } from '@/stores/authStore';
 import { useLearningStore } from '@/stores/learningStore';
 import { useNotionPageStore } from '@/stores/notionPageStore';
@@ -412,12 +413,21 @@ function ItemCard({ item, uid, showReviewAction }: {
           </div>
           {!expanded && item.content && (
             <p className="mt-1 line-clamp-1 text-xs text-gray-400">
-              {item.content.replace(/[#*`_~>]/g, '').slice(0, 80)}
+              {item.content.replace(/[#\*`_~>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 80)}
             </p>
           )}
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
+          {item.notionPageId && (
+            <Link
+              href={`/notion-plus/${item.notionPageId}?hl=${encodeURIComponent(item.content.slice(0, 60))}`}
+              className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-brand-500"
+              title="ノートで開く"
+            >
+              ↗
+            </Link>
+          )}
           <button onClick={copyContent} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="コピー">⎘</button>
           <button onClick={() => setEditing(true)} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="編集">✎</button>
           <button onClick={handleDelete} className="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-400" title="削除">✕</button>
@@ -430,8 +440,17 @@ function ItemCard({ item, uid, showReviewAction }: {
       {expanded && (
         <div className="border-t border-gray-100 px-4 pb-4 pt-3">
           {item.content && (
-            <div className="prose prose-sm mb-3 max-w-none text-gray-700">
-              <ReactMarkdown>{item.content}</ReactMarkdown>
+            <div className="mb-3 max-w-none text-sm text-gray-700
+              [&_strong]:font-bold [&_em]:italic [&_del]:line-through
+              [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5
+              [&_li]:my-0.5 [&_p]:my-1
+              [&_h1]:text-xl [&_h1]:font-bold [&_h1]:my-2
+              [&_h2]:text-lg [&_h2]:font-bold [&_h2]:my-1.5
+              [&_h3]:text-base [&_h3]:font-semibold [&_h3]:my-1
+              [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:rounded [&_code]:text-xs
+              [&_pre]:bg-gray-100 [&_pre]:p-2 [&_pre]:rounded [&_pre]:text-xs [&_pre]:overflow-x-auto
+              [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-3 [&_blockquote]:text-gray-500">
+              <ReactMarkdown>{item.content.replace(/\n(?!\n)/g, '  \n')}</ReactMarkdown>
             </div>
           )}
 

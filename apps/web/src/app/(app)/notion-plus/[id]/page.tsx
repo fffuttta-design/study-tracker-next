@@ -2,7 +2,7 @@
 
 import { Fragment, use, useEffect, useCallback, useState, useRef } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotionPageStore } from '@/stores/notionPageStore';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -20,10 +20,23 @@ function buildBreadcrumbs(pages: NotionPage[], currentId: string): NotionPage[] 
   return path;
 }
 
+function isImageSrc(s: string) {
+  return s.startsWith('http://') || s.startsWith('https://') || s.startsWith('data:');
+}
+
 const ICON_PRESETS = [
-  '📄','📝','📚','📖','💡','🎯','🔖','✅','📌','🗂️',
-  '🧠','🚀','🌟','🔥','💎','🎨','🎵','🏆','🛠️','📊',
-  '🌿','☀️','🌙','⚡','🔑','🎪','🦋','🌸','🍀','🎭',
+  '📄','📝','📚','📖','📓','📔','📒','📃','📜','📑','🗒️','🗓️',
+  '💡','🎯','🔖','✅','📌','📍','🗂️','📁','📂','🗃️','📋','🗄️',
+  '🧠','🔍','🔎','💭','🤔','📊','📈','📉','🗺️','🧩','🔬','🔭',
+  '🚀','🌟','⭐','🔥','💎','🏆','🥇','🎖️','👑','🎉','✨','🎊',
+  '🎨','🖌️','🎵','🎶','🎸','🎹','📸','🎬','🎭','🖼️','🎮','🎲',
+  '💼','🖥️','💻','📱','⌨️','🖱️','📡','📞','📠','🔐','🔒','🗝️',
+  '🛠️','⚙️','🔧','🔨','🔩','💰','💵','💳','🏢','🏪','🏫','🏠',
+  '👤','👥','🤝','👍','✌️','💪','🙌','👏','🧑‍💻','👨‍🎓','👩‍💼','🧑‍🔬',
+  '🌿','🌱','🍀','🌸','🌻','🌙','☀️','⚡','❄️','🌊','🌈','🌪️',
+  '🌍','🌏','✈️','🚂','🚗','⛰️','🌅','🏝️','🗼','⛩️','🎪','🦋',
+  '☕','🍵','🍎','🍊','🍋','🍇','🥑','🍕','🍜','🍣','🍰','🎂',
+  '❤️','💚','💙','💜','🧡','💛','🤍','🔴','🟠','🟡','🟢','🔵',
 ];
 
 export default function NotionPageDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -31,6 +44,8 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
   const { user } = useAuthStore();
   const { pages, update, add } = useNotionPageStore();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const highlightText = searchParams.get('hl') ?? undefined;
   const { notionPlusLayout, setNotionPlusLayout } = useSettingsStore();
   const [saving, setSaving] = useState(false);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
@@ -123,13 +138,15 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
           <div className="relative" ref={iconPickerRef}>
             <button
               onClick={() => setIconPickerOpen((v) => !v)}
-              className="rounded p-1 text-xl hover:bg-gray-100"
+              className="flex items-center justify-center rounded p-1 hover:bg-gray-100"
               title="アイコンを変更"
             >
-              {page.icon.startsWith('http') ? (
+              {isImageSrc(page.icon) ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={page.icon} alt="" className="h-6 w-6 rounded object-cover" />
-              ) : page.icon}
+                <img src={page.icon} alt="" className="block h-7 w-7 flex-shrink-0 rounded object-cover" style={{ aspectRatio: '1/1' }} />
+              ) : (
+                <span className="text-xl leading-none">{page.icon}</span>
+              )}
             </button>
             {iconPickerOpen && (
               <div className="absolute left-0 top-full z-50 w-64 rounded-xl border border-gray-200 bg-white p-3 shadow-xl">
@@ -237,9 +254,9 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
                 <>
                   <Link href={`/notion-plus/${p.id}`} className="flex items-center gap-1 rounded px-1 py-0.5 hover:bg-gray-100 hover:text-gray-600">
                     {p.icon && (
-                      p.icon.startsWith('http') ? (
+                      isImageSrc(p.icon) ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={p.icon} alt="" className="h-3.5 w-3.5 rounded object-cover" />
+                        <img src={p.icon} alt="" className="block h-3.5 w-3.5 flex-shrink-0 rounded object-cover" style={{ aspectRatio: '1/1' }} />
                       ) : (
                         <span className="text-xs leading-none">{p.icon}</span>
                       )
@@ -251,9 +268,9 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
               ) : (
                 <span className="flex items-center gap-1 px-1 py-0.5 font-medium text-gray-600">
                   {p.icon && (
-                    p.icon.startsWith('http') ? (
+                    isImageSrc(p.icon) ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={p.icon} alt="" className="h-3.5 w-3.5 rounded object-cover" />
+                      <img src={p.icon} alt="" className="block h-3.5 w-3.5 flex-shrink-0 rounded object-cover" style={{ aspectRatio: '1/1' }} />
                     ) : (
                       <span className="text-xs leading-none">{p.icon}</span>
                     )
@@ -275,6 +292,7 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
         recordTriggerRef={recordTriggerRef}
         notionPageId={page.id}
         notionPagePath={breadcrumbs.map((p) => p.title || 'Untitled').join(' / ')}
+        highlightText={highlightText}
       />
     </div>
   );

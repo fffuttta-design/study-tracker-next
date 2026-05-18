@@ -206,9 +206,9 @@ function buildBreadcrumbTitles(pages: NotionPage[], currentId: string): string[]
 }
 
 function PageIcon({ icon }: { icon: string }) {
-  if (icon.startsWith('http://') || icon.startsWith('https://')) {
+  if (icon.startsWith('http://') || icon.startsWith('https://') || icon.startsWith('data:')) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={icon} alt="" className="h-5 w-5 shrink-0 rounded object-cover" />;
+    return <img src={icon} alt="" className="block h-5 w-5 shrink-0 flex-shrink-0 rounded object-cover" style={{ aspectRatio: '1/1' }} />;
   }
   return <span className="shrink-0 text-base leading-none">{icon}</span>;
 }

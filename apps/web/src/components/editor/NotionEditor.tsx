@@ -16,8 +16,7 @@ import Highlight from '@tiptap/extension-highlight';
 import TextAlign from '@tiptap/extension-text-align';
 import Link from '@tiptap/extension-link';
 import Image from '@tiptap/extension-image';
-import TextStyle from '@tiptap/extension-text-style';
-import Color from '@tiptap/extension-color';
+import { TextStyle, Color } from '@tiptap/extension-text-style';
 import Underline from '@tiptap/extension-underline';
 import Youtube from '@tiptap/extension-youtube';
 import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
@@ -46,33 +45,127 @@ function isImageSrc(s: string) {
   return s.startsWith('http://') || s.startsWith('https://') || s.startsWith('data:');
 }
 
+// ── 絵文字プリセット ──────────────────────────────────────────────────
+
+const EMOJI_PRESETS = [
+  '📄','📝','📚','📖','📓','📔','📒','📃','📜','📑','🗒️','🗓️',
+  '💡','🎯','🔖','✅','📌','📍','🗂️','📁','📂','🗃️','📋','🗄️',
+  '🧠','🔍','🔎','💭','🤔','📊','📈','📉','🗺️','🧩','🔬','🔭',
+  '🚀','🌟','⭐','🔥','💎','🏆','🥇','🎖️','👑','🎉','✨','🎊',
+  '🎨','🖌️','🎵','🎶','🎸','🎹','📸','🎬','🎭','🖼️','🎮','🎲',
+  '💼','🖥️','💻','📱','⌨️','🖱️','📡','📞','📠','🔐','🔒','🗝️',
+  '🛠️','⚙️','🔧','🔨','🔩','💰','💵','💳','📊','🏢','🏪','🏫',
+  '👤','👥','🤝','👍','✌️','💪','🙌','👏','🧑‍💻','👨‍🎓','👩‍💼','🧑‍🔬',
+  '🌿','🌱','🍀','🌸','🌻','🌙','☀️','⚡','❄️','🌊','🌈','🌪️',
+  '🏠','🏡','🌍','🌏','✈️','🚂','🚗','⛰️','🌅','🏝️','🗼','⛩️',
+  '☕','🍵','🍎','🍊','🍋','🍇','🥑','🍕','🍜','🍣','🍰','🎂',
+  '❤️','💚','💙','💜','🧡','💛','🤍','🖤','🔴','🟠','🟡','🟢',
+  '🔵','🟣','⬛','⬜','🔲','🎪','🦋','🦁','🐯','🦊','🐸','🐺',
+];
+
 // ── PageLink ノード ──────────────────────────────────────────────────
 
-function PageLinkView({ node }: NodeViewProps) {
+function PageLinkView({ node, updateAttributes }: NodeViewProps) {
   const router = useRouter();
   const { href, title: storedTitle, icon: storedIcon } = node.attrs as { href: string; title: string; icon: string };
   const pages = useNotionPageStore((s) => s.pages);
+  const update = useNotionPageStore((s) => s.update);
+  const { user } = useAuthStore();
   const pageId = href?.match(/\/notion-plus\/([^/?#]+)/)?.[1];
   const livePage = pageId ? pages.find((p) => p.id === pageId) : null;
   const title = livePage?.title || storedTitle || 'Untitled';
   const icon = livePage?.icon || storedIcon || '📄';
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [iconUrlDraft, setIconUrlDraft] = useState('');
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPickerOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [pickerOpen]);
+
+  const handleIconChange = async (newIcon: string) => {
+    if (pageId && user && livePage) {
+      await update(user.uid, pageId, { icon: newIcon });
+    } else {
+      updateAttributes({ icon: newIcon });
+    }
+    setPickerOpen(false);
+    setIconUrlDraft('');
+  };
+
+  const handleIconPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    for (const item of e.clipboardData.items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const dataUrl = ev.target?.result as string;
+          if (dataUrl) handleIconChange(dataUrl);
+        };
+        reader.readAsDataURL(file);
+        return;
+      }
+    }
+  };
+
   return (
-    <NodeViewWrapper>
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={() => href && router.push(href)}
-        onKeyDown={(e) => e.key === 'Enter' && href && router.push(href)}
-        className="flex w-fit cursor-pointer items-center gap-1 py-0.5 hover:opacity-70"
-        contentEditable={false}
-      >
-        {isImageSrc(icon) ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={icon} alt="" className="h-[1.1em] w-[1.1em] flex-shrink-0 rounded object-cover" />
-        ) : (
-          <span className="text-[0.95em] leading-none">{icon}</span>
-        )}
-        <span className="text-[0.95em] text-gray-700 underline">{title || 'Untitled'}</span>
+    <NodeViewWrapper contentEditable={false}>
+      <div className="flex w-fit items-center gap-1 py-0.5">
+        <div className="relative" ref={pickerRef}>
+          <button
+            onClick={(e) => { e.stopPropagation(); setPickerOpen((v) => !v); }}
+            className="rounded p-0.5 hover:bg-gray-100"
+            title="アイコンを変更"
+          >
+            {isImageSrc(icon) ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={icon} alt="" className="block h-[1.1em] w-[1.1em] flex-shrink-0 rounded object-cover" style={{ aspectRatio: '1/1' }} />
+            ) : (
+              <span className="text-[0.95em] leading-none">{icon}</span>
+            )}
+          </button>
+          {pickerOpen && (
+            <div className="absolute left-0 top-full z-50 w-72 rounded-xl border border-gray-200 bg-white p-3 shadow-xl">
+              <p className="mb-1 text-xs font-medium text-gray-400">絵文字</p>
+              <div className="mb-2 grid grid-cols-8 gap-0.5 max-h-48 overflow-y-auto">
+                {EMOJI_PRESETS.map((emoji) => (
+                  <button key={emoji} onClick={() => handleIconChange(emoji)}
+                    className={`rounded p-1 text-base hover:bg-gray-100 ${icon === emoji ? 'bg-brand-50 ring-1 ring-brand-400' : ''}`}>
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+              <p className="mb-1 text-xs font-medium text-gray-400">画像URL / コピペ</p>
+              <div className="flex gap-1">
+                <input type="text" value={iconUrlDraft} onChange={(e) => setIconUrlDraft(e.target.value)}
+                  onPaste={handleIconPaste}
+                  onKeyDown={(e) => e.key === 'Enter' && iconUrlDraft && handleIconChange(iconUrlDraft)}
+                  placeholder="https://..."
+                  className="min-w-0 flex-1 rounded border border-gray-200 px-2 py-1 text-xs outline-none focus:border-brand-400" />
+                <button onClick={() => iconUrlDraft && handleIconChange(iconUrlDraft)} disabled={!iconUrlDraft}
+                  className="rounded bg-brand-500 px-2 py-1 text-xs text-white hover:bg-brand-600 disabled:opacity-40">設定</button>
+              </div>
+              {isImageSrc(iconUrlDraft) && (
+                <div className="mt-2 flex items-center gap-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={iconUrlDraft} alt="" className="block h-8 w-8 rounded object-cover" style={{ aspectRatio: '1/1' }}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  <span className="text-xs text-gray-400">プレビュー</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <button onClick={() => href && router.push(href)} className="cursor-pointer hover:opacity-70">
+          <span className="text-[0.95em] text-gray-700 underline">{title || 'Untitled'}</span>
+        </button>
       </div>
     </NodeViewWrapper>
   );
@@ -540,6 +633,7 @@ interface NotionEditorProps {
   onRecordText?: (text: string) => void;
   notionPageId?: string;
   notionPagePath?: string;
+  highlightText?: string;
 }
 
 interface PastePopup {
@@ -550,7 +644,7 @@ interface PastePopup {
 
 export function NotionEditor({
   initialTitle, initialContent, onSave, onCreateSubPage,
-  recordTriggerRef, onRecordText, notionPageId, notionPagePath,
+  recordTriggerRef, onRecordText, notionPageId, notionPagePath, highlightText,
 }: NotionEditorProps) {
   const notionPlusLayout = useSettingsStore((s) => s.notionPlusLayout);
   const router = useRouter();
@@ -715,6 +809,32 @@ export function NotionEditor({
   }, [editor, onSave]);
 
   useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
+
+  // ハイライトテキストが指定された場合、エディタ内で検索してハイライト
+  useEffect(() => {
+    if (!editor || !highlightText) return;
+    const search = highlightText.slice(0, 60);
+    const timer = setTimeout(() => {
+      let found = false;
+      editor.state.doc.descendants((node, pos) => {
+        if (found) return false;
+        if (node.isText && node.text) {
+          const idx = node.text.indexOf(search);
+          if (idx !== -1) {
+            const from = pos + idx;
+            const to = from + search.length;
+            editor.chain()
+              .setTextSelection({ from, to })
+              .setHighlight({ color: '#FDE68A' })
+              .scrollIntoView()
+              .run();
+            found = true;
+          }
+        }
+      });
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [editor, highlightText]);
 
   const handleRecord = useCallback(() => {
     if (!editor) return;
