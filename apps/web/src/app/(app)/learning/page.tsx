@@ -502,7 +502,7 @@ function DashboardTab({ todayItems, dueItems, uid, selectedDate, onAdd }: {
   })).filter((g) => g.items.length > 0);
 
   return (
-    <div className="grid grid-cols-1 gap-0 lg:grid-cols-2 lg:divide-x lg:divide-gray-100">
+    <div className="grid grid-cols-1 gap-0 lg:grid-cols-2 lg:divide-x lg:divide-gray-300">
       <div className="p-6">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
@@ -527,7 +527,7 @@ function DashboardTab({ todayItems, dueItems, uid, selectedDate, onAdd }: {
           <ItemList items={todayItems} uid={uid} />
         )}
       </div>
-      <div className="p-6">
+      <div className="border-t border-gray-300 p-6 lg:border-t-0">
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
           復習待ち ({dueItems.length})
         </h2>
@@ -711,14 +711,6 @@ function ItemCard({ item, uid, showReviewAction }: {
           <p className="truncate font-semibold text-gray-800 text-lg leading-snug">
             {item.title || item.content.split('\n')[0].slice(0, 60)}
           </p>
-          <div className="mt-1 flex items-center gap-2 text-xs text-gray-400">
-            {item.notionPagePath && (
-              <span className="flex items-center gap-0.5">
-                <span>📁</span><span>{item.notionPagePath}</span>
-              </span>
-            )}
-            <span>{format(new Date(item.dateKey), 'M/d', { locale: ja })} 登録</span>
-          </div>
           {!expanded && item.content && (
             <p className="mt-1 line-clamp-1 text-xs text-gray-400">
               {item.content.replace(/[#\*`_~>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 80)}
@@ -726,23 +718,33 @@ function ItemCard({ item, uid, showReviewAction }: {
           )}
         </div>
 
-        <div className="flex shrink-0 items-start gap-1">
-            {item.notionPageId && (
-              <Link
-                href={`/notion-plus/${item.notionPageId}?hl=${encodeURIComponent((item.content.split('\n').find(l => l.trim().length > 5) ?? item.content).trim().slice(0, 80))}`}
-                onClick={(e) => e.stopPropagation()}
-                className="flex items-center gap-1 rounded-md bg-brand-50 px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-100"
-                title="ノートを開く（ハイライト表示）"
-              >
-                <span>📖</span><span>ノートを開く</span>
-              </Link>
-            )}
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <div className="flex items-center gap-1">
             <button onClick={copyContent} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="コピー">⎘</button>
             <button onClick={() => setEditing(true)} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="編集">✎</button>
             <button onClick={handleDelete} className="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-400" title="削除">✕</button>
             <button onClick={() => setExpanded((v) => !v)} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500">
               {expanded ? '▲' : '▼'}
             </button>
+          </div>
+          {item.notionPageId && (
+            <Link
+              href={`/notion-plus/${item.notionPageId}?hl=${encodeURIComponent((item.content.split('\n').find(l => l.trim().length > 5) ?? item.content).trim().slice(0, 80))}`}
+              onClick={(e) => e.stopPropagation()}
+              className="flex items-center gap-1 rounded-md bg-brand-50 px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-100"
+              title="ノートを開く（ハイライト表示）"
+            >
+              <span>📖</span><span>ノートを開く</span>
+            </Link>
+          )}
+          <div className="flex items-center gap-2 text-right text-xs text-gray-400">
+            {item.notionPagePath && (
+              <span className="flex items-center gap-0.5">
+                <span>📁</span><span>{item.notionPagePath}</span>
+              </span>
+            )}
+            <span>{format(new Date(item.dateKey), 'M/d', { locale: ja })} 登録</span>
+          </div>
         </div>
       </div>
 
