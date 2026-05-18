@@ -1,7 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback, useState, createContext, useContext } from 'react';
 import { useRouter } from 'next/navigation';
+
+// ── ページ遷移インターセプトコンテキスト ─────────────────────────────────
+// モーダル内でページリンクをクリックした際、router.push の代わりに
+// このコンテキストのコールバックを呼ぶことでモーダル内でページを切り替える
+export const PageNavigationContext = createContext<((href: string) => void) | null>(null);
 import { Node as TiptapNode, InputRule } from '@tiptap/core';
 import {
   useEditor, EditorContent,
@@ -131,6 +136,7 @@ const EMOJI_PRESETS = [
 
 function PageLinkView({ node, updateAttributes }: NodeViewProps) {
   const router = useRouter();
+  const onPageNavigate = useContext(PageNavigationContext);
   const { href, title: storedTitle, icon: storedIcon } = node.attrs as { href: string; title: string; icon: string };
   const pages = useNotionPageStore((s) => s.pages);
   const update = useNotionPageStore((s) => s.update);
@@ -226,7 +232,7 @@ function PageLinkView({ node, updateAttributes }: NodeViewProps) {
             </div>
           )}
         </div>
-        <button onClick={() => href && router.push(href)} className="cursor-pointer hover:opacity-70">
+        <button onClick={() => href && (onPageNavigate ? onPageNavigate(href) : router.push(href))} className="cursor-pointer hover:opacity-70">
           <span className="text-[0.95em] text-gray-700 underline">{title || 'Untitled'}</span>
         </button>
       </div>
@@ -732,6 +738,7 @@ interface NotionEditorProps {
   notionPageId?: string;
   notionPagePath?: string;
   highlightText?: string;
+  onPageNavigate?: (href: string) => void;
 }
 
 interface PastePopup {
@@ -742,7 +749,7 @@ interface PastePopup {
 
 export function NotionEditor({
   initialTitle, initialContent, onSave, onCreateSubPage,
-  recordTriggerRef, onRecordText, notionPageId, notionPagePath, highlightText,
+  recordTriggerRef, onRecordText, notionPageId, notionPagePath, highlightText, onPageNavigate,
 }: NotionEditorProps) {
   const notionPlusLayout = useSettingsStore((s) => s.notionPlusLayout);
   const router = useRouter();
@@ -903,37 +910,36 @@ export function NotionEditor({
   // ハイライトテキストが指定された場合、エディタ内で検索してハイライト
   useEffect(() => {
     if (!editor || !highlightText) return;
-    const search = highlightText.slice(0, 60);
+    // \n はブロック間の区切りなので空白に置換して検索（テキストノードには \n が含まれない）
+    const search = highlightText.replace(/\n/g, ' ').slice(0, 60);
 
     const timer = setTimeout(() => {
-      // テキストノードを収集して位置マップを構築（複数ノードにまたがるテキストに対応）
       const texts: { text: string; pos: number }[] = [];
       editor.state.doc.descendants((node, pos) => {
         if (node.isText && node.text) texts.push({ text: node.text, pos });
-        return;
+        return true;
       });
       const joined = texts.map((t) => t.text).join('');
       const idx = joined.indexOf(search);
       if (idx === -1) return;
 
-      // テキストインデックスからドキュメント位置へ変換
       let offset = 0;
       let from = -1;
       let to = -1;
       for (const { text, pos } of texts) {
         const end = offset + text.length;
         if (from === -1 && idx < end) from = pos + (idx - offset);
-        if (from !== -1 && to === -1 && idx + search.length <= end) to = pos + (idx + search.length - offset);
+        if (from !== -1 && to === -1 && idx + search.length <= end) {
+          to = pos + (idx + search.length - offset);
+        }
         offset = end;
+        if (from !== -1 && to !== -1) break;
       }
       if (from === -1 || to === -1) return;
 
-      editor.chain().setTextSelection({ from, to }).setHighlight({ color: '#FDE68A' }).scrollIntoView().run();
+      editor.chain().focus().setTextSelection({ from, to }).setHighlight({ color: '#FDE68A' }).scrollIntoView().run();
 
-      // クリックで別の場所をクリックするとハイライトを解除
-      const clearHighlight = () => {
-        editor.chain().focus().unsetHighlight().run();
-      };
+      const clearHighlight = () => editor.chain().focus().unsetHighlight().run();
       setTimeout(() => document.addEventListener('click', clearHighlight, { once: true }), 100);
     }, 600);
 
@@ -1083,6 +1089,7 @@ export function NotionEditor({
   const outerClass = `relative flex flex-1 overflow-y-auto py-8 ${notionPlusLayout === 'center' ? 'justify-center px-6' : 'pl-16 pr-8'}`;
 
   return (
+    <PageNavigationContext.Provider value={onPageNavigate ?? null}>
     <div className={outerClass} onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }); }} onMouseDown={handleOuterMouseDown}>
       <div className="w-full max-w-3xl" ref={contentDivRef}>
         <input
@@ -1208,6 +1215,7 @@ export function NotionEditor({
         </>
       )}
     </div>
+    </PageNavigationContext.Provider>
   );
 }
 

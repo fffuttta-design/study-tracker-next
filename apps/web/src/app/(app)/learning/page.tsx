@@ -216,18 +216,24 @@ function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
   const { add: addItem } = useLearningStore();
   const { pages, add: addPage, update } = useNotionPageStore();
   const { user } = useAuthStore();
-  const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
   const [recordedText, setRecordedText] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const recordTriggerRef = useRef<(() => void) | null>(null);
 
-  const roots = pages
-    .filter((p) => !p.parentId)
-    .sort((a, b) => {
-      if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1;
-      return a.order - b.order;
-    });
+  const roots = useMemo(() =>
+    pages
+      .filter((p) => !p.parentId)
+      .sort((a, b) => {
+        if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1;
+        return a.order - b.order;
+      }),
+    [pages]
+  );
+
+  // ① デフォルトは一番上の親ページを開いた状態
+  const [selectedPageId, setSelectedPageId] = useState<string | null>(() => roots[0]?.id ?? null);
 
   const selectedPage = selectedPageId ? pages.find((p) => p.id === selectedPageId) ?? null : null;
 
@@ -306,26 +312,42 @@ function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
               </div>
             )}
 
-            {/* 全ページツリー */}
+            {/* 全ページツリー（② 子ページはデフォルト閉じ、トグルで開閉） */}
             <div className="space-y-0.5">
               {roots.map((page) => {
                 const children = pages.filter((p) => p.parentId === page.id).sort((a, b) => a.order - b.order);
+                const isExpanded = expandedIds.has(page.id);
+                const toggle = (e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  setExpandedIds((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(page.id)) next.delete(page.id); else next.add(page.id);
+                    return next;
+                  });
+                };
                 return (
                   <div key={page.id}>
-                    <button
-                      onClick={() => setSelectedPageId(page.id)}
-                      className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors ${
-                        selectedPageId === page.id
-                          ? 'bg-white font-semibold text-gray-900 shadow-sm'
-                          : 'text-gray-600 hover:bg-white hover:text-gray-900'
-                      }`}
-                    >
-                      <PagePickerIcon icon={page.icon} />
-                      <span className="min-w-0 flex-1 truncate text-left">{page.title || 'Untitled'}</span>
-                      {page.isFavorite && <span className="shrink-0 text-[10px] text-yellow-400">★</span>}
-                    </button>
-                    {children.length > 0 && (
-                      <div className="ml-4 border-l border-gray-200 pl-2 pt-0.5">
+                    <div className="flex items-center gap-0.5">
+                      <button
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-[9px] text-gray-400 hover:bg-gray-200 ${children.length === 0 ? 'invisible' : ''}`}
+                        style={{ transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}
+                        onClick={toggle}
+                      >▶</button>
+                      <button
+                        onClick={() => setSelectedPageId(page.id)}
+                        className={`flex flex-1 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors ${
+                          selectedPageId === page.id
+                            ? 'bg-white font-semibold text-gray-900 shadow-sm'
+                            : 'text-gray-600 hover:bg-white hover:text-gray-900'
+                        }`}
+                      >
+                        <PagePickerIcon icon={page.icon} />
+                        <span className="min-w-0 flex-1 truncate text-left">{page.title || 'Untitled'}</span>
+                        {page.isFavorite && <span className="shrink-0 text-[10px] text-yellow-400">★</span>}
+                      </button>
+                    </div>
+                    {isExpanded && children.length > 0 && (
+                      <div className="ml-5 border-l border-gray-200 pl-2 pt-0.5">
                         {children.map((child) => (
                           <button
                             key={child.id}
@@ -381,6 +403,10 @@ function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
                 recordTriggerRef={recordTriggerRef}
                 onRecordText={handleRecord}
                 notionPageId={selectedPageId ?? ''}
+                onPageNavigate={(href) => {
+                  const id = href.match(/\/notion-plus\/([^/?#]+)/)?.[1];
+                  if (id) setSelectedPageId(id);
+                }}
               />
             ) : (
               <div className="flex h-full flex-col items-center justify-center gap-2">
