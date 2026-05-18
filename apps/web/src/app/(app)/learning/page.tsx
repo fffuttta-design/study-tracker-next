@@ -523,7 +523,7 @@ function DashboardTab({ todayItems, dueItems, uid, selectedDate, onAdd }: {
             <div>
               {todayGrouped.map((g) => (
                 <div key={g.label}>
-                  <BadgeDivider label={g.label} count={g.items.length} />
+                  <BadgeDivider label={g.label} count={g.items.length} leftAlign />
                   <ItemList items={g.items} uid={uid} />
                 </div>
               ))}
@@ -760,14 +760,11 @@ function ItemCard({ item, uid, showReviewAction }: {
               {expanded ? '▲' : '▼'}
             </button>
           </div>
-          <div className="flex items-center gap-2 text-right text-xs text-gray-400">
-            {item.notionPagePath && (
-              <span className="flex items-center gap-0.5">
-                <span>📁</span><span>{item.notionPagePath}</span>
-              </span>
-            )}
-            <span>{format(new Date(item.dateKey), 'M/d', { locale: ja })} 登録</span>
-          </div>
+          {item.notionPagePath && (
+            <div className="flex items-center gap-0.5 text-xs text-gray-400">
+              <span>📁</span><span>{item.notionPagePath}</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -789,23 +786,26 @@ function ItemCard({ item, uid, showReviewAction }: {
             </div>
           )}
 
-          {/* 復習スケジュールチップ */}
-          <div className="flex flex-wrap gap-1.5">
-            {item.reviews.map((r) => (
-              <span
-                key={r.stageIndex}
-                className={`rounded border px-2 py-0.5 text-xs ${
-                  r.completed
-                    ? 'border-gray-100 bg-gray-50 text-gray-300 line-through'
-                    : r.stageIndex === nextReview?.stageIndex
-                    ? STAGE_COLORS[r.stageIndex]
-                    : 'border-gray-100 bg-gray-50 text-gray-400'
-                }`}
-              >
-                {STAGE_LABELS[r.stageIndex]} {format(new Date(r.scheduledDate), 'M/d', { locale: ja })}
-                {r.completed && ' ✓'}
-              </span>
-            ))}
+          {/* 復習スケジュールチップ + 登録日 */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-wrap gap-1.5">
+              {item.reviews.map((r) => (
+                <span
+                  key={r.stageIndex}
+                  className={`rounded border px-2 py-0.5 text-xs ${
+                    r.completed
+                      ? 'border-gray-100 bg-gray-50 text-gray-300 line-through'
+                      : r.stageIndex === nextReview?.stageIndex
+                      ? STAGE_COLORS[r.stageIndex]
+                      : 'border-gray-100 bg-gray-50 text-gray-400'
+                  }`}
+                >
+                  {STAGE_LABELS[r.stageIndex]} {format(new Date(r.scheduledDate), 'M/d', { locale: ja })}
+                  {r.completed && ' ✓'}
+                </span>
+              ))}
+            </div>
+            <span className="shrink-0 text-xs text-gray-400">{format(new Date(item.dateKey), 'M/d', { locale: ja })} 登録</span>
           </div>
 
           {showReviewAction && nextReview && !fullyDone && (
@@ -867,13 +867,13 @@ function EditModal({ item, uid, onClose }: {
 // ── 共通UIパーツ ─────────────────────────────────────────────────────
 
 function BadgeDivider({
-  label, count, badgeClass = 'border-gray-200 bg-white text-gray-500', countBg = 'bg-gray-400',
+  label, count, badgeClass = 'border-gray-200 bg-white text-gray-500', countBg = 'bg-gray-400', leftAlign = false,
 }: {
-  label: string; count?: number; badgeClass?: string; countBg?: string;
+  label: string; count?: number; badgeClass?: string; countBg?: string; leftAlign?: boolean;
 }) {
   return (
     <div className="my-3 flex items-center gap-2">
-      <div className="h-px flex-1 bg-gray-200" />
+      {!leftAlign && <div className="h-px flex-1 bg-gray-200" />}
       <div className={`flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap ${badgeClass}`}>
         {label}
         {count !== undefined && (
