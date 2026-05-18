@@ -503,48 +503,61 @@ function DashboardTab({ todayItems, dueItems, uid, selectedDate, onAdd }: {
 
   return (
     <div className="grid grid-cols-1 gap-0 lg:grid-cols-2 lg:divide-x lg:divide-gray-300">
-      <div className="p-6">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-            {format(selectedDate, 'M月d日', { locale: ja })}の登録 ({todayItems.length})
-          </h2>
+      {/* 今日の登録 */}
+      <div className="flex flex-col">
+        <div className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-gray-800">今日の登録</span>
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500">{todayItems.length}</span>
+          </div>
           <button onClick={onAdd} className="shrink-0 rounded-lg bg-brand-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-600">
             + 追加
           </button>
         </div>
-        {todayItems.length === 0 ? (
-          <Empty text="今日の学習はまだありません" />
-        ) : todayGrouped ? (
-          <div className="space-y-4">
-            {todayGrouped.map((g) => (
-              <div key={g.label}>
-                {g.label && <p className="mb-1.5 text-xs font-medium text-gray-400">{g.label}</p>}
-                <ItemList items={g.items} uid={uid} />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <ItemList items={todayItems} uid={uid} />
-        )}
+        <div className="p-6">
+          {todayItems.length === 0 ? (
+            <Empty text="今日の学習はまだありません" />
+          ) : todayGrouped ? (
+            <div className="space-y-4">
+              {todayGrouped.map((g) => (
+                <div key={g.label}>
+                  {g.label && <p className="mb-1.5 text-xs font-medium text-gray-400">{g.label}</p>}
+                  <ItemList items={g.items} uid={uid} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <ItemList items={todayItems} uid={uid} />
+          )}
+        </div>
       </div>
-      <div className="border-t border-gray-300 p-6 lg:border-t-0">
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
-          復習待ち ({dueItems.length})
-        </h2>
-        {dueItems.length === 0 ? (
-          <Empty text="復習待ちのアイテムはありません 🎉" />
-        ) : (
-          <div className="space-y-4">
-            {dueGrouped.map((g) => (
-              <div key={g.index}>
-                <p className={`mb-1.5 text-xs font-medium ${STAGE_COLORS[g.index].split(' ')[1]}`}>
-                  {g.label}（{g.items.length}件）
-                </p>
-                <ItemList items={g.items} uid={uid} showReviewAction />
-              </div>
-            ))}
-          </div>
-        )}
+
+      {/* 今日の復習 */}
+      <div className="flex flex-col">
+        <div className="flex items-center gap-2 border-b border-gray-200 bg-white px-6 py-4 lg:border-t-0 border-t border-gray-300">
+          <span className="text-sm font-semibold text-gray-800">今日の復習</span>
+          {dueItems.length > 0
+            ? <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-semibold text-white">{dueItems.length}</span>
+            : <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500">0</span>
+          }
+        </div>
+        <div className="p-6">
+          {dueItems.length === 0 ? (
+            <Empty text="復習待ちのアイテムはありません 🎉" />
+          ) : (
+            <div className="space-y-6">
+              {dueGrouped.map((g) => (
+                <div key={g.index}>
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className={`text-xs font-semibold ${STAGE_COLORS[g.index].split(' ')[1]}`}>{g.label}</span>
+                    <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${STAGE_COLORS[g.index]}`}>{g.items.length}</span>
+                  </div>
+                  <ItemList items={g.items} uid={uid} showReviewAction />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
