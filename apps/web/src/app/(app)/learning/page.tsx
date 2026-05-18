@@ -138,149 +138,7 @@ function PagePickerIcon({ icon }: { icon: string }) {
   return <span className="shrink-0 text-base leading-none">{icon}</span>;
 }
 
-// ── Step 1: ページ選択 ─────────────────────────────────────────────────
-
-function PagePickerScreen({ uid, onSelect, onClose }: {
-  uid: string;
-  onSelect: (pageId: string) => void;
-  onClose: () => void;
-}) {
-  const { pages, add } = useNotionPageStore();
-  const [creating, setCreating] = useState(false);
-
-  const roots = pages
-    .filter((p) => !p.parentId)
-    .sort((a, b) => {
-      if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1;
-      return a.order - b.order;
-    });
-
-  const handleCreate = async () => {
-    setCreating(true);
-    try {
-      const page = await add(uid);
-      onSelect(page.id);
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-white">
-      <div className="flex items-center justify-between border-b border-gray-100 px-6 py-3">
-        <span className="text-sm font-semibold text-gray-700">📚 記録するノートを選択</span>
-        <button onClick={onClose} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">✕</button>
-      </div>
-      <div className="flex-1 overflow-y-auto p-6">
-        <button
-          onClick={handleCreate}
-          disabled={creating}
-          className="mb-5 flex w-full items-center gap-2 rounded-xl border-2 border-dashed border-brand-200 px-4 py-3 text-sm font-medium text-brand-500 hover:bg-brand-50 disabled:opacity-50"
-        >
-          <span className="text-lg">＋</span>
-          <span>{creating ? '作成中...' : '新規ページを作成'}</span>
-        </button>
-
-        {roots.length === 0 ? (
-          <p className="text-center text-sm text-gray-400">ページがありません</p>
-        ) : (
-          <div className="space-y-1">
-            {roots.map((page) => {
-              const children = pages.filter((p) => p.parentId === page.id).sort((a, b) => a.order - b.order);
-              return (
-                <div key={page.id}>
-                  <button
-                    onClick={() => onSelect(page.id)}
-                    className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left hover:bg-gray-50"
-                  >
-                    <PagePickerIcon icon={page.icon} />
-                    <span className="flex-1 truncate text-sm text-gray-700">{page.title || 'Untitled'}</span>
-                    {page.isFavorite && <span className="shrink-0 text-xs text-yellow-400">★</span>}
-                    <span className="shrink-0 text-xs text-gray-300">›</span>
-                  </button>
-                  {children.length > 0 && (
-                    <div className="ml-7 border-l border-gray-200 pl-2">
-                      {children.map((child) => (
-                        <button
-                          key={child.id}
-                          onClick={() => onSelect(child.id)}
-                          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-gray-50"
-                        >
-                          <PagePickerIcon icon={child.icon} />
-                          <span className="flex-1 truncate text-xs text-gray-600">{child.title || 'Untitled'}</span>
-                          <span className="shrink-0 text-xs text-gray-300">›</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── Step 2: ノートエディタ ─────────────────────────────────────────────
-
-function EditorScreen({ pageId, onRecord, onBack }: {
-  pageId: string;
-  onRecord: (text: string) => void;
-  onBack: () => void;
-}) {
-  const { pages, update } = useNotionPageStore();
-  const { user } = useAuthStore();
-  const recordTriggerRef = useRef<(() => void) | null>(null);
-  const page = pages.find((p) => p.id === pageId);
-
-  const handleSave = useCallback(async (title: string, content: string) => {
-    if (!user || !page) return;
-    await update(user.uid, pageId, { title, content });
-  }, [user, page, update, pageId]);
-
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-white">
-      <div className="flex items-center justify-between border-b border-gray-100 px-6 py-3">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-1.5 rounded px-2 py-1 text-sm text-gray-500 hover:bg-gray-100"
-        >
-          <span>←</span>
-          <span>ページを選び直す</span>
-        </button>
-        <span className="flex items-center gap-1.5 text-sm font-medium text-gray-600">
-          <span>{page?.icon}</span>
-          <span className="max-w-[200px] truncate">{page?.title || 'Untitled'}</span>
-        </span>
-        <button
-          onClick={() => recordTriggerRef.current?.()}
-          className="rounded-lg bg-brand-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-600"
-        >
-          📚 学習アイテムとして記録
-        </button>
-      </div>
-      <div className="flex-1 overflow-hidden">
-        {page ? (
-          <NotionEditor
-            key={pageId}
-            initialTitle={page.title}
-            initialContent={page.content}
-            onSave={handleSave}
-            recordTriggerRef={recordTriggerRef}
-            onRecordText={onRecord}
-            notionPageId={pageId}
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+// ── AddItemDialog（左右分割ビュー）──────────────────────────────────────
 
 // ── Step 3: 確認ポップアップ ────────────────────────────────────────────
 
@@ -354,23 +212,33 @@ function ConfirmDialog({ text, pageId, onConfirm, onCancel }: {
   );
 }
 
-// ── AddItemDialog（ウィザード統括）──────────────────────────────────────
-
 function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
   const { add: addItem } = useLearningStore();
-  const { pages } = useNotionPageStore();
-  const [step, setStep] = useState<'picker' | 'editor' | 'confirm'>('picker');
+  const { pages, add: addPage, update } = useNotionPageStore();
+  const { user } = useAuthStore();
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
   const [recordedText, setRecordedText] = useState('');
+  const [confirming, setConfirming] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const recordTriggerRef = useRef<(() => void) | null>(null);
 
-  const handleSelectPage = (pageId: string) => {
-    setSelectedPageId(pageId);
-    setStep('editor');
-  };
+  const roots = pages
+    .filter((p) => !p.parentId)
+    .sort((a, b) => {
+      if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1;
+      return a.order - b.order;
+    });
+
+  const selectedPage = selectedPageId ? pages.find((p) => p.id === selectedPageId) ?? null : null;
+
+  const handleSave = useCallback(async (title: string, content: string) => {
+    if (!user || !selectedPageId) return;
+    await update(user.uid, selectedPageId, { title, content });
+  }, [user, selectedPageId, update]);
 
   const handleRecord = (text: string) => {
     setRecordedText(text);
-    setStep('confirm');
+    setConfirming(true);
   };
 
   const handleConfirm = async (title: string, content: string) => {
@@ -387,24 +255,148 @@ function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
     onClose();
   };
 
+  const handleCreate = async () => {
+    setCreating(true);
+    try {
+      const page = await addPage(uid);
+      setSelectedPageId(page.id);
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <>
-      {step === 'picker' && (
-        <PagePickerScreen uid={uid} onSelect={handleSelectPage} onClose={onClose} />
-      )}
-      {(step === 'editor' || step === 'confirm') && selectedPageId && (
-        <EditorScreen
-          pageId={selectedPageId}
-          onRecord={handleRecord}
-          onBack={() => setStep('picker')}
-        />
-      )}
-      {step === 'confirm' && selectedPageId && (
+      <div className="fixed inset-0 z-50 flex bg-white">
+        {/* 左パネル: ページリスト */}
+        <div className="flex w-60 flex-col border-r border-gray-100 bg-gray-50">
+          <div className="flex items-center justify-between border-b border-gray-100 px-3 py-3">
+            <span className="text-sm font-semibold text-gray-700">📝 ページを選択</span>
+            <button
+              onClick={handleCreate}
+              disabled={creating}
+              title="新規ページ"
+              className="rounded p-1 text-lg leading-none text-gray-400 hover:bg-gray-200 hover:text-brand-500 disabled:opacity-50"
+            >
+              +
+            </button>
+          </div>
+
+          <nav className="flex-1 overflow-y-auto px-1 py-1">
+            {/* お気に入りセクション */}
+            {roots.some((p) => p.isFavorite) && (
+              <div className="mb-1">
+                <p className="px-2 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-yellow-500">★ お気に入り</p>
+                {roots.filter((p) => p.isFavorite).map((page) => (
+                  <button
+                    key={`fav-${page.id}`}
+                    onClick={() => setSelectedPageId(page.id)}
+                    className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 pl-4 text-xs transition-colors ${
+                      selectedPageId === page.id
+                        ? 'bg-white font-semibold text-gray-900 shadow-sm'
+                        : 'text-gray-600 hover:bg-white hover:text-gray-900'
+                    }`}
+                  >
+                    <PagePickerIcon icon={page.icon} />
+                    <span className="min-w-0 flex-1 truncate text-left">{page.title || 'Untitled'}</span>
+                  </button>
+                ))}
+                <div className="mx-2 mb-1 mt-1 border-b border-gray-200" />
+              </div>
+            )}
+
+            {/* 全ページツリー */}
+            <div className="space-y-0.5">
+              {roots.map((page) => {
+                const children = pages.filter((p) => p.parentId === page.id).sort((a, b) => a.order - b.order);
+                return (
+                  <div key={page.id}>
+                    <button
+                      onClick={() => setSelectedPageId(page.id)}
+                      className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors ${
+                        selectedPageId === page.id
+                          ? 'bg-white font-semibold text-gray-900 shadow-sm'
+                          : 'text-gray-600 hover:bg-white hover:text-gray-900'
+                      }`}
+                    >
+                      <PagePickerIcon icon={page.icon} />
+                      <span className="min-w-0 flex-1 truncate text-left">{page.title || 'Untitled'}</span>
+                      {page.isFavorite && <span className="shrink-0 text-[10px] text-yellow-400">★</span>}
+                    </button>
+                    {children.length > 0 && (
+                      <div className="ml-4 border-l border-gray-200 pl-2 pt-0.5">
+                        {children.map((child) => (
+                          <button
+                            key={child.id}
+                            onClick={() => setSelectedPageId(child.id)}
+                            className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors ${
+                              selectedPageId === child.id
+                                ? 'bg-white font-semibold text-gray-800 shadow-sm'
+                                : 'text-gray-500 hover:bg-white hover:text-gray-700'
+                            }`}
+                          >
+                            <PagePickerIcon icon={child.icon} />
+                            <span className="min-w-0 flex-1 truncate text-left">{child.title || 'Untitled'}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </nav>
+
+          <div className="border-t border-gray-100 px-3 py-2.5">
+            <button
+              onClick={onClose}
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+            >
+              <span>✕</span>
+              <span>閉じる</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 右パネル: エディタ */}
+        <div className="flex flex-1 flex-col">
+          <div className="flex items-center justify-between border-b border-amber-100 bg-amber-50 px-6 py-2.5">
+            <span className="text-sm text-amber-700">テキストを選択して 🔥 ボタンで登録</span>
+            <button
+              onClick={() => recordTriggerRef.current?.()}
+              disabled={!selectedPageId}
+              className="rounded-lg bg-brand-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-40"
+            >
+              📚 学習アイテムとして記録
+            </button>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            {selectedPage ? (
+              <NotionEditor
+                key={selectedPageId ?? ''}
+                initialTitle={selectedPage.title}
+                initialContent={selectedPage.content}
+                onSave={handleSave}
+                recordTriggerRef={recordTriggerRef}
+                onRecordText={handleRecord}
+                notionPageId={selectedPageId ?? ''}
+              />
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center gap-2">
+                <span className="text-3xl">📝</span>
+                <p className="text-sm text-gray-400">左のページを選択してください</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {confirming && selectedPageId && (
         <ConfirmDialog
           text={recordedText}
           pageId={selectedPageId}
           onConfirm={handleConfirm}
-          onCancel={() => setStep('editor')}
+          onCancel={() => setConfirming(false)}
         />
       )}
     </>
