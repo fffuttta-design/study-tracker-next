@@ -124,6 +124,20 @@ export default function LearningPage() {
   );
 }
 
+// ── アイコン表示ヘルパー ──────────────────────────────────────────────
+
+function isImgSrc(s: string) {
+  return s.startsWith('http://') || s.startsWith('https://') || s.startsWith('data:');
+}
+
+function PagePickerIcon({ icon }: { icon: string }) {
+  if (isImgSrc(icon)) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={icon} alt="" className="h-5 w-5 shrink-0 rounded-sm object-cover" />;
+  }
+  return <span className="shrink-0 text-base leading-none">{icon}</span>;
+}
+
 // ── Step 1: ページ選択 ─────────────────────────────────────────────────
 
 function PagePickerScreen({ uid, onSelect, onClose }: {
@@ -179,7 +193,7 @@ function PagePickerScreen({ uid, onSelect, onClose }: {
                     onClick={() => onSelect(page.id)}
                     className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left hover:bg-gray-50"
                   >
-                    <span className="text-base leading-none">{page.icon}</span>
+                    <PagePickerIcon icon={page.icon} />
                     <span className="flex-1 truncate text-sm text-gray-700">{page.title || 'Untitled'}</span>
                     {page.isFavorite && <span className="shrink-0 text-xs text-yellow-400">★</span>}
                     <span className="shrink-0 text-xs text-gray-300">›</span>
@@ -192,7 +206,7 @@ function PagePickerScreen({ uid, onSelect, onClose }: {
                           onClick={() => onSelect(child.id)}
                           className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-gray-50"
                         >
-                          <span className="text-sm leading-none">{child.icon}</span>
+                          <PagePickerIcon icon={child.icon} />
                           <span className="flex-1 truncate text-xs text-gray-600">{child.title || 'Untitled'}</span>
                           <span className="shrink-0 text-xs text-gray-300">›</span>
                         </button>
