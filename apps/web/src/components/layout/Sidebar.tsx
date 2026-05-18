@@ -1,12 +1,14 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { type User } from 'firebase/auth';
 import { type NotionPage } from '@study-tracker/core';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotionPageStore } from '@/stores/notionPageStore';
 import { APP_VERSION } from '@/lib/version';
+import appIcon from '@/app/icon.png';
 
 interface SidebarProps {
   user: User;
@@ -189,9 +191,12 @@ export function Sidebar({ user }: SidebarProps) {
   return (
     <aside className="flex h-full w-56 flex-col border-r border-gray-100 bg-gray-50">
       {/* アプリ名 */}
-      <div className="px-4 py-5">
-        <span className="text-sm font-semibold text-gray-800">Study Tracker</span>
-        <p className="text-xs text-gray-400">{APP_VERSION}</p>
+      <div className="flex items-center gap-2 px-4 py-5">
+        <Image src={appIcon} alt="" className="h-7 w-7 rounded-lg" />
+        <div>
+          <p className="text-sm font-semibold text-gray-800">Study Tracker</p>
+          <p className="text-xs text-gray-400">{APP_VERSION}</p>
+        </div>
       </div>
 
       {/* ナビゲーション */}

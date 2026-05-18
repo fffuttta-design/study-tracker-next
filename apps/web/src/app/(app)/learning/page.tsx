@@ -704,28 +704,11 @@ function ItemCard({ item, uid, showReviewAction }: {
               {item.title || item.content.split('\n')[0].slice(0, 60)}
             </span>
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-400">
-            {item.notionPagePath && (
-              <span className="flex items-center gap-0.5">
-                <span>📁</span><span>{item.notionPagePath}</span>
-              </span>
-            )}
-            {nextReview && !fullyDone && (
-              <span>次: {format(new Date(nextReview.scheduledDate), 'M/d', { locale: ja })}</span>
-            )}
-            <span>{format(new Date(item.dateKey), 'M/d', { locale: ja })} 登録</span>
-            {item.notionPageId && (
-              <Link
-                href={`/notion-plus/${item.notionPageId}?hl=${encodeURIComponent((item.content.split('\n').find(l => l.trim().length > 5) ?? item.content).trim().slice(0, 80))}`}
-                onClick={(e) => e.stopPropagation()}
-                className="flex items-center gap-0.5 rounded bg-brand-50 px-1.5 py-0.5 text-brand-600 hover:bg-brand-100"
-                title="ノートで開く（ハイライト表示）"
-              >
-                <span>📖</span>
-                <span>ノートを開く</span>
-              </Link>
-            )}
-          </div>
+          {item.notionPagePath && (
+            <div className="mt-1 flex items-center gap-0.5 text-xs text-gray-400">
+              <span>📁</span><span>{item.notionPagePath}</span>
+            </div>
+          )}
           {!expanded && item.content && (
             <p className="mt-1 line-clamp-1 text-xs text-gray-400">
               {item.content.replace(/[#\*`_~>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 80)}
@@ -733,13 +716,26 @@ function ItemCard({ item, uid, showReviewAction }: {
           )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-1">
-          <button onClick={copyContent} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="コピー">⎘</button>
-          <button onClick={() => setEditing(true)} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="編集">✎</button>
-          <button onClick={handleDelete} className="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-400" title="削除">✕</button>
-          <button onClick={() => setExpanded((v) => !v)} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500">
-            {expanded ? '▲' : '▼'}
-          </button>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <div className="flex items-center gap-1">
+            {item.notionPageId && (
+              <Link
+                href={`/notion-plus/${item.notionPageId}?hl=${encodeURIComponent((item.content.split('\n').find(l => l.trim().length > 5) ?? item.content).trim().slice(0, 80))}`}
+                onClick={(e) => e.stopPropagation()}
+                className="rounded p-1 text-gray-300 hover:bg-brand-50 hover:text-brand-500"
+                title="ノートを開く（ハイライト表示）"
+              >📖</Link>
+            )}
+            <button onClick={copyContent} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="コピー">⎘</button>
+            <button onClick={() => setEditing(true)} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="編集">✎</button>
+            <button onClick={handleDelete} className="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-400" title="削除">✕</button>
+            <button onClick={() => setExpanded((v) => !v)} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500">
+              {expanded ? '▲' : '▼'}
+            </button>
+          </div>
+          <span className="text-[10px] text-gray-300">
+            {format(new Date(item.dateKey), 'M/d', { locale: ja })} 登録
+          </span>
         </div>
       </div>
 
