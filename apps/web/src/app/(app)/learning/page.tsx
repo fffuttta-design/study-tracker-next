@@ -750,7 +750,7 @@ const cardBg = showReviewAction && nextReview ? (STAGE_CARD_BG[nextReview.stageI
     <div className={`rounded-lg border transition-shadow ${cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}>
       {/* ② カードヘッダー全体をクリックで開閉 */}
       <div
-        className="flex cursor-pointer items-start gap-3 px-4 py-3"
+        className={`flex cursor-pointer gap-3 px-4 py-3 ${expanded ? 'items-center' : 'items-start'}`}
         onClick={() => setExpanded((v) => !v)}
       >
         {showReviewAction && nextReview && !fullyDone && (
@@ -762,7 +762,7 @@ const cardBg = showReviewAction && nextReview ? (STAGE_CARD_BG[nextReview.stageI
         )}
 
         <div className="min-w-0 flex-1">
-          <p className={`font-bold text-gray-900 leading-snug ${expanded ? 'text-2xl text-center w-full' : 'truncate text-sm'}`}>
+          <p className={`font-bold text-gray-900 leading-snug ${expanded ? 'text-2xl' : 'truncate text-sm'}`}>
             {item.title || item.content.split('\n')[0].slice(0, 60)}
           </p>
           {!expanded && item.content && (
