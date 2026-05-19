@@ -892,7 +892,8 @@ function RecordDialog({ initialContent, notionPageId, notionPagePath, onClose }:
   const add = useLearningStore((s) => s.add);
   const router = useRouter();
   const firstLine = initialContent.split('\n').find((l) => l.trim())?.trim() ?? '';
-  const [title, setTitle] = useState(firstLine.slice(0, 80));
+  const cleanTitle = firstLine.replace(/^#{1,6}\s+/, '').replace(/\*{1,3}([^*]*)\*{1,3}/g, '$1').replace(/_{1,3}([^_]*)_{1,3}/g, '$1').replace(/~~([^~]*)~~/g, '$1').replace(/`[^`]+`/g, '').replace(/^[>\-*+]\s+/gm, '').replace(/[◆▶▲▼●○■□★☆◇]/g, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').trim();
+  const [title, setTitle] = useState(cleanTitle.slice(0, 80));
   const [content, setContent] = useState(initialContent);
   const [saving, setSaving] = useState(false);
   const dateKey = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
@@ -1340,7 +1341,7 @@ export function NotionEditor({
     <EditorUidContext.Provider value={user?.uid ?? ''}>
     <PageNavigationContext.Provider value={onPageNavigate ?? null}>
     <div className={outerClass} onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }); }} onMouseDown={handleOuterMouseDown}>
-      <div className="w-full max-w-3xl" ref={contentDivRef}>
+      <div className="w-full" ref={contentDivRef}>
         <input
           ref={titleRef}
           defaultValue={initialTitle}

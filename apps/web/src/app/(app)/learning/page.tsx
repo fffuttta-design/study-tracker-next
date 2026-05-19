@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef, useCallback } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/stores/authStore';
 import { useLearningStore } from '@/stores/learningStore';
@@ -62,6 +62,19 @@ const STAGE_BADGE_COUNT_BG = ['bg-red-500', 'bg-yellow-500', 'bg-green-600', 'bg
 function dailyQuote(): string {
   const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
   return DAILY_QUOTES[dayOfYear % DAILY_QUOTES.length];
+}
+
+function stripMarkdown(s: string): string {
+  return s
+    .replace(/^#{1,6}\s+/, '')
+    .replace(/\*{1,3}([^*]*)\*{1,3}/g, '$1')
+    .replace(/_{1,3}([^_]*)_{1,3}/g, '$1')
+    .replace(/~~([^~]*)~~/g, '$1')
+    .replace(/`[^`]+`/g, '')
+    .replace(/^[>\-*+]\s+/gm, '')
+    .replace(/[◆▶▲▼●○■□★☆◇]/g, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .trim();
 }
 
 function toDateKey(d: Date): string {
@@ -169,7 +182,7 @@ function ConfirmDialog({ text, pageId, onConfirm, onCancel }: {
   const { pages } = useNotionPageStore();
   const page = pages.find((p) => p.id === pageId);
   const firstLine = text.split('\n').find((l) => l.trim())?.trim() ?? '';
-  const [title, setTitle] = useState(page?.title || firstLine.slice(0, 80));
+  const [title, setTitle] = useState(page?.title || stripMarkdown(firstLine).slice(0, 80));
   const [content, setContent] = useState(text);
   const [saving, setSaving] = useState(false);
 
@@ -254,18 +267,30 @@ function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
   // ① デフォルトは一番上の親ページを開いた状態
   const [selectedPageId, setSelectedPageId] = useState<string | null>(() => roots[0]?.id ?? null);
 
-  const navigateTo = (id: string) => {
-    if (selectedPageId) setPageHistory((h) => [...h, selectedPageId]);
-    setSelectedPageId(id);
-  };
+  const navigateTo = useCallback((id: string) => {
+    setSelectedPageId((cur) => { if (cur) setPageHistory((h) => [...h, cur]); return id; });
+  }, []);
 
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     setPageHistory((h) => {
       const prev = h[h.length - 1];
       if (prev !== undefined) setSelectedPageId(prev);
       return h.slice(0, -1);
     });
-  };
+  }, []);
+
+  // マウスの戻るボタン（button=3）でページ履歴を戻る
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (e.button === 3) { e.preventDefault(); handleBack(); } };
+    document.addEventListener('mouseup', handler);
+    return () => document.removeEventListener('mouseup', handler);
+  }, [handleBack]);
+
+  const handleCreateSubPageInModal = useCallback(async () => {
+    const newPage = await addPage(uid);
+    navigateTo(newPage.id);
+    return { id: newPage.id, title: newPage.title };
+  }, [uid, addPage, navigateTo]);
 
   const selectedPage = selectedPageId ? pages.find((p) => p.id === selectedPageId) ?? null : null;
 
@@ -427,13 +452,22 @@ function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
               )}
               <span className="text-sm text-amber-700">テキストを選択して 🔥 ボタンで登録</span>
             </div>
-            <button
-              onClick={() => recordTriggerRef.current?.()}
-              disabled={!selectedPageId}
-              className="rounded-lg bg-brand-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-40"
-            >
-              📚 学習アイテムとして記録
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => recordTriggerRef.current?.()}
+                disabled={!selectedPageId}
+                className="rounded-lg bg-brand-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-40"
+              >
+                📚 学習アイテムとして記録
+              </button>
+              <button
+                onClick={onClose}
+                className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100"
+                title="閉じる"
+              >
+                ✕
+              </button>
+            </div>
           </div>
           <div className="flex min-h-0 flex-1 flex-col">
             {selectedPage ? (
@@ -442,6 +476,7 @@ function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
                 initialTitle={selectedPage.title}
                 initialContent={selectedPage.content}
                 onSave={handleSave}
+                onCreateSubPage={handleCreateSubPageInModal}
                 recordTriggerRef={recordTriggerRef}
                 onRecordText={handleRecord}
                 notionPageId={selectedPageId ?? ''}
@@ -727,7 +762,7 @@ const cardBg = showReviewAction && nextReview ? (STAGE_CARD_BG[nextReview.stageI
         )}
 
         <div className="min-w-0 flex-1">
-          <p className="truncate font-semibold text-gray-800 text-lg leading-snug">
+          <p className={`font-bold text-gray-900 leading-snug ${expanded ? 'text-xl' : 'truncate text-sm'}`}>
             {item.title || item.content.split('\n')[0].slice(0, 60)}
           </p>
           {!expanded && item.content && (
