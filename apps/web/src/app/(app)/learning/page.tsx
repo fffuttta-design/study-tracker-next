@@ -182,7 +182,7 @@ function ConfirmDialog({ text, pageId, onConfirm, onCancel }: {
   const { pages } = useNotionPageStore();
   const page = pages.find((p) => p.id === pageId);
   const firstLine = text.split('\n').find((l) => l.trim())?.trim() ?? '';
-  const [title, setTitle] = useState(page?.title || stripMarkdown(firstLine).slice(0, 80));
+  const [title, setTitle] = useState(stripMarkdown(firstLine).slice(0, 80));
   const [content, setContent] = useState(text);
   const [saving, setSaving] = useState(false);
 
