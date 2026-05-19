@@ -152,6 +152,10 @@ details[open] .toggle-heading-arrow { transform: rotate(90deg); }
   margin-top: 0.25rem;
 }
 
+/* ページリンク・URLメンションの行間を詰める */
+.notion-editor [data-type="page-link"] { margin: 1px 0; line-height: 1.5; }
+.notion-editor [data-type="page-link"] + [data-type="page-link"] { margin-top: 0; }
+
 /* 目次 */
 .toc-block {
   border: 1px solid #e5e7eb;

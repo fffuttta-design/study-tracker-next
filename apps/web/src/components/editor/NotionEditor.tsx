@@ -266,7 +266,7 @@ function PageLinkView({ node, updateAttributes }: NodeViewProps) {
 
   return (
     <NodeViewWrapper contentEditable={false}>
-      <div className="flex w-fit items-center gap-1 py-0.5">
+      <div className="flex w-fit items-center gap-1 py-px">
         <div className="relative" ref={pickerRef}>
           <button
             onClick={(e) => { e.stopPropagation(); setPickerOpen((v) => !v); }}
@@ -1225,7 +1225,7 @@ export function NotionEditor({
     };
   }, [editor]);
 
-  // 左余白ドラッグでマーキー選択
+  // 左余白ドラッグでマーキー選択（クリックは無視、4px以上動いた時だけ発動）
   const handleOuterMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!contentDivRef.current || !editor) return;
     const contentRect = contentDivRef.current.getBoundingClientRect();
@@ -1234,32 +1234,38 @@ export function NotionEditor({
     e.preventDefault();
     const startX = e.clientX;
     const startY = e.clientY;
-    const init = { x1: startX, y1: startY, x2: startX, y2: startY };
-    marqueeRef.current = init;
-    setMarquee(init);
+    let hasMoved = false;
 
     const onMove = (ev: MouseEvent) => {
+      const dx = Math.abs(ev.clientX - startX);
+      const dy = Math.abs(ev.clientY - startY);
+      if (!hasMoved) {
+        if (dx < 4 && dy < 4) return;
+        hasMoved = true;
+      }
       const next = { x1: startX, y1: startY, x2: ev.clientX, y2: ev.clientY };
       marqueeRef.current = next;
       setMarquee({ ...next });
     };
 
     const onUp = (ev: MouseEvent) => {
-      const m = marqueeRef.current;
-      if (m && editor) {
-        const minY = Math.min(m.y1, ev.clientY);
-        const maxY = Math.max(m.y1, ev.clientY);
-        const midX = contentRect.left + 20;
-        const startResult = editor.view.posAtCoords({ left: midX, top: minY + 2 });
-        const endResult = editor.view.posAtCoords({ left: midX, top: maxY - 2 });
-        if (startResult && endResult) {
-          const $from = editor.state.doc.resolve(startResult.pos);
-          const $to = editor.state.doc.resolve(endResult.pos);
-          const fromD = $from.depth > 0 ? $from.depth : 1;
-          const toD = $to.depth > 0 ? $to.depth : 1;
-          const lineStart = $from.start(fromD);
-          const lineEnd = $to.end(toD);
-          editor.chain().focus().setTextSelection({ from: Math.min(lineStart, lineEnd), to: Math.max(lineStart, lineEnd) }).run();
+      if (hasMoved) {
+        const m = marqueeRef.current;
+        if (m && editor) {
+          const minY = Math.min(m.y1, ev.clientY);
+          const maxY = Math.max(m.y1, ev.clientY);
+          const midX = contentRect.left + 20;
+          const startResult = editor.view.posAtCoords({ left: midX, top: minY + 2 });
+          const endResult = editor.view.posAtCoords({ left: midX, top: maxY - 2 });
+          if (startResult && endResult) {
+            const $from = editor.state.doc.resolve(startResult.pos);
+            const $to = editor.state.doc.resolve(endResult.pos);
+            const fromD = $from.depth > 0 ? $from.depth : 1;
+            const toD = $to.depth > 0 ? $to.depth : 1;
+            const lineStart = $from.start(fromD);
+            const lineEnd = $to.end(toD);
+            editor.chain().focus().setTextSelection({ from: Math.min(lineStart, lineEnd), to: Math.max(lineStart, lineEnd) }).run();
+          }
         }
       }
       marqueeRef.current = null;
