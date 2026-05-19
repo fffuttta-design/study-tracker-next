@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect, memo } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/stores/authStore';
 import { useLearningStore } from '@/stores/learningStore';
@@ -717,7 +717,7 @@ function ItemList({ items, uid, showReviewAction = false }: {
 
 // ── アイテムカード ────────────────────────────────────────────────────
 
-function ItemCard({ item, uid, showReviewAction }: {
+const ItemCard = memo(function ItemCard({ item, uid, showReviewAction }: {
   item: LearningItem;
   uid: string;
   showReviewAction: boolean;
@@ -762,7 +762,7 @@ const cardBg = showReviewAction && nextReview ? (STAGE_CARD_BG[nextReview.stageI
         )}
 
         <div className="min-w-0 flex-1">
-          <p className={`font-bold text-gray-900 leading-snug ${expanded ? 'text-xl' : 'truncate text-sm'}`}>
+          <p className={`font-bold text-gray-900 leading-snug ${expanded ? 'text-2xl text-center w-full' : 'truncate text-sm'}`}>
             {item.title || item.content.split('\n')[0].slice(0, 60)}
           </p>
           {!expanded && item.content && (
@@ -851,7 +851,7 @@ const cardBg = showReviewAction && nextReview ? (STAGE_CARD_BG[nextReview.stageI
       )}
     </div>
   );
-}
+});
 
 // ── 編集モーダル ─────────────────────────────────────────────────────
 

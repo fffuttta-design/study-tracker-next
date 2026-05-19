@@ -1,14 +1,19 @@
 'use client';
 
 import { Fragment, use, useEffect, useCallback, useState, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotionPageStore, type PageHistorySnapshot } from '@/stores/notionPageStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { type NotionPage } from '@study-tracker/core';
-import { NotionEditor } from '@/components/editor/NotionEditor';
 import { DatabaseView } from '@/components/database/DatabaseView';
+
+const NotionEditor = dynamic(
+  () => import('@/components/editor/NotionEditor').then((m) => ({ default: m.NotionEditor })),
+  { ssr: false, loading: () => <div className="flex flex-1 items-center justify-center"><div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" /></div> }
+);
 
 function buildBreadcrumbs(pages: NotionPage[], currentId: string): NotionPage[] {
   const map = new Map(pages.map((p) => [p.id, p]));
