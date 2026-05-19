@@ -895,7 +895,7 @@ function RecordDialog({ initialContent, notionPageId, notionPagePath, onClose }:
   const [title, setTitle] = useState(firstLine.slice(0, 80));
   const [content, setContent] = useState(initialContent);
   const [saving, setSaving] = useState(false);
-  const dateKey = new Date().toISOString().slice(0, 10);
+  const dateKey = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
   const inputCls = 'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-500';
 
   const submit = async () => {

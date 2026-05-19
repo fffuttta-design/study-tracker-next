@@ -65,7 +65,10 @@ function dailyQuote(): string {
 }
 
 function toDateKey(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 // ── メインページ ─────────────────────────────────────────────────────
@@ -280,7 +283,7 @@ function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
     if (!selectedPageId) return;
     const page = pages.find((p) => p.id === selectedPageId);
     await addItem(uid, {
-      dateKey: new Date().toISOString().slice(0, 10),
+      dateKey: toDateKey(new Date()),
       title,
       content,
       sortOrder: 0,
