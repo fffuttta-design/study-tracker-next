@@ -557,6 +557,7 @@ function DashboardTab({ todayItems, dueItems, uid, onAdd }: {
                     count={g.items.length}
                     badgeClass={STAGE_COLORS[g.index]}
                     countBg={STAGE_BADGE_COUNT_BG[g.index]}
+                    leftAlign
                   />
                   <ItemList items={g.items} uid={uid} showReviewAction />
                 </div>
@@ -644,6 +645,7 @@ function ReviewTab({ dueItems, uid }: {
               count={g.items.length}
               badgeClass={STAGE_COLORS[g.index]}
               countBg={STAGE_BADGE_COUNT_BG[g.index]}
+              leftAlign
             />
             <ItemList items={g.items} uid={uid} showReviewAction />
           </div>
@@ -749,9 +751,6 @@ const cardBg = showReviewAction && nextReview ? (STAGE_CARD_BG[nextReview.stageI
             <button onClick={copyContent} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="コピー">⎘</button>
             <button onClick={() => setEditing(true)} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="編集">✎</button>
             <button onClick={handleDelete} className="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-400" title="削除">✕</button>
-            <button onClick={() => setExpanded((v) => !v)} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500">
-              {expanded ? '▲' : '▼'}
-            </button>
           </div>
           {item.notionPagePath && (
             <div className="flex items-center gap-0.5 text-xs text-gray-400">
