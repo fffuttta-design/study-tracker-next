@@ -1040,6 +1040,25 @@ export function NotionEditor({
     })(),
     editorProps: {
       attributes: { class: 'notion-editor' },
+      handleKeyDown(view, event) {
+        // ページリンクに隣接する段落での Shift+Enter をブロック（間隔統一のため）
+        if (event.key === 'Enter' && event.shiftKey) {
+          const { state } = view;
+          const { $from } = state.selection;
+          const doc = state.doc;
+          const curIdx = $from.index(0);
+          const prevNode = curIdx > 0 ? doc.child(curIdx - 1) : null;
+          const nextNode = curIdx < doc.childCount - 1 ? doc.child(curIdx + 1) : null;
+          if (
+            (prevNode && prevNode.type.name === 'pageLink') ||
+            (nextNode && nextNode.type.name === 'pageLink')
+          ) {
+            event.preventDefault();
+            return true;
+          }
+        }
+        return false;
+      },
       handlePaste(view, event) {
         const items = event.clipboardData?.items;
         if (items) {
