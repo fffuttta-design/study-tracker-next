@@ -42,8 +42,16 @@ export function isFullyCompleted(item: LearningItem): boolean {
   return getNextStageIndex(item) === -1;
 }
 
+export function localDateKey(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export function hasDueReview(item: LearningItem): boolean {
-  const today = new Date().toISOString().slice(0, 10);
+  // ローカル日付（日本時間）で比較することで 00:00 JST から正しく復習が出る
+  const today = localDateKey();
   return item.reviews.some(
     (r) => !r.completed && r.scheduledDate.slice(0, 10) <= today
   );
@@ -53,13 +61,14 @@ export function createReviews(
   dateKey: string,
   stageDays: readonly number[] = DEFAULT_REVIEW_STAGE_DAYS
 ): ReviewRecord[] {
-  const base = new Date(dateKey);
+  // YYYY-MM-DD をローカル日付として解釈（UTC変換を避ける）
+  const [y, mo, d] = dateKey.split('-').map(Number);
   return stageDays.map((days, i) => {
-    const d = new Date(base);
-    d.setDate(d.getDate() + days);
+    const base = new Date(y, mo - 1, d); // ローカル時刻の深夜0時
+    base.setDate(base.getDate() + days);
     return {
       stageIndex: i,
-      scheduledDate: d.toISOString(),
+      scheduledDate: localDateKey(base), // YYYY-MM-DD（ローカル）で保存
       completed: false,
     };
   });
