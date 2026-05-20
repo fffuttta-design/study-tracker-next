@@ -273,12 +273,15 @@ function PageLinkView({ node, updateAttributes }: NodeViewProps) {
             className="rounded p-0.5 hover:bg-gray-100"
             title="アイコンを変更"
           >
-            {isImageSrc(icon) ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={icon} alt="" className="block h-[1.1em] w-[1.1em] flex-shrink-0 rounded-md object-cover" style={{ aspectRatio: '1/1' }} />
-            ) : (
-              <span className="text-[0.95em] leading-none">{icon}</span>
-            )}
+            {/* アイコンを 18px 固定枠に統一 → 行高を揃える */}
+            <span className="flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center">
+              {isImageSrc(icon) ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={icon} alt="" className="h-[18px] w-[18px] rounded-sm object-cover" />
+              ) : (
+                <span className="text-[14px] leading-none">{icon}</span>
+              )}
+            </span>
           </button>
           {pickerOpen && (
             <div className="absolute left-0 top-full z-50 w-72 rounded-xl border border-gray-200 bg-white p-3 shadow-xl">
