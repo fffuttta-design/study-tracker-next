@@ -322,7 +322,7 @@ function PageLinkView({ node, updateAttributes }: NodeViewProps) {
 const PageLinkNode = TiptapNode.create({
   name: 'pageLink',
   group: 'block',
-  atom: true,
+  atom: false,
   addAttributes() {
     return {
       href: { default: null },
