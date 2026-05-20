@@ -213,33 +213,10 @@ const EMOJI_PRESETS = [
 
 // ── PageLink ノード ──────────────────────────────────────────────────
 
-function PageLinkView({ node, updateAttributes, getPos, editor: tiptapEditor }: NodeViewProps) {
+function PageLinkView({ node, updateAttributes }: NodeViewProps) {
   const router = useRouter();
   const onPageNavigate = useContext(PageNavigationContext);
   const { href, title: storedTitle, icon: storedIcon } = node.attrs as { href: string; title: string; icon: string };
-
-  // リンク下端クリック → 次がpageLinkなら段落挿入、そうでなければカーソル移動
-  const handleInsertBelow = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!tiptapEditor) return;
-    const pos = typeof getPos === 'function' ? getPos() : null;
-    if (pos === null || pos === undefined) return;
-    const after = pos + node.nodeSize;
-    const nextNode = tiptapEditor.state.doc.nodeAt(after);
-    if (!nextNode || nextNode.type.name === 'pageLink') {
-      tiptapEditor.chain()
-        .insertContentAt(after, { type: 'paragraph' })
-        .setTextSelection(after + 1)
-        .focus()
-        .run();
-    } else {
-      tiptapEditor.chain()
-        .setTextSelection(after + 1)
-        .focus()
-        .run();
-    }
-  }, [tiptapEditor, getPos, node.nodeSize]);
   const pages = useNotionPageStore((s) => s.pages);
   const update = useNotionPageStore((s) => s.update);
   const { user } = useAuthStore();
@@ -288,7 +265,7 @@ function PageLinkView({ node, updateAttributes, getPos, editor: tiptapEditor }: 
   };
 
   return (
-    <NodeViewWrapper data-type="page-link" className="!my-0 !py-0 leading-none" contentEditable={false}>
+    <NodeViewWrapper as="span" data-type="page-link" className="block" contentEditable={false}>
       <div className="flex w-fit items-center gap-1 py-px">
         <div className="relative" ref={pickerRef}>
           <button
@@ -338,20 +315,14 @@ function PageLinkView({ node, updateAttributes, getPos, editor: tiptapEditor }: 
           <span className="text-[0.95em] text-gray-700 underline">{title || 'Untitled'}</span>
         </button>
       </div>
-      {/* カーソル挿入ゾーン：リンク間をクリックして段落を挿入できる */}
-      <div
-        contentEditable={false}
-        className="h-2 w-full cursor-text"
-        onMouseDown={handleInsertBelow}
-        title="クリックでカーソルを挿入"
-      />
     </NodeViewWrapper>
   );
 }
 
 const PageLinkNode = TiptapNode.create({
   name: 'pageLink',
-  group: 'block',
+  group: 'inline',
+  inline: true,
   atom: true,
   addAttributes() {
     return {
@@ -360,8 +331,13 @@ const PageLinkNode = TiptapNode.create({
       icon: { default: '📄' },
     };
   },
-  parseHTML() { return [{ tag: 'div[data-type="page-link"]' }]; },
-  renderHTML({ HTMLAttributes }) { return ['div', { ...HTMLAttributes, 'data-type': 'page-link' }]; },
+  parseHTML() {
+    return [
+      { tag: 'span[data-type="page-link"]' },
+      { tag: 'div[data-type="page-link"]' }, // 旧形式との後方互換
+    ];
+  },
+  renderHTML({ HTMLAttributes }) { return ['span', { ...HTMLAttributes, 'data-type': 'page-link' }]; },
   addNodeView() { return ReactNodeViewRenderer(PageLinkView); },
 });
 
@@ -960,6 +936,26 @@ function RecordDialog({ initialContent, notionPageId, notionPagePath, onClose }:
   );
 }
 
+// ── 旧ブロック形式 pageLink → インライン形式へのマイグレーション ────────
+function migratePageLinks(json: unknown): unknown {
+  if (!json || typeof json !== 'object') return json;
+  const obj = json as Record<string, unknown>;
+  if (obj.type === 'doc' && Array.isArray(obj.content)) {
+    return {
+      ...obj,
+      content: (obj.content as unknown[]).flatMap((node) => {
+        const n = node as Record<string, unknown>;
+        // トップレベルにある旧ブロック形式の pageLink を段落で包む
+        if (n.type === 'pageLink') {
+          return [{ type: 'paragraph', content: [n] }];
+        }
+        return [n];
+      }),
+    };
+  }
+  return json;
+}
+
 // ── メインエディタ ─────────────────────────────────────────────────
 
 interface NotionEditorProps {
@@ -1066,7 +1062,10 @@ export function NotionEditor({
     ],
     content: (() => {
       if (!initialContent) return '';
-      try { return JSON.parse(initialContent); } catch { return initialContent; }
+      try {
+        const parsed = JSON.parse(initialContent);
+        return migratePageLinks(parsed) as object;
+      } catch { return initialContent; }
     })(),
     editorProps: {
       attributes: { class: 'notion-editor' },
