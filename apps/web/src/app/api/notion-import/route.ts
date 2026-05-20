@@ -178,7 +178,24 @@ async function crawlPage(
     })
   );
 
-  const nodes = blocks.map((b) => convertBlock(b, childMetaMap)).filter(Boolean);
+  const rawNodes = blocks
+    .map((b) => convertBlock(b, childMetaMap))
+    .filter(Boolean) as Record<string, unknown>[];
+
+  // Notionのデータには pageLink の前後に空段落が自動挿入されているが
+  // うちのエディタでは高さが出てしまうため、隣接する空段落だけ除去する
+  const nodes = rawNodes.filter((node, i) => {
+    if (node.type !== 'paragraph') return true;
+    const content = node.content as unknown[] | undefined;
+    if (content && content.length > 0) return true; // 内容あり → 残す
+    // 空段落: 前後どちらかが pageLink なら除去
+    const prev = i > 0 ? rawNodes[i - 1] : null;
+    const next = i < rawNodes.length - 1 ? rawNodes[i + 1] : null;
+    return !(
+      (prev && prev.type === 'pageLink') ||
+      (next && next.type === 'pageLink')
+    );
+  });
 
   result.push({
     notionId: meta.id,
