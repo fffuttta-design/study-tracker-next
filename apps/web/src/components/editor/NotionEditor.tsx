@@ -11,8 +11,7 @@ export const PageNavigationContext = createContext<((href: string) => void) | nu
 // ── エディタUID コンテキスト ──────────────────────────────────────────
 export const EditorUidContext = createContext<string>('');
 
-import { Node as TiptapNode, InputRule } from '@tiptap/core';
-import { TextSelection } from '@tiptap/pm/state';
+import { Node as TiptapNode, Extension, InputRule } from '@tiptap/core';
 import {
   useEditor, EditorContent,
   NodeViewWrapper, NodeViewContent,
@@ -319,6 +318,57 @@ function PageLinkView({ node, updateAttributes }: NodeViewProps) {
     </NodeViewWrapper>
   );
 }
+
+// ── ページリンク隣接行のキーボード修正 ───────────────────────────────────
+// handleKeyDown (editorProps) は ProseMirror プラグインより先に発火するため
+// addKeyboardShortcuts (Extension) で登録する方が信頼性が高い
+const PageLinkKeyboardFix = Extension.create({
+  name: 'pageLinkKeyboardFix',
+  priority: 200, // StarterKit(100) より高く設定
+  addKeyboardShortcuts() {
+    return {
+      // 空段落の先頭で Backspace → 前段落が pageLink を含む場合、
+      // デフォルトのマージを防ぎ空段落だけを削除する
+      Backspace: () => {
+        const { state } = this.editor;
+        const { $from, empty } = state.selection;
+
+        // 折り畳みカーソルかつ段落先頭のみ処理
+        if (!empty || $from.depth !== 1 || $from.parentOffset !== 0) return false;
+
+        const curPara = $from.parent;
+        const curIdx  = $from.index(0); // doc 内での現在段落インデックス
+
+        // 直前の兄弟が必要
+        if (curIdx <= 0) return false;
+        const prevNode = state.doc.child(curIdx - 1);
+
+        // 直前段落の最後の子が pageLink でない場合はデフォルト動作
+        if (
+          prevNode.type.name !== 'paragraph' ||
+          prevNode.childCount === 0 ||
+          prevNode.lastChild?.type.name !== 'pageLink'
+        ) return false;
+
+        // 空段落のみ: 段落を削除してカーソルを前段落末尾（pageLink 直後）へ
+        if (curPara.childCount === 0) {
+          const paraStart  = $from.before(1); // 現在段落の開きタグ直前
+          const paraEnd    = $from.after(1);  // 現在段落の閉じタグ直後
+          const targetPos  = paraStart - 1;   // 前段落内 pageLink の直後
+
+          return this.editor
+            .chain()
+            .deleteRange({ from: paraStart, to: paraEnd })
+            .setTextSelection(targetPos)
+            .run();
+        }
+
+        // 非空段落はデフォルト動作（先頭文字を削除）
+        return false;
+      },
+    };
+  },
+});
 
 const PageLinkNode = TiptapNode.create({
   name: 'pageLink',
@@ -1054,6 +1104,7 @@ export function NotionEditor({
       TableRow,
       CustomTableCell,
       CustomTableHeader,
+      PageLinkKeyboardFix,
       PageLinkNode,
       UrlMentionNode,
       CalloutNode,
@@ -1070,48 +1121,6 @@ export function NotionEditor({
     })(),
     editorProps: {
       attributes: { class: 'notion-editor' },
-      handleKeyDown(view, event) {
-        // ── Backspace: 空段落でのページリンク段落とのマージを防ぐ ──────────
-        if (event.key === 'Backspace') {
-          const { state } = view;
-          const { $from, empty } = state.selection;
-          // 空段落の先頭にいる場合のみ処理
-          if (empty && $from.depth === 1 && $from.parentOffset === 0 && $from.parent.childCount === 0) {
-            const curIdx = $from.index(0);
-            if (curIdx > 0) {
-              const prevNode = state.doc.child(curIdx - 1);
-              // 前段落がpageLinkを末尾に持つ場合 → マージせず空段落だけ削除
-              if (prevNode.type.name === 'paragraph' && prevNode.lastChild?.type.name === 'pageLink') {
-                event.preventDefault();
-                const paraStart = $from.before(1);
-                const paraEnd   = $from.after(1);
-                const tr = state.tr.delete(paraStart, paraEnd);
-                // カーソルを前の段落の末尾（pageLink直後）に移動
-                tr.setSelection(TextSelection.create(tr.doc, paraStart - 1));
-                view.dispatch(tr);
-                return true;
-              }
-            }
-          }
-        }
-        // ── Shift+Enter: ページリンクに隣接する段落でブロック ────────────
-        if (event.key === 'Enter' && event.shiftKey) {
-          const { state } = view;
-          const { $from } = state.selection;
-          const doc = state.doc;
-          const curIdx = $from.index(0);
-          const prevNode = curIdx > 0 ? doc.child(curIdx - 1) : null;
-          const nextNode = curIdx < doc.childCount - 1 ? doc.child(curIdx + 1) : null;
-          if (
-            (prevNode && prevNode.type.name === 'pageLink') ||
-            (nextNode && nextNode.type.name === 'pageLink')
-          ) {
-            event.preventDefault();
-            return true;
-          }
-        }
-        return false;
-      },
       handlePaste(view, event) {
         const items = event.clipboardData?.items;
         if (items) {
