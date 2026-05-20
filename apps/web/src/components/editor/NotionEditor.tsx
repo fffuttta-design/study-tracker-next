@@ -12,6 +12,7 @@ export const PageNavigationContext = createContext<((href: string) => void) | nu
 export const EditorUidContext = createContext<string>('');
 
 import { Node as TiptapNode, Extension, InputRule } from '@tiptap/core';
+import { TextSelection } from '@tiptap/pm/state';
 import {
   useEditor, EditorContent,
   NodeViewWrapper, NodeViewContent,
@@ -266,7 +267,7 @@ function PageLinkView({ node, updateAttributes }: NodeViewProps) {
 
   return (
     <NodeViewWrapper as="span" data-type="page-link" className="block" contentEditable={false}>
-      <div className="flex w-fit items-center gap-1 py-px">
+      <div className="flex w-full items-center gap-1 py-px">
         <div className="relative" ref={pickerRef}>
           <button
             onClick={(e) => { e.stopPropagation(); setPickerOpen((v) => !v); }}
@@ -352,15 +353,14 @@ const PageLinkKeyboardFix = Extension.create({
 
         // 空段落のみ: 段落を削除してカーソルを前段落末尾（pageLink 直後）へ
         if (curPara.childCount === 0) {
-          const paraStart  = $from.before(1); // 現在段落の開きタグ直前
-          const paraEnd    = $from.after(1);  // 現在段落の閉じタグ直後
-          const targetPos  = paraStart - 1;   // 前段落内 pageLink の直後
+          const paraStart = $from.before(1); // 現在段落の開きタグ直前
+          const paraEnd   = $from.after(1);  // 現在段落の閉じタグ直後
+          const targetPos = paraStart - 1;   // 前段落内 pageLink の直後（chain より信頼性高い直接dispatch）
 
-          return this.editor
-            .chain()
-            .deleteRange({ from: paraStart, to: paraEnd })
-            .setTextSelection(targetPos)
-            .run();
+          const tr = state.tr.delete(paraStart, paraEnd);
+          tr.setSelection(TextSelection.create(tr.doc, targetPos));
+          this.editor.view.dispatch(tr);
+          return true;
         }
 
         // 非空段落はデフォルト動作（先頭文字を削除）
