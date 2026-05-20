@@ -288,7 +288,7 @@ function PageLinkView({ node, updateAttributes, getPos, editor: tiptapEditor }: 
   };
 
   return (
-    <NodeViewWrapper className="!my-0 !py-0 leading-none" contentEditable={false}>
+    <NodeViewWrapper data-type="page-link" className="!my-0 !py-0 leading-none" contentEditable={false}>
       <div className="flex w-fit items-center gap-1 py-px">
         <div className="relative" ref={pickerRef}>
           <button

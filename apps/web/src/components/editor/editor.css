@@ -7,8 +7,15 @@
 }
 
 .notion-editor p { margin: 0.25rem 0; }
-/* 空段落（改行のみ）の余白を除去してページリンク間隔を統一 */
-.notion-editor p:has(> br:only-child) { margin: 0 !important; min-height: 1.2em; }
+/* ページリンクに隣接する空段落を非表示にして間隔を統一 */
+.notion-editor [data-type="page-link"] + p:has(> br:only-child),
+.notion-editor p:has(> br:only-child):has(+ [data-type="page-link"]) {
+  height: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden;
+  margin: 0 !important;
+  padding: 0 !important;
+}
 .notion-editor h1 { font-size: 1.875rem; font-weight: 700; margin: 1.25rem 0 0.5rem; }
 .notion-editor h2 { font-size: 1.5rem; font-weight: 600; margin: 1rem 0 0.375rem; }
 .notion-editor h3 { font-size: 1.25rem; font-weight: 600; margin: 0.75rem 0 0.25rem; }
