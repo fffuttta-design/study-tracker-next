@@ -12,6 +12,7 @@ export const PageNavigationContext = createContext<((href: string) => void) | nu
 export const EditorUidContext = createContext<string>('');
 
 import { Node as TiptapNode, InputRule } from '@tiptap/core';
+import { TextSelection } from '@tiptap/pm/state';
 import {
   useEditor, EditorContent,
   NodeViewWrapper, NodeViewContent,
@@ -1070,7 +1071,30 @@ export function NotionEditor({
     editorProps: {
       attributes: { class: 'notion-editor' },
       handleKeyDown(view, event) {
-        // ページリンクに隣接する段落での Shift+Enter をブロック（間隔統一のため）
+        // ── Backspace: 空段落でのページリンク段落とのマージを防ぐ ──────────
+        if (event.key === 'Backspace') {
+          const { state } = view;
+          const { $from, empty } = state.selection;
+          // 空段落の先頭にいる場合のみ処理
+          if (empty && $from.depth === 1 && $from.parentOffset === 0 && $from.parent.childCount === 0) {
+            const curIdx = $from.index(0);
+            if (curIdx > 0) {
+              const prevNode = state.doc.child(curIdx - 1);
+              // 前段落がpageLinkを末尾に持つ場合 → マージせず空段落だけ削除
+              if (prevNode.type.name === 'paragraph' && prevNode.lastChild?.type.name === 'pageLink') {
+                event.preventDefault();
+                const paraStart = $from.before(1);
+                const paraEnd   = $from.after(1);
+                const tr = state.tr.delete(paraStart, paraEnd);
+                // カーソルを前の段落の末尾（pageLink直後）に移動
+                tr.setSelection(TextSelection.create(tr.doc, paraStart - 1));
+                view.dispatch(tr);
+                return true;
+              }
+            }
+          }
+        }
+        // ── Shift+Enter: ページリンクに隣接する段落でブロック ────────────
         if (event.key === 'Enter' && event.shiftKey) {
           const { state } = view;
           const { $from } = state.selection;
