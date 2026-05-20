@@ -213,10 +213,33 @@ const EMOJI_PRESETS = [
 
 // ── PageLink ノード ──────────────────────────────────────────────────
 
-function PageLinkView({ node, updateAttributes }: NodeViewProps) {
+function PageLinkView({ node, updateAttributes, getPos, editor: tiptapEditor }: NodeViewProps) {
   const router = useRouter();
   const onPageNavigate = useContext(PageNavigationContext);
   const { href, title: storedTitle, icon: storedIcon } = node.attrs as { href: string; title: string; icon: string };
+
+  // リンク下端クリック → 次がpageLinkなら段落挿入、そうでなければカーソル移動
+  const handleInsertBelow = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!tiptapEditor) return;
+    const pos = typeof getPos === 'function' ? getPos() : null;
+    if (pos === null || pos === undefined) return;
+    const after = pos + node.nodeSize;
+    const nextNode = tiptapEditor.state.doc.nodeAt(after);
+    if (!nextNode || nextNode.type.name === 'pageLink') {
+      tiptapEditor.chain()
+        .insertContentAt(after, { type: 'paragraph' })
+        .setTextSelection(after + 1)
+        .focus()
+        .run();
+    } else {
+      tiptapEditor.chain()
+        .setTextSelection(after + 1)
+        .focus()
+        .run();
+    }
+  }, [tiptapEditor, getPos, node.nodeSize]);
   const pages = useNotionPageStore((s) => s.pages);
   const update = useNotionPageStore((s) => s.update);
   const { user } = useAuthStore();
@@ -315,6 +338,13 @@ function PageLinkView({ node, updateAttributes }: NodeViewProps) {
           <span className="text-[0.95em] text-gray-700 underline">{title || 'Untitled'}</span>
         </button>
       </div>
+      {/* カーソル挿入ゾーン：リンク間をクリックして段落を挿入できる */}
+      <div
+        contentEditable={false}
+        className="h-2 w-full cursor-text"
+        onMouseDown={handleInsertBelow}
+        title="クリックでカーソルを挿入"
+      />
     </NodeViewWrapper>
   );
 }
@@ -322,7 +352,7 @@ function PageLinkView({ node, updateAttributes }: NodeViewProps) {
 const PageLinkNode = TiptapNode.create({
   name: 'pageLink',
   group: 'block',
-  atom: false,
+  atom: true,
   addAttributes() {
     return {
       href: { default: null },
