@@ -11,8 +11,7 @@ export const PageNavigationContext = createContext<((href: string) => void) | nu
 // ── エディタUID コンテキスト ──────────────────────────────────────────
 export const EditorUidContext = createContext<string>('');
 
-import { Node as TiptapNode, Extension, InputRule } from '@tiptap/core';
-import { TextSelection } from '@tiptap/pm/state';
+import { Node as TiptapNode, InputRule } from '@tiptap/core';
 import {
   useEditor, EditorContent,
   NodeViewWrapper, NodeViewContent,
@@ -266,7 +265,7 @@ function PageLinkView({ node, updateAttributes }: NodeViewProps) {
   };
 
   return (
-    <NodeViewWrapper as="span" data-type="page-link" className="block" contentEditable={false}>
+    <NodeViewWrapper data-type="page-link" contentEditable={false}>
       <div className="flex w-full items-center gap-1 py-px">
         <div className="relative" ref={pickerRef}>
           <button
@@ -320,60 +319,9 @@ function PageLinkView({ node, updateAttributes }: NodeViewProps) {
   );
 }
 
-// ── ページリンク隣接行のキーボード修正 ───────────────────────────────────
-// handleKeyDown (editorProps) は ProseMirror プラグインより先に発火するため
-// addKeyboardShortcuts (Extension) で登録する方が信頼性が高い
-const PageLinkKeyboardFix = Extension.create({
-  name: 'pageLinkKeyboardFix',
-  priority: 200, // StarterKit(100) より高く設定
-  addKeyboardShortcuts() {
-    return {
-      // 空段落の先頭で Backspace → 前段落が pageLink を含む場合、
-      // デフォルトのマージを防ぎ空段落だけを削除する
-      Backspace: () => {
-        const { state } = this.editor;
-        const { $from, empty } = state.selection;
-
-        // 折り畳みカーソルかつ段落先頭のみ処理
-        if (!empty || $from.depth !== 1 || $from.parentOffset !== 0) return false;
-
-        const curPara = $from.parent;
-        const curIdx  = $from.index(0); // doc 内での現在段落インデックス
-
-        // 直前の兄弟が必要
-        if (curIdx <= 0) return false;
-        const prevNode = state.doc.child(curIdx - 1);
-
-        // 直前段落の最後の子が pageLink でない場合はデフォルト動作
-        if (
-          prevNode.type.name !== 'paragraph' ||
-          prevNode.childCount === 0 ||
-          prevNode.lastChild?.type.name !== 'pageLink'
-        ) return false;
-
-        // 空段落のみ: 段落を削除してカーソルを前段落末尾（pageLink 直後）へ
-        if (curPara.childCount === 0) {
-          const paraStart = $from.before(1); // 現在段落の開きタグ直前
-          const paraEnd   = $from.after(1);  // 現在段落の閉じタグ直後
-          const targetPos = paraStart - 1;   // 前段落内 pageLink の直後（chain より信頼性高い直接dispatch）
-
-          const tr = state.tr.delete(paraStart, paraEnd);
-          tr.setSelection(TextSelection.create(tr.doc, targetPos));
-          this.editor.view.dispatch(tr);
-          return true;
-        }
-
-        // 非空段落はデフォルト動作（先頭文字を削除）
-        return false;
-      },
-    };
-  },
-});
-
 const PageLinkNode = TiptapNode.create({
   name: 'pageLink',
-  group: 'inline',
-  inline: true,
+  group: 'block',
   atom: true,
   addAttributes() {
     return {
@@ -384,11 +332,11 @@ const PageLinkNode = TiptapNode.create({
   },
   parseHTML() {
     return [
-      { tag: 'span[data-type="page-link"]' },
-      { tag: 'div[data-type="page-link"]' }, // 旧形式との後方互換
+      { tag: 'div[data-type="page-link"]' },
+      { tag: 'span[data-type="page-link"]' }, // v1.1.28〜v1.1.31 インライン期間との後方互換
     ];
   },
-  renderHTML({ HTMLAttributes }) { return ['span', { ...HTMLAttributes, 'data-type': 'page-link' }]; },
+  renderHTML({ HTMLAttributes }) { return ['div', { ...HTMLAttributes, 'data-type': 'page-link' }]; },
   addNodeView() { return ReactNodeViewRenderer(PageLinkView); },
 });
 
@@ -987,7 +935,9 @@ function RecordDialog({ initialContent, notionPageId, notionPagePath, onClose }:
   );
 }
 
-// ── 旧ブロック形式 pageLink → インライン形式へのマイグレーション ────────
+// ── インライン期間（v1.1.28〜v1.1.31）に保存されたデータをブロック形式へ戻す ──
+// 当時: pageLink が paragraph に包まれて保存 → { type:'paragraph', content:[{type:'pageLink'}] }
+// 現在: pageLink はブロック直置き → { type:'pageLink', attrs:{...} }
 function migratePageLinks(json: unknown): unknown {
   if (!json || typeof json !== 'object') return json;
   const obj = json as Record<string, unknown>;
@@ -996,9 +946,14 @@ function migratePageLinks(json: unknown): unknown {
       ...obj,
       content: (obj.content as unknown[]).flatMap((node) => {
         const n = node as Record<string, unknown>;
-        // トップレベルにある旧ブロック形式の pageLink を段落で包む
-        if (n.type === 'pageLink') {
-          return [{ type: 'paragraph', content: [n] }];
+        // paragraph が pageLink 1つだけを含む場合 → アンラップしてブロック直置きに戻す
+        if (
+          n.type === 'paragraph' &&
+          Array.isArray(n.content) &&
+          (n.content as unknown[]).length === 1 &&
+          ((n.content as unknown[])[0] as Record<string, unknown>).type === 'pageLink'
+        ) {
+          return [(n.content as unknown[])[0]];
         }
         return [n];
       }),
@@ -1104,7 +1059,6 @@ export function NotionEditor({
       TableRow,
       CustomTableCell,
       CustomTableHeader,
-      PageLinkKeyboardFix,
       PageLinkNode,
       UrlMentionNode,
       CalloutNode,
