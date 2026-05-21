@@ -61,8 +61,13 @@ function PageTreeEntry({
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(false);
-    const droppedPageId = e.dataTransfer.getData('application/x-page-id');
+    // application/x-page-id が取れない場合は text/plain にフォールバック
+    const droppedPageId =
+      e.dataTransfer.getData('application/x-page-id') ||
+      e.dataTransfer.getData('text/plain');
     if (!droppedPageId || !user || droppedPageId === page.id) return;
+    // UUIDっぽくない文字列（URLなど）は無視
+    if (!/^[0-9a-f-]{36}$/.test(droppedPageId)) return;
     await update(user.uid, droppedPageId, { parentId: page.id });
   };
 

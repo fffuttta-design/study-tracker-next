@@ -308,7 +308,7 @@ function PageLinkView({ node, updateAttributes, deleteNode }: NodeViewProps) {
           </button>
         </div>
       )}
-      <div className="flex w-full items-center gap-1 py-px" onContextMenu={handleContextMenu}>
+      <div className="group flex w-full items-center gap-1 py-px" onContextMenu={handleContextMenu}>
         <div className="relative" ref={pickerRef}>
           <button
             onClick={(e) => { e.stopPropagation(); setPickerOpen((v) => !v); }}
@@ -365,18 +365,27 @@ function PageLinkView({ node, updateAttributes, deleteNode }: NodeViewProps) {
             {title || 'Untitled'}
           </span>
         ) : (
-          <button
-            draggable
-            onDragStart={(e) => {
-              if (!pageId) return;
-              e.dataTransfer.setData('application/x-page-id', pageId);
-              e.dataTransfer.effectAllowed = 'move';
-            }}
-            onClick={() => onPageNavigate ? onPageNavigate(href) : router.push(href)}
-            className="cursor-pointer hover:opacity-70"
-          >
-            <span className="text-[0.95em] text-gray-700 underline">{title || 'Untitled'}</span>
-          </button>
+          <>
+            {/* ドラッグハンドル：サイドバーのページにドロップして子ページ化 */}
+            {pageId && (
+              <span
+                draggable
+                onDragStart={(e) => {
+                  e.stopPropagation();
+                  e.dataTransfer.setData('application/x-page-id', pageId);
+                  e.dataTransfer.setData('text/plain', pageId);
+                  e.dataTransfer.effectAllowed = 'move';
+                }}
+                className="cursor-grab select-none px-0.5 text-gray-300 opacity-0 transition-opacity group-hover:opacity-100 hover:text-gray-500 active:cursor-grabbing"
+                title="ドラッグしてサイドバーのページに移動"
+              >
+                ⠿
+              </span>
+            )}
+            <button onClick={() => onPageNavigate ? onPageNavigate(href) : router.push(href)} className="cursor-pointer hover:opacity-70">
+              <span className="text-[0.95em] text-gray-700 underline">{title || 'Untitled'}</span>
+            </button>
+          </>
         )}
       </div>
     </NodeViewWrapper>
