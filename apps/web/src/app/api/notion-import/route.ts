@@ -63,7 +63,6 @@ function toTextNodes(richTexts: Array<Record<string, unknown>>) {
   return richTexts.map((t) => {
     const text = (t.plain_text as string) ?? '';
     const ann = (t.annotations ?? {}) as Record<string, unknown>;
-    const href = t.href as string | null;
     const marks: Array<Record<string, unknown>> = [];
     if (ann.bold) marks.push({ type: 'bold' });
     if (ann.italic) marks.push({ type: 'italic' });
@@ -74,6 +73,21 @@ function toTextNodes(richTexts: Array<Record<string, unknown>>) {
       const css = NOTION_COLORS[color];
       if (css) marks.push({ type: 'textStyle', attrs: { color: css } });
     }
+    // インラインページメンション（@ページ）→ notion-child:// プレースホルダーリンク
+    const tType = t.type as string | undefined;
+    if (tType === 'mention') {
+      const mention = (t.mention ?? {}) as Record<string, unknown>;
+      if (mention.type === 'page') {
+        const pageId = (mention.page as { id?: string } | undefined)?.id;
+        if (pageId) {
+          marks.push({ type: 'link', attrs: { href: `notion-child://${pageId}`, target: '_self', rel: null } });
+          return { type: 'text', text: text || 'Untitled', marks };
+        }
+      }
+      // 日付・ユーザーなどその他のメンションはプレーンテキスト
+      return { type: 'text', text };
+    }
+    const href = t.href as string | null;
     if (href) marks.push({ type: 'link', attrs: { href, target: '_blank', rel: 'noopener noreferrer' } });
     return marks.length ? { type: 'text', text, marks } : { type: 'text', text };
   });
@@ -135,6 +149,16 @@ function convertBlock(block: Record<string, unknown>, childMetaMap?: Map<string,
     case 'child_database': {
       const title = (data.title as string) ?? 'Untitled';
       return { type: 'inlineDatabase', attrs: { databaseId: `notion-child-db://${block.id as string}`, title } };
+    }
+    case 'link_to_page': {
+      // Notion の「リンクtoページ」ブロック（child_page と異なり任意のページを参照）
+      const lpData = data as { type?: string; page_id?: string; database_id?: string };
+      const refId = lpData.page_id ?? lpData.database_id;
+      if (!refId) return null;
+      const meta = childMetaMap?.get(refId);
+      const title = meta?.title ?? 'Untitled';
+      const icon = meta?.icon ?? (lpData.database_id ? '📊' : '📄');
+      return { type: 'pageLink', attrs: { href: `notion-child://${refId}`, title, icon } };
     }
     default:
       return rt.length > 0 ? { type: 'paragraph', content: toTextNodes(rt) } : null;
@@ -281,6 +305,28 @@ async function crawlPage(
       if (children.length > 0) childrenMap.set(b.id as string, children);
     } catch { /* 無視 */ }
   }));
+
+  // link_to_page ブロックが参照するページのメタを収集（トップレベル + childrenMap内）
+  const collectLinkToPageIds = (blockList: Record<string, unknown>[]): string[] => {
+    const ids: string[] = [];
+    for (const b of blockList) {
+      if (b.type === 'link_to_page') {
+        const d = ((b['link_to_page'] ?? {}) as Record<string, unknown>);
+        const refId = (d.page_id ?? d.database_id) as string | undefined;
+        if (refId && !childMetaMap.has(refId)) ids.push(refId);
+      }
+    }
+    return ids;
+  };
+  const linkToPageIds = [
+    ...collectLinkToPageIds(blocks),
+    ...[...childrenMap.values()].flatMap(collectLinkToPageIds),
+  ];
+  if (linkToPageIds.length > 0) {
+    await Promise.all(linkToPageIds.map(async (id) => {
+      try { const m = await fetchPageMeta(id, token); if (m) childMetaMap.set(id, m); } catch { /* 無視 */ }
+    }));
+  }
 
   const rawNodes = blocks.map((b) => convertBlock(b, childMetaMap, childrenMap)).filter(Boolean) as Record<string, unknown>[];
   const nodes = rawNodes.filter((node, i) => {
