@@ -277,7 +277,7 @@ async function crawlPage(
   emit: (event: StreamEvent) => void,
   depth = 0
 ): Promise<void> {
-  if (depth > 5) return;
+  if (depth > 15) return;
   let meta;
   try { meta = await fetchPageMeta(pageId, token); } catch { return; }
   if (!meta) return;

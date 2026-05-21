@@ -234,10 +234,10 @@ function NotionImportSection({ uid, addPage }: {
         }
       }
 
-      // リンクのプレースホルダー置換（全ページ収集後）
-      for (const p of allPages) {
+      // リンクのプレースホルダー置換（全ページ収集後・並列実行）
+      await Promise.all(allPages.map(async (p) => {
         const internalId = idMap.get(p.notionId);
-        if (!internalId) continue;
+        if (!internalId) return;
         let content = p.content;
         let changed = false;
         for (const [notionId, pageId] of idMap.entries()) {
@@ -253,7 +253,7 @@ function NotionImportSection({ uid, addPage }: {
           }
         }
         if (changed) await update(uid, internalId, { content });
-      }
+      }));
 
       setStep('done');
     } catch (e) {
