@@ -322,7 +322,7 @@ function PageLinkView({ node, updateAttributes, deleteNode, getPos, editor: tipt
           </button>
         </div>
       )}
-      <div className="group flex w-full items-center gap-1 py-px" onContextMenu={handleContextMenu}>
+      <div className="flex w-full items-center gap-1 py-px" onContextMenu={handleContextMenu}>
         <div className="relative" ref={pickerRef}>
           <button
             onClick={(e) => { e.stopPropagation(); setPickerOpen((v) => !v); }}
@@ -379,34 +379,9 @@ function PageLinkView({ node, updateAttributes, deleteNode, getPos, editor: tipt
             {title || 'Untitled'}
           </span>
         ) : (
-          <>
-            {/* ドラッグハンドル：サイドバーのページにドロップして子ページ化 */}
-            {pageId && (
-              <span
-                draggable
-                onDragStart={(e) => {
-                  e.stopPropagation();
-                  e.dataTransfer.setData('application/x-page-id', pageId);
-                  e.dataTransfer.setData('text/plain', pageId);
-                  e.dataTransfer.effectAllowed = 'move';
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const pos = typeof getPos === 'function' ? getPos() : undefined;
-                  if (typeof pos === 'number' && tiptapEditor) {
-                    tiptapEditor.commands.setNodeSelection(pos);
-                  }
-                }}
-                className="cursor-pointer select-none px-0.5 text-gray-300 opacity-0 transition-opacity group-hover:opacity-100 hover:text-gray-500 active:cursor-grabbing"
-                title="クリックで選択（Ctrl+Xで切り取り）"
-              >
-                ⠿
-              </span>
-            )}
-            <button onClick={() => onPageNavigate ? onPageNavigate(href) : router.push(href)} className="cursor-pointer hover:opacity-70">
-              <span className="text-[0.95em] text-gray-700 underline">{title || 'Untitled'}</span>
-            </button>
-          </>
+          <button onClick={() => onPageNavigate ? onPageNavigate(href) : router.push(href)} className="cursor-pointer hover:opacity-70">
+            <span className="text-[0.95em] text-gray-700 underline">{title || 'Untitled'}</span>
+          </button>
         )}
       </div>
     </NodeViewWrapper>
@@ -1518,6 +1493,16 @@ export function NotionEditor({
             )}
             <button onClick={handleCtxCallout} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
               <span className="text-base">💡</span>コールアウトを挿入
+            </button>
+            <button
+              onClick={() => {
+                setCtxMenu(null);
+                editor?.commands.focus();
+                setTimeout(() => document.execCommand('paste'), 10);
+              }}
+              className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+            >
+              <span className="text-base">📋</span>貼り付け
             </button>
             <button onClick={handleRecord} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
               <span className="text-base">📚</span>学習リストに記録
