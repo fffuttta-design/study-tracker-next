@@ -119,8 +119,16 @@ function convertBlock(block: Record<string, unknown>, childMetaMap?: Map<string,
         attrs: { href: `notion-child://${block.id as string}`, title, icon },
       };
     }
-    case 'child_database':
-      return null;
+    case 'child_database': {
+      const title = (data.title as string) ?? 'Untitled';
+      return {
+        type: 'inlineDatabase',
+        attrs: {
+          databaseId: `notion-child-db://${block.id as string}`,
+          title,
+        },
+      };
+    }
     default:
       return rt.length > 0 ? { type: 'paragraph', content: toTextNodes(rt) } : null;
   }
@@ -285,6 +293,7 @@ async function crawlPage(
 
   const blocks = await fetchAllBlocks(pageId, token);
   const childPageBlocks = blocks.filter((b) => b.type === 'child_page');
+  const childDbBlocks = blocks.filter((b) => b.type === 'child_database');
 
   const childMetaMap = new Map<string, { title: string; icon: string }>();
   await Promise.all(
@@ -318,8 +327,14 @@ async function crawlPage(
     content: JSON.stringify({ type: 'doc', content: nodes }),
   });
 
+  // 子ページを再帰クロール
   for (const child of childPageBlocks) {
     await crawlPage(child.id as string, token, meta.id, result);
+  }
+
+  // 子データベースを再帰クロール（親ページの配下として登録）
+  for (const child of childDbBlocks) {
+    await crawlDatabase(child.id as string, token, meta.id, result);
   }
 }
 

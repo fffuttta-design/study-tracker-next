@@ -204,16 +204,22 @@ function NotionImportSection({ uid, addPage }: {
         setProgress((prev) => ({ ...prev, done: prev.done + 1 }));
       }
 
-      // notion-child://[notionId] を実際の /notion-plus/[internalId] に置換
+      // notion-child://[notionId] → /notion-plus/[internalId]（ページリンク）
+      // notion-child-db://[notionId] → [internalId]（インラインデータベース）
       for (const p of pages) {
         const internalId = idMap.get(p.notionId);
         if (!internalId) continue;
         let content = p.content;
         let changed = false;
         for (const [notionId, pageId] of idMap.entries()) {
-          const placeholder = `notion-child://${notionId}`;
-          if (content.includes(placeholder)) {
-            content = content.replaceAll(placeholder, `/notion-plus/${pageId}`);
+          const pagePlaceholder = `notion-child://${notionId}`;
+          if (content.includes(pagePlaceholder)) {
+            content = content.replaceAll(pagePlaceholder, `/notion-plus/${pageId}`);
+            changed = true;
+          }
+          const dbPlaceholder = `notion-child-db://${notionId}`;
+          if (content.includes(dbPlaceholder)) {
+            content = content.replaceAll(dbPlaceholder, pageId);
             changed = true;
           }
         }
