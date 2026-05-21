@@ -339,15 +339,28 @@ function NotionPageSidebar({ user }: { user: User }) {
         )}
       </nav>
 
-      {/* フッター: 学習リストに戻る + ユーザー */}
+      {/* フッター: 学習リストに戻る + 設定 + ユーザー */}
       <div className="border-t border-gray-100">
-        <Suspense fallback={
-          <Link href="/learning" className="flex items-center gap-2 px-3 py-2.5 text-xs text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700">
-            <span>←</span><span>学習リストに戻る</span>
+        <div className="flex items-center justify-between">
+          <Suspense fallback={
+            <Link href="/learning" className="flex items-center gap-2 px-3 py-2.5 text-xs text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700">
+              <span>←</span><span>学習リストに戻る</span>
+            </Link>
+          }>
+            <BackToLearningLink />
+          </Suspense>
+          <Link
+            href="/notion-plus/settings"
+            title="NotionPlus設定"
+            className={`mr-2 rounded p-1.5 text-sm transition-colors ${
+              pathname === '/notion-plus/settings'
+                ? 'bg-gray-200 text-gray-700'
+                : 'text-gray-400 hover:bg-gray-200 hover:text-gray-700'
+            }`}
+          >
+            ⚙️
           </Link>
-        }>
-          <BackToLearningLink />
-        </Suspense>
+        </div>
         <div className="border-t border-gray-100 py-1">
           <UserFooter user={user} />
         </div>
