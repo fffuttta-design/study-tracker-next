@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { APP_VERSION } from '@/lib/version';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuthStore } from '@/stores/authStore';
 import { useSettingsStore, REVIEW_STAGE_LABELS } from '@/stores/settingsStore';
@@ -70,7 +71,7 @@ export default function SettingsPage() {
 
         {/* アプリ情報 */}
         <Section title="アプリ情報">
-          <InfoRow label="バージョン" value="0.0.1" />
+          <InfoRow label="バージョン" value={APP_VERSION} />
           <InfoRow label="Firebase プロジェクト" value="time-tracker-app-72eba" />
         </Section>
       </div>
