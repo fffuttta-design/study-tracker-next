@@ -213,7 +213,7 @@ const EMOJI_PRESETS = [
 
 // ── PageLink ノード ──────────────────────────────────────────────────
 
-function PageLinkView({ node, updateAttributes }: NodeViewProps) {
+function PageLinkView({ node, updateAttributes, deleteNode }: NodeViewProps) {
   const router = useRouter();
   const onPageNavigate = useContext(PageNavigationContext);
   const { href, title: storedTitle, icon: storedIcon } = node.attrs as { href: string; title: string; icon: string };
@@ -226,7 +226,9 @@ function PageLinkView({ node, updateAttributes }: NodeViewProps) {
   const icon = livePage?.icon || storedIcon || '📄';
   const [pickerOpen, setPickerOpen] = useState(false);
   const [iconUrlDraft, setIconUrlDraft] = useState('');
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!pickerOpen) return;
@@ -236,6 +238,23 @@ function PageLinkView({ node, updateAttributes }: NodeViewProps) {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [pickerOpen]);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+        setContextMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [contextMenu]);
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  };
 
   const handleIconChange = async (newIcon: string) => {
     if (pageId && user && livePage) {
@@ -266,7 +285,22 @@ function PageLinkView({ node, updateAttributes }: NodeViewProps) {
 
   return (
     <NodeViewWrapper data-type="page-link" contentEditable={false}>
-      <div className="flex w-full items-center gap-1 py-px">
+      {/* 右クリックコンテキストメニュー */}
+      {contextMenu && (
+        <div
+          ref={contextMenuRef}
+          className="fixed z-[200] min-w-[120px] rounded-lg border border-gray-100 bg-white py-1 shadow-xl"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+        >
+          <button
+            onMouseDown={(e) => { e.preventDefault(); setContextMenu(null); deleteNode(); }}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-red-500 hover:bg-red-50"
+          >
+            🗑️ 削除
+          </button>
+        </div>
+      )}
+      <div className="flex w-full items-center gap-1 py-px" onContextMenu={handleContextMenu}>
         <div className="relative" ref={pickerRef}>
           <button
             onClick={(e) => { e.stopPropagation(); setPickerOpen((v) => !v); }}
