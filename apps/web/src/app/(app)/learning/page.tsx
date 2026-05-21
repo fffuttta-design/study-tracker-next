@@ -66,6 +66,46 @@ function dailyQuote(): string {
   return DAILY_QUOTES[dayOfYear % DAILY_QUOTES.length];
 }
 
+// TipTap JSON から平文テキストを抽出
+function extractTextFromTipTap(content: string): string {
+  try {
+    const doc = JSON.parse(content) as { content?: unknown[] };
+    const parts: string[] = [];
+    function walk(node: { type?: string; text?: string; content?: unknown[] }) {
+      if (node.text) parts.push(node.text);
+      if (node.content) (node.content as typeof node[]).forEach(walk);
+    }
+    if (doc.content) (doc.content as typeof doc[]).forEach(walk);
+    return parts.join(' ');
+  } catch { return ''; }
+}
+
+// マッチ箇所の前後スニペットを取得
+function getSnippet(text: string, query: string, pad = 50): string {
+  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx === -1) return text.slice(0, pad * 2);
+  const start = Math.max(0, idx - pad);
+  const end = Math.min(text.length, idx + query.length + pad);
+  return (start > 0 ? '…' : '') + text.slice(start, end) + (end < text.length ? '…' : '');
+}
+
+// マッチ箇所をハイライト表示するコンポーネント
+function HighlightText({ text, query }: { text: string; query: string }) {
+  if (!query.trim()) return <>{text}</>;
+  const lower = text.toLowerCase();
+  const q = query.toLowerCase();
+  const parts: React.ReactNode[] = [];
+  let cursor = 0;
+  let idx: number;
+  while ((idx = lower.indexOf(q, cursor)) !== -1) {
+    if (idx > cursor) parts.push(<span key={`t${cursor}`}>{text.slice(cursor, idx)}</span>);
+    parts.push(<mark key={`m${idx}`} className="rounded bg-yellow-200 px-0.5 text-gray-900">{text.slice(idx, idx + q.length)}</mark>);
+    cursor = idx + q.length;
+  }
+  if (cursor < text.length) parts.push(<span key={`t${cursor}`}>{text.slice(cursor)}</span>);
+  return <>{parts}</>;
+}
+
 function stripMarkdown(s: string): string {
   return s
     .replace(/^#{1,6}\s+/, '')
@@ -266,7 +306,26 @@ function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
   const [creating, setCreating] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [pageHistory, setPageHistory] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const recordTriggerRef = useRef<(() => void) | null>(null);
+
+  // 検索結果を計算（ノート名マッチ優先、テキストマッチは下位）
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim();
+    if (!q) return null;
+    const lower = q.toLowerCase();
+    const titleMatches: typeof pages = [];
+    const contentMatches: Array<{ page: (typeof pages)[0]; snippet: string }> = [];
+    for (const page of pages) {
+      const titleMatch = (page.title || 'Untitled').toLowerCase().includes(lower);
+      if (titleMatch) { titleMatches.push(page); continue; }
+      const text = extractTextFromTipTap(page.content);
+      if (text.toLowerCase().includes(lower)) {
+        contentMatches.push({ page, snippet: getSnippet(text, q) });
+      }
+    }
+    return { titleMatches, contentMatches };
+  }, [searchQuery, pages]);
 
   const roots = useMemo(() =>
     pages
@@ -360,7 +419,77 @@ function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
             </button>
           </div>
 
+          {/* 検索入力 */}
+          <div className="border-b border-gray-100 px-2 py-2">
+            <div className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2 py-1.5 focus-within:border-brand-400">
+              <span className="text-xs text-gray-400">🔍</span>
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="ノートを検索..."
+                className="min-w-0 flex-1 bg-transparent text-xs text-gray-700 outline-none placeholder:text-gray-300"
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
+              )}
+            </div>
+          </div>
+
           <nav className="flex-1 overflow-y-auto px-1 py-1">
+          {/* 検索結果 */}
+          {searchResults ? (
+            <div className="space-y-1 px-1 py-1">
+              {searchResults.titleMatches.length === 0 && searchResults.contentMatches.length === 0 && (
+                <p className="px-2 py-4 text-center text-xs text-gray-400">一致するノートがありません</p>
+              )}
+
+              {/* ── ノート名マッチ ── */}
+              {searchResults.titleMatches.length > 0 && (
+                <>
+                  <p className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">ノート名</p>
+                  {searchResults.titleMatches.map((page) => (
+                    <button
+                      key={page.id}
+                      onClick={() => { setSelectedPageId(page.id); setSearchQuery(''); }}
+                      className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors ${
+                        selectedPageId === page.id ? 'bg-white font-semibold text-gray-900 shadow-sm' : 'text-gray-600 hover:bg-white hover:text-gray-900'
+                      }`}
+                    >
+                      <PagePickerIcon icon={page.icon} />
+                      <span className="min-w-0 flex-1 truncate text-left">
+                        <HighlightText text={page.title || 'Untitled'} query={searchQuery} />
+                      </span>
+                    </button>
+                  ))}
+                </>
+              )}
+
+              {/* ── テキストマッチ ── */}
+              {searchResults.contentMatches.length > 0 && (
+                <>
+                  <p className="px-2 pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">テキスト</p>
+                  {searchResults.contentMatches.map(({ page, snippet }) => (
+                    <button
+                      key={page.id}
+                      onClick={() => { setSelectedPageId(page.id); setSearchQuery(''); }}
+                      className={`flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-xs transition-colors ${
+                        selectedPageId === page.id ? 'bg-white shadow-sm' : 'text-gray-600 hover:bg-white hover:text-gray-900'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <PagePickerIcon icon={page.icon} />
+                        <span className="font-medium text-gray-800">{page.title || 'Untitled'}</span>
+                      </div>
+                      <p className="line-clamp-2 pl-5 text-left text-[10px] leading-relaxed text-gray-400">
+                        <HighlightText text={snippet} query={searchQuery} />
+                      </p>
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+          ) : (
+            <>
             {/* お気に入りセクション */}
             {roots.some((p) => p.isFavorite) && (
               <div className="mb-1">
@@ -439,6 +568,8 @@ function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
                 );
               })}
             </div>
+            </>
+          )}
           </nav>
 
           <div className="border-t border-gray-100 px-3 py-2.5">
