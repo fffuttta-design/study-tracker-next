@@ -4,9 +4,8 @@ import type { EditorView } from '@tiptap/pm/view';
 import type { Slice } from '@tiptap/pm/model';
 
 // ── ドラッグハンドル拡張（外部パッケージ不要・自前実装）────────────────
-// 切り戻し方法: extensions リストからこの拡張を削除するだけでOK
+// 切り戻し: extensions リストから DragHandleExtension を削除するだけ
 
-// ProseMirror の内部型（型定義に含まれないプロパティをキャスト）
 interface PmViewInternal {
   dragging: { slice: Slice; move: boolean } | null;
   serializeForClipboard(slice: Slice): { dom: HTMLElement; text: string };
@@ -18,80 +17,88 @@ function dragHandlePlugin() {
   return new Plugin({
     key: DRAG_HANDLE_KEY,
     view(view: EditorView) {
-      // ── ハンドル要素を作成 ──
+      // ── body直下にfixedで配置（overflow clipping を回避）──
       const handle = document.createElement('div');
       handle.className = 'pm-drag-handle';
+      handle.draggable = true;
+      handle.contentEditable = 'false';
       handle.innerHTML = `<svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor">
         <circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/>
         <circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/>
         <circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="14" r="1.5"/>
       </svg>`;
-      handle.draggable = true;
-      handle.contentEditable = 'false';
-
-      const container = view.dom.parentElement;
-      if (container) {
-        if (getComputedStyle(container).position === 'static') {
-          container.style.position = 'relative';
-        }
-        container.appendChild(handle);
-      }
+      document.body.appendChild(handle);
 
       let hoveredPos = -1;
+      let hideTimer: ReturnType<typeof setTimeout> | null = null;
 
-      // ── ホバー中のブロック位置を特定 ──
+      const showHandle = () => {
+        if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+      };
+      const scheduleHide = () => {
+        hideTimer = setTimeout(() => { handle.style.opacity = '0'; }, 150);
+      };
+
+      // ── top-levelブロックのPM位置を取得 ──
       const getTopLevelPos = (x: number, y: number): number => {
         const pos = view.posAtCoords({ left: x, top: y });
         if (!pos) return -1;
         try {
           const $pos = view.state.doc.resolve(pos.pos);
-          if ($pos.depth === 0) return pos.pos;
-          return $pos.before(1);
-        } catch {
-          return -1;
-        }
+          return $pos.depth > 0 ? $pos.before(1) : pos.pos;
+        } catch { return -1; }
       };
 
-      // ── ハンドルを配置 ──
-      const positionHandle = (nodePos: number) => {
-        const nodeDOM = view.nodeDOM(nodePos);
-        if (!nodeDOM || !(nodeDOM instanceof HTMLElement)) return;
-        const nodeRect = nodeDOM.getBoundingClientRect();
-        const containerRect = container!.getBoundingClientRect();
-        handle.style.top = `${nodeRect.top - containerRect.top + (nodeRect.height / 2) - 8}px`;
-        handle.style.left = `${-28}px`;
+      // ── documentレベルでmousemoveを監視（左マージン含め反応させるため）──
+      const onMouseMove = (e: MouseEvent) => {
+        const editorRect = view.dom.getBoundingClientRect();
+
+        // エディタの縦範囲外なら非表示
+        if (e.clientY < editorRect.top || e.clientY > editorRect.bottom) {
+          scheduleHide(); return;
+        }
+        // エディタの横範囲から大きく外れたら非表示（左40pxまでは許容）
+        if (e.clientX < editorRect.left - 40 || e.clientX > editorRect.right) {
+          scheduleHide(); return;
+        }
+
+        // エディタ左端より左にいるときは最後のホバーポジションを使う（ハンドル上にマウスがある）
+        const lookupX = Math.max(e.clientX, editorRect.left + 4);
+        const pos = getTopLevelPos(lookupX, e.clientY);
+        if (pos < 0) { scheduleHide(); return; }
+
+        const node = view.state.doc.nodeAt(pos);
+        if (!node) { scheduleHide(); return; }
+
+        hoveredPos = pos;
+        showHandle();
+
+        // ブロックのDOMからviewport座標を取得
+        const nodeDOM = view.nodeDOM(pos);
+        const domEl = nodeDOM instanceof HTMLElement ? nodeDOM : (nodeDOM as ChildNode | null)?.parentElement;
+        if (!domEl) { scheduleHide(); return; }
+
+        const rect = domEl.getBoundingClientRect();
+        const handleTop = rect.top + rect.height / 2 - 10;
+        const handleLeft = editorRect.left - 28;
+
+        handle.style.top = `${handleTop}px`;
+        handle.style.left = `${handleLeft}px`;
         handle.style.opacity = '1';
       };
 
-      // ── マウス移動でハンドル追従 ──
-      const onMouseMove = (e: MouseEvent) => {
-        const editorRect = view.dom.getBoundingClientRect();
-        // エディタ内（左マージン含む）にいるときだけ表示
-        if (e.clientY < editorRect.top || e.clientY > editorRect.bottom) {
-          handle.style.opacity = '0';
-          return;
-        }
-        const pos = getTopLevelPos(e.clientX, e.clientY);
-        if (pos < 0) { handle.style.opacity = '0'; return; }
-        const node = view.state.doc.nodeAt(pos);
-        if (!node) { handle.style.opacity = '0'; return; }
-        hoveredPos = pos;
-        positionHandle(pos);
-      };
+      // ハンドル自体にホバーしているときは非表示にしない
+      handle.addEventListener('mouseenter', () => showHandle());
+      handle.addEventListener('mouseleave', () => scheduleHide());
 
-      const onMouseLeave = () => { handle.style.opacity = '0'; };
-
-      container?.addEventListener('mousemove', onMouseMove);
-      container?.addEventListener('mouseleave', onMouseLeave);
+      document.addEventListener('mousemove', onMouseMove);
 
       // ── ドラッグ開始 ──
       handle.addEventListener('dragstart', (e) => {
         if (hoveredPos < 0) { e.preventDefault(); return; }
         try {
           const selection = NodeSelection.create(view.state.doc, hoveredPos);
-          const tr = view.state.tr.setSelection(selection);
-          view.dispatch(tr);
-
+          view.dispatch(view.state.tr.setSelection(selection));
           const slice = view.state.selection.content();
           const { dom, text } = (view as unknown as PmViewInternal).serializeForClipboard(slice);
           e.dataTransfer!.clearData();
@@ -99,9 +106,8 @@ function dragHandlePlugin() {
           e.dataTransfer!.setData('text/plain', text);
           e.dataTransfer!.effectAllowed = 'move';
           (view as unknown as PmViewInternal).dragging = { slice, move: true };
-        } catch {
-          e.preventDefault();
-        }
+          handle.style.opacity = '0';
+        } catch { e.preventDefault(); }
       });
 
       handle.addEventListener('dragend', () => {
@@ -111,8 +117,7 @@ function dragHandlePlugin() {
 
       return {
         destroy() {
-          container?.removeEventListener('mousemove', onMouseMove);
-          container?.removeEventListener('mouseleave', onMouseLeave);
+          document.removeEventListener('mousemove', onMouseMove);
           handle.remove();
         },
       };

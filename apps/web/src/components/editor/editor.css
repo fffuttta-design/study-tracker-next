@@ -181,7 +181,7 @@ details[open] .toggle-heading-arrow { transform: rotate(90deg); }
 
 /* ── ドラッグハンドル ──────────────────────────────────────────────── */
 .pm-drag-handle {
-  position: absolute;
+  position: fixed;
   width: 20px;
   height: 20px;
   display: flex;
@@ -189,13 +189,13 @@ details[open] .toggle-heading-arrow { transform: rotate(90deg); }
   justify-content: center;
   cursor: grab;
   opacity: 0;
-  transition: opacity 0.1s ease;
+  transition: opacity 0.12s ease;
   color: #9ca3af;
   background: transparent;
   border: none;
   border-radius: 3px;
   padding: 2px;
-  z-index: 20;
+  z-index: 9999;
   pointer-events: auto;
   user-select: none;
   -webkit-user-select: none;
