@@ -117,7 +117,7 @@ function convertBlock(block: Record<string, unknown>, childMetaMap?: Map<string,
         const converted = convertBlock(child, childMetaMap, childrenMap);
         if (converted) innerContent.push(converted);
       }
-      return { type: 'blockquote', content: innerContent };
+      return { type: 'callout', attrs: { background: '#F3F4F6' }, content: innerContent };
     }
     case 'image': {
       const imgData = data as Record<string, Record<string, string>>;
