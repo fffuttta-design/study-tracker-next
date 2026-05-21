@@ -284,7 +284,8 @@ export interface PageData {
 
 type StreamEvent =
   | { type: 'page'; data: PageData }
-  | { type: 'done'; total: number }
+  | { type: 'skip'; notionId: string; title: string; reason: string }
+  | { type: 'done'; total: number; skipped: number }
   | { type: 'error'; message: string };
 
 // ── ページクロール（ストリーミング版） ────────────────────────────────
@@ -296,13 +297,25 @@ async function crawlPage(
   emit: (event: StreamEvent) => void,
   depth = 0
 ): Promise<void> {
-  if (depth > 5) return;
+  if (depth > 5) {
+    emit({ type: 'skip', notionId: pageId, title: '(depth limit)', reason: '階層が深すぎるためスキップ (depth > 5)' });
+    return;
+  }
   let meta;
-  try { meta = await fetchPageMeta(pageId, token); } catch { return; }
-  if (!meta) return;
+  try { meta = await fetchPageMeta(pageId, token); } catch (e) {
+    emit({ type: 'skip', notionId: pageId, title: '???', reason: `メタ取得失敗: ${String(e)}` });
+    return;
+  }
+  if (!meta) {
+    emit({ type: 'skip', notionId: pageId, title: '???', reason: 'ページが見つからない（共有未設定？）' });
+    return;
+  }
 
   let blocks: Record<string, unknown>[] = [];
-  try { blocks = await fetchAllBlocks(pageId, token); } catch { /* 空で続行 */ }
+  try { blocks = await fetchAllBlocks(pageId, token); } catch (e) {
+    emit({ type: 'skip', notionId: meta.id, title: meta.title, reason: `ブロック取得失敗: ${String(e)}` });
+    return;
+  }
 
   const childPageBlocks = blocks.filter((b) => b.type === 'child_page');
   const childDbBlocks = blocks.filter((b) => b.type === 'child_database');
@@ -343,10 +356,15 @@ async function crawlPage(
 
   // 子ページ・子DBを順番にクロール（DFS順維持のため直列）
   for (const child of childPageBlocks) {
-    await crawlPage(child.id as string, token, meta.id, emit, depth + 1).catch(() => { /* 個別失敗は無視 */ });
+    await crawlPage(child.id as string, token, meta.id, emit, depth + 1).catch((e) => {
+      const childMeta = childMetaMap.get(child.id as string);
+      emit({ type: 'skip', notionId: child.id as string, title: childMeta?.title ?? 'Untitled', reason: `クロール例外: ${String(e)}` });
+    });
   }
   for (const child of childDbBlocks) {
-    await crawlDatabase(child.id as string, token, meta.id, emit).catch(() => { /* 個別失敗は無視 */ });
+    await crawlDatabase(child.id as string, token, meta.id, emit).catch((e) => {
+      emit({ type: 'skip', notionId: child.id as string, title: 'DB', reason: `DBクロール例外: ${String(e)}` });
+    });
   }
 }
 
@@ -419,11 +437,13 @@ export async function POST(req: NextRequest) {
 
   const encoder = new TextEncoder();
   let total = 0;
+  let skipped = 0;
 
   const stream = new ReadableStream({
     async start(controller) {
       const emit = (event: StreamEvent) => {
         if (event.type === 'page') total++;
+        if (event.type === 'skip') skipped++;
         controller.enqueue(encoder.encode(JSON.stringify(event) + '\n'));
       };
 
@@ -438,7 +458,7 @@ export async function POST(req: NextRequest) {
         if (total === 0) {
           emit({ type: 'error', message: 'ページを取得できませんでした。インテグレーションに共有されているか確認してください。' });
         } else {
-          emit({ type: 'done', total });
+          emit({ type: 'done', total, skipped });
         }
       } catch (e) {
         emit({ type: 'error', message: String(e) });

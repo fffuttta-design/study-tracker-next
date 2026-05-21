@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { APP_VERSION } from '@/lib/version';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuthStore } from '@/stores/authStore';
@@ -147,6 +147,10 @@ interface ImportPage {
   }>;
 }
 
+type LogEntry =
+  | { status: 'success'; title: string; icon: string; isDb: boolean }
+  | { status: 'skip'; title: string; reason: string };
+
 function NotionImportSection({ uid, addPage }: {
   uid: string;
   addPage: (uid: string, params?: { parentId?: string; order?: number; type?: 'page' | 'database' }) => Promise<{ id: string; title: string; content: string; icon: string; isFavorite: boolean; order: number; updatedAt: string }>;
@@ -155,14 +159,25 @@ function NotionImportSection({ uid, addPage }: {
   const { importRow } = useDbRowStore();
   const [url, setUrl] = useState('');
   const [step, setStep] = useState<'idle' | 'importing' | 'done'>('idle');
-  const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [progress, setProgress] = useState({ done: 0, total: 0, skipped: 0 });
   const [error, setError] = useState('');
+  const [log, setLog] = useState<LogEntry[]>([]);
+  const [logOpen, setLogOpen] = useState(false);
+  const logEndRef = React.useRef<HTMLDivElement>(null);
+
+  // ログが増えたら自動スクロール
+  React.useEffect(() => {
+    if (logOpen) logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [log.length, logOpen]);
+
+  const addLog = (entry: LogEntry) => setLog((prev) => [...prev, entry]);
 
   const doImport = async () => {
     if (!uid || !url.trim()) return;
     setError('');
     setStep('importing');
-    setProgress({ done: 0, total: 0 });
+    setProgress({ done: 0, total: 0, skipped: 0 });
+    setLog([]);
 
     try {
       const res = await fetch('/api/notion-import', {
@@ -176,12 +191,11 @@ function NotionImportSection({ uid, addPage }: {
         return;
       }
 
-      // ストリームを1行ずつ読み取りながらリアルタイム処理
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
       const idMap = new Map<string, string>();
-      const allPages: ImportPage[] = []; // リンク置換フェーズ用
+      const allPages: ImportPage[] = [];
 
       while (true) {
         const { done, value } = await reader.read();
@@ -192,7 +206,7 @@ function NotionImportSection({ uid, addPage }: {
 
         for (const line of lines) {
           if (!line.trim()) continue;
-          let event: { type: string; data?: ImportPage; message?: string; total?: number };
+          let event: { type: string; data?: ImportPage; message?: string; total?: number; skipped?: number; notionId?: string; title?: string; reason?: string };
           try { event = JSON.parse(line); } catch { continue; }
 
           if (event.type === 'error') {
@@ -201,12 +215,16 @@ function NotionImportSection({ uid, addPage }: {
             return;
           }
 
+          if (event.type === 'skip') {
+            addLog({ status: 'skip', title: event.title ?? '???', reason: event.reason ?? '' });
+            setProgress((prev) => ({ ...prev, skipped: prev.skipped + 1 }));
+          }
+
           if (event.type === 'page' && event.data) {
             const p = event.data;
             allPages.push(p);
-            setProgress((prev) => ({ done: prev.done, total: prev.total + 1 }));
+            setProgress((prev) => ({ ...prev, total: prev.total + 1 }));
 
-            // 受け取り次第すぐFirestoreに保存
             const parentId = p.parentNotionId ? idMap.get(p.parentNotionId) : undefined;
             const created = await addPage(uid, {
               ...(parentId ? { parentId } : {}),
@@ -229,13 +247,13 @@ function NotionImportSection({ uid, addPage }: {
               }
             }
 
+            addLog({ status: 'success', title: p.title || 'Untitled', icon: p.icon || '📄', isDb: p.type === 'database' });
             setProgress((prev) => ({ ...prev, done: prev.done + 1 }));
           }
         }
       }
 
-      // リンクのプレースホルダー置換（全ページ収集後）
-      // 先にすべての置換を計算（同期処理）し、一括バッチ書き込み
+      // リンクのプレースホルダー置換（全ページ収集後・一括バッチ書き込み）
       const replacements: Array<{ id: string; content: string }> = [];
       for (const p of allPages) {
         const internalId = idMap.get(p.notionId);
@@ -256,7 +274,6 @@ function NotionImportSection({ uid, addPage }: {
         }
         if (changed) replacements.push({ id: internalId, content });
       }
-      // 500件チャンク分割バッチ書き込み（1回のコミットで完結）
       if (replacements.length > 0) {
         await batchUpdate(uid, replacements);
       }
@@ -269,7 +286,10 @@ function NotionImportSection({ uid, addPage }: {
     }
   };
 
-  const reset = () => { setStep('idle'); setUrl(''); setError(''); };
+  const reset = () => { setStep('idle'); setUrl(''); setError(''); setLog([]); };
+
+  const successCount = log.filter((e) => e.status === 'success').length;
+  const skipCount = log.filter((e) => e.status === 'skip').length;
 
   return (
     <Section title="Notionインポート">
@@ -298,39 +318,92 @@ function NotionImportSection({ uid, addPage }: {
       )}
 
       {step === 'importing' && (
-        <div className="py-4 text-center">
-          <div className="mx-auto mb-3 h-6 w-6 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
-          <p className="text-sm text-gray-700">
-            {progress.total === 0
-              ? 'ページを取得中...'
-              : `インポート中... ${progress.done} / ${progress.total} ページ`}
-          </p>
+        <div className="py-2">
+          <div className="mb-3 flex items-center gap-2">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+            <p className="text-sm text-gray-700">
+              {progress.total === 0
+                ? 'ページを取得中...'
+                : `インポート中... ${progress.done} / ${progress.total} ページ${progress.skipped > 0 ? `（${progress.skipped} スキップ）` : ''}`}
+            </p>
+          </div>
           {progress.total > 0 && (
-            <div className="mt-3 h-1.5 w-full rounded-full bg-gray-100">
+            <div className="mb-3 h-1.5 w-full rounded-full bg-gray-100">
               <div
                 className="h-1.5 rounded-full bg-brand-500 transition-all"
                 style={{ width: `${Math.round((progress.done / progress.total) * 100)}%` }}
               />
             </div>
           )}
-          <p className="mt-2 text-xs text-gray-400">
-            ページを受け取り次第順番に保存しています
-          </p>
+          <ImportLog log={log} open={logOpen} onToggle={() => setLogOpen((v) => !v)} logEndRef={logEndRef} />
         </div>
       )}
 
       {step === 'done' && (
-        <div className="py-4 text-center">
-          <p className="mb-2 text-2xl">✅</p>
-          <p className="text-sm text-gray-700">
-            {progress.total} ページをインポートしました
-          </p>
+        <div className="py-2">
+          <div className="mb-3 flex items-center gap-2">
+            <span className="text-xl">✅</span>
+            <div>
+              <p className="text-sm font-medium text-gray-700">インポート完了</p>
+              <p className="text-xs text-gray-400">
+                {successCount} ページ成功
+                {skipCount > 0 && <span className="ml-2 text-yellow-500">⚠️ {skipCount} スキップ</span>}
+              </p>
+            </div>
+          </div>
+          <ImportLog log={log} open={logOpen} onToggle={() => setLogOpen((v) => !v)} logEndRef={logEndRef} />
           <button onClick={reset} className="mt-3 text-xs text-brand-500 hover:underline">
             別のページをインポート
           </button>
         </div>
       )}
     </Section>
+  );
+}
+
+function ImportLog({ log, open, onToggle, logEndRef }: {
+  log: LogEntry[];
+  open: boolean;
+  onToggle: () => void;
+  logEndRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  if (log.length === 0) return null;
+  return (
+    <div className="rounded-lg border border-gray-100 bg-gray-50">
+      <button
+        onClick={onToggle}
+        className="flex w-full items-center justify-between px-3 py-2 text-xs text-gray-500 hover:bg-gray-100"
+      >
+        <span className="font-medium">📋 詳細ログ（{log.length} 件）</span>
+        <span>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="max-h-64 overflow-y-auto border-t border-gray-100 px-3 py-1">
+          {log.map((entry, i) => (
+            <div key={i} className="flex items-start gap-2 py-1">
+              {entry.status === 'success' ? (
+                <>
+                  <span className="mt-px shrink-0 text-green-500">✅</span>
+                  <span className="text-xs text-gray-600">
+                    {entry.icon} {entry.title}
+                    {entry.isDb && <span className="ml-1 rounded bg-blue-50 px-1 text-[10px] text-blue-500">DB</span>}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="mt-px shrink-0 text-yellow-500">⚠️</span>
+                  <span className="text-xs text-gray-500">
+                    {entry.title}
+                    <span className="ml-1 text-gray-400">— {entry.reason}</span>
+                  </span>
+                </>
+              )}
+            </div>
+          ))}
+          <div ref={logEndRef} />
+        </div>
+      )}
+    </div>
   );
 }
 
