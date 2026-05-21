@@ -14,6 +14,8 @@ import {
 import { format, addDays, subDays, isToday } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import ReactMarkdown from 'react-markdown';
+import rehypeRaw from 'rehype-raw';
+import { useSearchParams } from 'next/navigation';
 
 // ── 定数 ──────────────────────────────────────────────────────────────
 
@@ -89,7 +91,11 @@ function toDateKey(d: Date): string {
 export default function LearningPage() {
   const { user } = useAuthStore();
   const { items, loading } = useLearningStore();
-  const [tab, setTab] = useState(0);
+  const searchParams = useSearchParams();
+  const [tab, setTab] = useState(() => {
+    const t = Number(searchParams.get('tab') ?? '0');
+    return isNaN(t) ? 0 : Math.min(Math.max(t, 0), 3);
+  });
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const dateKey = toDateKey(selectedDate);
@@ -561,12 +567,12 @@ function DashboardTab({ todayItems, dueItems, uid, onAdd }: {
               {todayGrouped.map((g) => (
                 <div key={g.label}>
                   <BadgeDivider label={g.label} count={g.items.length} leftAlign />
-                  <ItemList items={g.items} uid={uid} />
+                  <ItemList items={g.items} uid={uid} compact fromTab={0} />
                 </div>
               ))}
             </div>
           ) : (
-            <ItemList items={todayItems} uid={uid} />
+            <ItemList items={todayItems} uid={uid} compact fromTab={0} />
           )}
         </div>
       </div>
@@ -594,7 +600,7 @@ function DashboardTab({ todayItems, dueItems, uid, onAdd }: {
                     countBg={STAGE_BADGE_COUNT_BG[g.index]}
                     leftAlign
                   />
-                  <ItemList items={g.items} uid={uid} showReviewAction />
+                  <ItemList items={g.items} uid={uid} showReviewAction compact fromTab={0} />
                 </div>
               ))}
             </div>
@@ -649,7 +655,7 @@ function TodayTab({ items, uid, onAdd }: {
       </div>
       {filtered.length === 0
         ? <Empty text={search || filter !== 'all' ? '条件に一致するアイテムがありません' : 'この日の学習はまだありません'} />
-        : <ItemList items={filtered} uid={uid} showReviewAction />}
+        : <ItemList items={filtered} uid={uid} showReviewAction fromTab={1} />}
     </div>
   );
 }
@@ -682,7 +688,7 @@ function ReviewTab({ dueItems, uid }: {
               countBg={STAGE_BADGE_COUNT_BG[g.index]}
               leftAlign
             />
-            <ItemList items={g.items} uid={uid} showReviewAction />
+            <ItemList items={g.items} uid={uid} showReviewAction fromTab={2} />
           </div>
         ))}
     </div>
@@ -701,15 +707,17 @@ function LogTab() {
 
 // ── アイテムリスト ────────────────────────────────────────────────────
 
-function ItemList({ items, uid, showReviewAction = false }: {
+function ItemList({ items, uid, showReviewAction = false, compact = false, fromTab }: {
   items: LearningItem[];
   uid: string;
   showReviewAction?: boolean;
+  compact?: boolean;
+  fromTab?: number;
 }) {
   return (
     <div className="space-y-1.5">
       {items.map((item) => (
-        <ItemCard key={item.id} item={item} uid={uid} showReviewAction={showReviewAction} />
+        <ItemCard key={item.id} item={item} uid={uid} showReviewAction={showReviewAction} compact={compact} fromTab={fromTab} />
       ))}
     </div>
   );
@@ -717,10 +725,12 @@ function ItemList({ items, uid, showReviewAction = false }: {
 
 // ── アイテムカード ────────────────────────────────────────────────────
 
-const ItemCard = memo(function ItemCard({ item, uid, showReviewAction }: {
+const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact = false, fromTab }: {
   item: LearningItem;
   uid: string;
   showReviewAction: boolean;
+  compact?: boolean;
+  fromTab?: number;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -744,11 +754,62 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction }: {
     navigator.clipboard.writeText([item.title, item.content].filter(Boolean).join('\n'));
   };
 
-const cardBg = showReviewAction && nextReview ? (STAGE_CARD_BG[nextReview.stageIndex] ?? 'bg-white') : 'bg-white';
+  const noteLinkHref = item.notionPageId
+    ? `/notion-plus/${item.notionPageId}?hl=${encodeURIComponent((item.content.split('\n').find(l => l.trim().length > 5) ?? item.content).trim().slice(0, 80))}&from=${fromTab ?? 0}`
+    : null;
 
+  const cardBg = showReviewAction && nextReview ? (STAGE_CARD_BG[nextReview.stageIndex] ?? 'bg-white') : 'bg-white';
+
+  // ── コンパクトレイアウト（ダッシュボード専用）────────────────────────
+  if (compact && !expanded) {
+    return (
+      <div className={`rounded-lg border ${cardBg} border-gray-100 hover:border-gray-200 transition-shadow`}>
+        {/* 行1: 復習チェック + タイトル */}
+        <div
+          className="flex cursor-pointer items-center gap-2 px-3 pt-2 pb-0.5"
+          onClick={() => setExpanded(true)}
+        >
+          {showReviewAction && nextReview && !fullyDone && (
+            <button
+              onClick={(e) => { e.stopPropagation(); completeReview(); }}
+              className="h-4 w-4 shrink-0 rounded border-2 border-gray-300 hover:border-brand-500 hover:bg-brand-50"
+              title="この復習を完了"
+            />
+          )}
+          <p className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">
+            {item.title || item.content.split('\n')[0].slice(0, 60)}
+          </p>
+        </div>
+        {/* 行2: ノートを開く + 3アイコン + カテゴリ */}
+        <div className="flex items-center gap-1 px-3 pb-2" onClick={(e) => e.stopPropagation()}>
+          {noteLinkHref && (
+            <Link
+              href={noteLinkHref}
+              className="flex items-center gap-0.5 rounded-md bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-600 hover:bg-brand-100"
+              title="ノートを開く"
+            >
+              <span>📖</span><span>ノートを開く</span>
+            </Link>
+          )}
+          <button onClick={copyContent} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="コピー">⎘</button>
+          <button onClick={() => setEditing(true)} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="編集">✎</button>
+          <button onClick={handleDelete} className="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-400" title="削除">✕</button>
+          {item.notionPagePath && (
+            <span className="ml-auto flex items-center gap-0.5 text-xs text-gray-400 min-w-0">
+              <span className="shrink-0">📁</span>
+              <span className="truncate max-w-[80px]">{item.notionPagePath}</span>
+            </span>
+          )}
+        </div>
+        {editing && <EditModal item={item} uid={uid} onClose={() => setEditing(false)} />}
+      </div>
+    );
+  }
+
+  // ── 通常レイアウト（他タブ、またはコンパクトカードを展開した状態）────
   return (
     <div className={`rounded-lg border transition-shadow ${cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}>
-      {/* ② カードヘッダー全体をクリックで開閉 */}
+      {/* カードヘッダー全体をクリックで開閉 */}
       <div
         className={`flex cursor-pointer gap-3 px-4 py-3 ${expanded ? 'items-center' : 'items-start'}`}
         onClick={() => setExpanded((v) => !v)}
@@ -774,9 +835,9 @@ const cardBg = showReviewAction && nextReview ? (STAGE_CARD_BG[nextReview.stageI
 
         <div className="flex shrink-0 flex-col items-end gap-1.5" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center gap-1">
-            {item.notionPageId && (
+            {noteLinkHref && (
               <Link
-                href={`/notion-plus/${item.notionPageId}?hl=${encodeURIComponent((item.content.split('\n').find(l => l.trim().length > 5) ?? item.content).trim().slice(0, 80))}`}
+                href={noteLinkHref}
                 className="flex items-center gap-1 rounded-md bg-brand-50 px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-100"
                 title="ノートを開く（ハイライト表示）"
               >
@@ -795,7 +856,7 @@ const cardBg = showReviewAction && nextReview ? (STAGE_CARD_BG[nextReview.stageI
         </div>
       </div>
 
-      {/* ② 本文エリアはダブルクリックで閉じる */}
+      {/* 本文エリアはダブルクリックで閉じる */}
       {expanded && (
         <div className="border-t border-gray-100 px-4 pb-4 pt-3" onDoubleClick={() => setExpanded(false)}>
           {item.content && (
@@ -809,7 +870,7 @@ const cardBg = showReviewAction && nextReview ? (STAGE_CARD_BG[nextReview.stageI
               [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:rounded [&_code]:text-xs
               [&_pre]:bg-gray-100 [&_pre]:p-2 [&_pre]:rounded [&_pre]:text-xs [&_pre]:overflow-x-auto
               [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-3 [&_blockquote]:text-gray-500">
-              <ReactMarkdown>{item.content.replace(/\n(?!\n)/g, '  \n')}</ReactMarkdown>
+              <ReactMarkdown rehypePlugins={[rehypeRaw]}>{item.content.replace(/\n(?!\n)/g, '  \n')}</ReactMarkdown>
             </div>
           )}
 
@@ -838,9 +899,9 @@ const cardBg = showReviewAction && nextReview ? (STAGE_CARD_BG[nextReview.stageI
           {showReviewAction && nextReview && !fullyDone && (
             <button
               onClick={completeReview}
-              className="mt-3 rounded-lg bg-brand-500 px-4 py-1.5 text-xs font-medium text-white hover:bg-brand-600"
+              className="mt-3 inline-flex items-center gap-1.5 rounded-full border-2 border-brand-500 px-4 py-1 text-xs font-semibold text-brand-600 hover:bg-brand-50 transition-colors"
             >
-              この復習を完了（{STAGE_LABELS[nextReview.stageIndex]}）
+              ◯ この復習を完了（{STAGE_LABELS[nextReview.stageIndex]}）
             </button>
           )}
         </div>
