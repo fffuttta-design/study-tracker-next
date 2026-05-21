@@ -20,7 +20,7 @@ function createSemaphore(limit: number) {
     }
   };
 }
-const sem = createSemaphore(4);
+const sem = createSemaphore(3);
 
 const NOTION_VERSION = '2022-06-28';
 
@@ -277,7 +277,7 @@ async function crawlPage(
   emit: (event: StreamEvent) => void,
   depth = 0
 ): Promise<void> {
-  if (depth > 15) return;
+  if (depth > 5) return;
   let meta;
   try { meta = await fetchPageMeta(pageId, token); } catch { return; }
   if (!meta) return;
@@ -305,28 +305,6 @@ async function crawlPage(
       if (children.length > 0) childrenMap.set(b.id as string, children);
     } catch { /* 無視 */ }
   }));
-
-  // link_to_page ブロックが参照するページのメタを収集（トップレベル + childrenMap内）
-  const collectLinkToPageIds = (blockList: Record<string, unknown>[]): string[] => {
-    const ids: string[] = [];
-    for (const b of blockList) {
-      if (b.type === 'link_to_page') {
-        const d = ((b['link_to_page'] ?? {}) as Record<string, unknown>);
-        const refId = (d.page_id ?? d.database_id) as string | undefined;
-        if (refId && !childMetaMap.has(refId)) ids.push(refId);
-      }
-    }
-    return ids;
-  };
-  const linkToPageIds = [
-    ...collectLinkToPageIds(blocks),
-    ...[...childrenMap.values()].flatMap(collectLinkToPageIds),
-  ];
-  if (linkToPageIds.length > 0) {
-    await Promise.all(linkToPageIds.map(async (id) => {
-      try { const m = await fetchPageMeta(id, token); if (m) childMetaMap.set(id, m); } catch { /* 無視 */ }
-    }));
-  }
 
   const rawNodes = blocks.map((b) => convertBlock(b, childMetaMap, childrenMap)).filter(Boolean) as Record<string, unknown>[];
   const nodes = rawNodes.filter((node, i) => {

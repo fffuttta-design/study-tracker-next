@@ -151,7 +151,7 @@ function NotionImportSection({ uid, addPage }: {
   uid: string;
   addPage: (uid: string, params?: { parentId?: string; order?: number; type?: 'page' | 'database' }) => Promise<{ id: string; title: string; content: string; icon: string; isFavorite: boolean; order: number; updatedAt: string }>;
 }) {
-  const { update } = useNotionPageStore();
+  const { update, batchUpdate } = useNotionPageStore();
   const { importRow } = useDbRowStore();
   const [url, setUrl] = useState('');
   const [step, setStep] = useState<'idle' | 'importing' | 'done'>('idle');
@@ -234,10 +234,12 @@ function NotionImportSection({ uid, addPage }: {
         }
       }
 
-      // リンクのプレースホルダー置換（全ページ収集後・並列実行）
-      await Promise.all(allPages.map(async (p) => {
+      // リンクのプレースホルダー置換（全ページ収集後）
+      // 先にすべての置換を計算（同期処理）し、一括バッチ書き込み
+      const replacements: Array<{ id: string; content: string }> = [];
+      for (const p of allPages) {
         const internalId = idMap.get(p.notionId);
-        if (!internalId) return;
+        if (!internalId) continue;
         let content = p.content;
         let changed = false;
         for (const [notionId, pageId] of idMap.entries()) {
@@ -252,8 +254,12 @@ function NotionImportSection({ uid, addPage }: {
             changed = true;
           }
         }
-        if (changed) await update(uid, internalId, { content });
-      }));
+        if (changed) replacements.push({ id: internalId, content });
+      }
+      // 500件チャンク分割バッチ書き込み（1回のコミットで完結）
+      if (replacements.length > 0) {
+        await batchUpdate(uid, replacements);
+      }
 
       setStep('done');
     } catch (e) {

@@ -230,6 +230,8 @@ function PageLinkView({ node, updateAttributes, deleteNode }: NodeViewProps) {
   const livePage = pageId ? pages.find((p) => p.id === pageId) : null;
   const title = livePage?.title || storedTitle || 'Untitled';
   const icon = livePage?.icon || storedIcon || '📄';
+  // notion-child:// = インポート時に未解決のまま残ったリンク（ツリー外のページ等）
+  const isUnresolved = !href || href.startsWith('notion-child://');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [iconUrlDraft, setIconUrlDraft] = useState('');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
@@ -355,9 +357,18 @@ function PageLinkView({ node, updateAttributes, deleteNode }: NodeViewProps) {
             </div>
           )}
         </div>
-        <button onClick={() => href && (onPageNavigate ? onPageNavigate(href) : router.push(href))} className="cursor-pointer hover:opacity-70">
-          <span className="text-[0.95em] text-gray-700 underline">{title || 'Untitled'}</span>
-        </button>
+        {isUnresolved ? (
+          <span
+            className="cursor-not-allowed text-[0.95em] text-gray-400 line-through opacity-60"
+            title="このページはインポートされていません（ツリー外の参照）"
+          >
+            {title || 'Untitled'}
+          </span>
+        ) : (
+          <button onClick={() => onPageNavigate ? onPageNavigate(href) : router.push(href)} className="cursor-pointer hover:opacity-70">
+            <span className="text-[0.95em] text-gray-700 underline">{title || 'Untitled'}</span>
+          </button>
+        )}
       </div>
     </NodeViewWrapper>
   );

@@ -1,7 +1,7 @@
 ﻿
 import { create } from 'zustand';
 import { type NotionPage, createNotionPage } from '@study-tracker/core';
-import { subscribeCol, upsertDoc, deleteDocById, fetchWhere } from '@study-tracker/firebase';
+import { subscribeCol, upsertDoc, deleteDocById, fetchWhere, batchUpsert } from '@study-tracker/firebase';
 
 export interface PageHistorySnapshot {
   id: string;
@@ -17,6 +17,7 @@ interface NotionPageState {
   subscribe: (uid: string) => () => void;
   add: (uid: string, params?: { parentId?: string; order?: number; type?: 'page' | 'database' }) => Promise<NotionPage>;
   update: (uid: string, id: string, data: Partial<NotionPage>) => Promise<void>;
+  batchUpdate: (uid: string, updates: Array<{ id: string; content: string }>) => Promise<void>;
   remove: (uid: string, id: string) => Promise<void>;
   saveHistory: (uid: string, pageId: string, title: string, content: string) => Promise<void>;
   loadPageHistory: (uid: string, pageId: string) => Promise<PageHistorySnapshot[]>;
@@ -41,6 +42,13 @@ export const useNotionPageStore = create<NotionPageState>((set) => ({
   update: async (uid, id, data) => {
     const updated = { ...data, updatedAt: new Date().toISOString() };
     await upsertDoc(uid, 'notionPages', id, updated as Record<string, unknown>);
+  },
+
+  batchUpdate: async (uid, updates) => {
+    if (updates.length === 0) return;
+    const now = new Date().toISOString();
+    const items = updates.map(({ id, content }) => ({ id, content, updatedAt: now }));
+    await batchUpsert(uid, 'notionPages', items);
   },
 
   remove: async (uid, id) => {
