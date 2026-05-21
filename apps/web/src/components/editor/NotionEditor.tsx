@@ -307,11 +307,12 @@ function PageLinkView({ node, updateAttributes, deleteNode }: NodeViewProps) {
             className="rounded p-0.5 hover:bg-gray-100"
             title="アイコンを変更"
           >
-            {/* アイコンを 18px 固定枠に統一 → 行高を揃える */}
-            <span className="flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center">
+            {/* 18px 固定枠・overflow-hidden+rounded で四角クリッピング */}
+            {/* style={{ }} はCSSの height:auto より優先度が高いためバグ回避 */}
+            <span className="flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center overflow-hidden rounded">
               {isImageSrc(icon) ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={icon} alt="" className="h-[18px] w-[18px] rounded-sm object-cover" />
+                <img src={icon} alt="" className="h-full w-full object-cover" style={{ height: '18px', width: '18px', aspectRatio: '1/1' }} />
               ) : (
                 <span className="text-[14px] leading-none">{icon}</span>
               )}
