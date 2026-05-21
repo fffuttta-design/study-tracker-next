@@ -1,9 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import { useAuthStore } from '@/stores/authStore';
 import { useSettingsStore, REVIEW_STAGE_LABELS } from '@/stores/settingsStore';
 import { useNotionPageStore } from '@/stores/notionPageStore';
+import { useDbRowStore } from '@/stores/notionDatabaseRowStore';
 
 export default function SettingsPage() {
   const { user, signOut } = useAuthStore();
@@ -129,13 +131,27 @@ function ReviewStageRow({ stageLabel, stageIndex, days, onChange }: {
 
 // ── Notionインポートセクション ────────────────────────────────────────
 
-interface ImportPage { notionId: string; title: string; icon: string; parentNotionId: string | null; content: string }
+interface ImportPage {
+  notionId: string;
+  title: string;
+  icon: string;
+  parentNotionId: string | null;
+  content: string;
+  type?: 'page' | 'database';
+  rows?: Array<{
+    notionId: string;
+    cells: Record<string, string | number | boolean | null>;
+    pageContent: string;
+    order: number;
+  }>;
+}
 
 function NotionImportSection({ uid, addPage }: {
   uid: string;
-  addPage: (uid: string, params?: { parentId?: string; order?: number }) => Promise<{ id: string; title: string; content: string; icon: string; isFavorite: boolean; order: number; updatedAt: string }>;
+  addPage: (uid: string, params?: { parentId?: string; order?: number; type?: 'page' | 'database' }) => Promise<{ id: string; title: string; content: string; icon: string; isFavorite: boolean; order: number; updatedAt: string }>;
 }) {
   const { update } = useNotionPageStore();
+  const { importRow } = useDbRowStore();
   const [url, setUrl] = useState('');
   const [step, setStep] = useState<'idle' | 'importing' | 'done'>('idle');
   const [progress, setProgress] = useState({ done: 0, total: 0 });
@@ -163,9 +179,28 @@ function NotionImportSection({ uid, addPage }: {
       const idMap = new Map<string, string>();
       for (const p of pages) {
         const parentId = p.parentNotionId ? idMap.get(p.parentNotionId) : undefined;
-        const created = await addPage(uid, parentId ? { parentId } : undefined);
+        const created = await addPage(uid, {
+          ...(parentId ? { parentId } : {}),
+          ...(p.type === 'database' ? { type: 'database' } : {}),
+        });
         await update(uid, created.id, { title: p.title, icon: p.icon, content: p.content });
         idMap.set(p.notionId, created.id);
+
+        // データベースの場合、行データを Firestore に保存
+        if (p.type === 'database' && p.rows) {
+          for (const row of p.rows) {
+            await importRow(uid, {
+              id: uuidv4(),
+              databaseId: created.id,
+              cells: row.cells,
+              pageContent: row.pageContent,
+              order: row.order,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            });
+          }
+        }
+
         setProgress((prev) => ({ ...prev, done: prev.done + 1 }));
       }
 

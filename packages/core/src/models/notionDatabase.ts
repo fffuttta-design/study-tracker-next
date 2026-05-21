@@ -24,6 +24,7 @@ export interface DbRow {
   id: string;
   databaseId: string;
   cells: Record<string, string | number | boolean | null>;
+  pageContent?: string; // 行のページ本文（TipTap JSON）
   order: number;
   createdAt: string;
   updatedAt: string;

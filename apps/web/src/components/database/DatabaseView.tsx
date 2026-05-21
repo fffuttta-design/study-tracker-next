@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import {
   type NotionPage,
@@ -11,6 +11,7 @@ import {
   parseDbSchema,
 } from '@study-tracker/core';
 import { useDbRowStore } from '@/stores/notionDatabaseRowStore';
+import { NotionEditor } from '@/components/editor/NotionEditor';
 
 // ─── 定数 ────────────────────────────────────────────────────────────────────
 
@@ -400,6 +401,99 @@ function PropertyHeader({
   );
 }
 
+// ─── 行フルページモーダル ─────────────────────────────────────────────────────
+
+function RowPageModal({
+  row,
+  schema,
+  uid,
+  databaseTitle,
+  onSaveCells,
+  onSaveContent,
+  onClose,
+}: {
+  row: DbRow;
+  schema: { properties: DbProperty[] };
+  uid: string;
+  databaseTitle: string;
+  onSaveCells: (propId: string, val: string | number | boolean | null) => void;
+  onSaveContent: (content: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const dummyRef = useRef<(() => void) | null>(null);
+  const titleProp = schema.properties.find((p) => p.type === 'title');
+  const titleValue = titleProp
+    ? (typeof row.cells[titleProp.id] === 'string' ? (row.cells[titleProp.id] as string) : '')
+    : '';
+
+  const handleEditorSave = useCallback(async (title: string, content: string) => {
+    if (titleProp) onSaveCells(titleProp.id, title);
+    await onSaveContent(content);
+  }, [titleProp, onSaveCells, onSaveContent]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-white">
+      {/* ヘッダー */}
+      <div className="flex items-center gap-3 border-b border-gray-100 px-4 py-2.5">
+        <button
+          onClick={onClose}
+          className="flex items-center gap-1 rounded px-2 py-1 text-sm text-gray-500 hover:bg-gray-100"
+        >
+          ← 戻る
+        </button>
+        <span className="text-xs text-gray-400">{databaseTitle}</span>
+      </div>
+
+      {/* プロパティ一覧（title以外） */}
+      {schema.properties.filter((p) => p.type !== 'title').length > 0 && (
+        <div className="flex flex-wrap gap-x-6 gap-y-2 border-b border-gray-100 px-8 py-3">
+          {schema.properties.filter((p) => p.type !== 'title').map((prop) => {
+            const raw = row.cells[prop.id] ?? null;
+            return (
+              <div key={prop.id} className="flex items-center gap-2">
+                <span className="flex w-20 shrink-0 items-center gap-1 text-xs text-gray-400">
+                  <span>{TYPE_ICONS[prop.type]}</span>
+                  <span className="truncate">{prop.name}</span>
+                </span>
+                <div className="flex min-w-[100px] items-center rounded border border-gray-200 px-2 py-1">
+                  {prop.type === 'text' && (
+                    <TextCell value={typeof raw === 'string' ? raw : ''} onSave={(v) => onSaveCells(prop.id, v)} />
+                  )}
+                  {prop.type === 'number' && (
+                    <NumberCell value={typeof raw === 'number' ? raw : null} onSave={(v) => onSaveCells(prop.id, v)} />
+                  )}
+                  {prop.type === 'select' && (
+                    <SelectCell value={typeof raw === 'string' ? raw : ''} options={prop.options ?? []} onSave={(v) => onSaveCells(prop.id, v)} />
+                  )}
+                  {prop.type === 'checkbox' && (
+                    <CheckboxCell value={typeof raw === 'boolean' ? raw : false} onSave={(v) => onSaveCells(prop.id, v)} />
+                  )}
+                  {prop.type === 'date' && (
+                    <DateCell value={typeof raw === 'string' ? raw : ''} onSave={(v) => onSaveCells(prop.id, v)} />
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ページ本文（NotionEditor） */}
+      <div className="flex min-h-0 flex-1 flex-col">
+        <NotionEditor
+          key={row.id}
+          initialTitle={titleValue}
+          initialContent={row.pageContent ?? ''}
+          onSave={handleEditorSave}
+          notionPageId={row.id}
+          recordTriggerRef={dummyRef}
+          onCreateSubPage={async () => ({ id: '', title: '' })}
+        />
+      </div>
+    </div>
+  );
+}
+
 // ─── 行詳細サイドパネル ──────────────────────────────────────────────────────
 
 function RowDetailPanel({
@@ -561,8 +655,9 @@ function defaultWidth(type: DbPropertyType): number {
 export function DatabaseView({ page, uid, onSaveSchema }: DatabaseViewProps) {
   const [schema, setSchema] = useState(() => parseDbSchema(page.content));
   const schemaRef = useRef(schema);
-  const { rows, subscribeRows, addRow, updateRow, removeRow } = useDbRowStore();
+  const { rows, subscribeRows, addRow, updateRow, updateRowContent, removeRow } = useDbRowStore();
   const [addingProp, setAddingProp] = useState(false);
+  const [modalRowId, setModalRowId] = useState<string | null>(null);
   const [newPropName, setNewPropName] = useState('');
   const [newPropType, setNewPropType] = useState<DbPropertyType>('text');
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
@@ -822,9 +917,9 @@ export function DatabaseView({ page, uid, onSaveSchema }: DatabaseViewProps) {
                               />
                             </div>
                             <button
-                              onClick={() => setSelectedRowId(selectedRowId === row.id ? null : row.id)}
-                              className={`shrink-0 ml-1 rounded px-1 py-0.5 text-[10px] transition ${selectedRowId === row.id ? 'text-brand-500' : 'text-gray-300 hover:text-brand-400'} ${hoveredRow === row.id || selectedRowId === row.id ? 'opacity-100' : 'opacity-0'}`}
-                              title="詳細を開く"
+                              onClick={() => setModalRowId(row.id)}
+                              className={`shrink-0 ml-1 rounded px-1 py-0.5 text-[10px] text-gray-300 transition hover:text-brand-400 ${hoveredRow === row.id ? 'opacity-100' : 'opacity-0'}`}
+                              title="ページを開く"
                             >
                               ↗
                             </button>
@@ -898,6 +993,23 @@ export function DatabaseView({ page, uid, onSaveSchema }: DatabaseViewProps) {
           onClose={() => setSelectedRowId(null)}
         />
       )}
+
+      {/* 行フルページモーダル */}
+      {modalRowId && (() => {
+        const modalRow = rows.find((r) => r.id === modalRowId);
+        if (!modalRow) return null;
+        return (
+          <RowPageModal
+            row={modalRow}
+            schema={schema}
+            uid={uid}
+            databaseTitle={page.title || 'Untitled'}
+            onSaveCells={(propId, val) => handleCellSave(modalRow, propId, val)}
+            onSaveContent={async (content) => { await updateRowContent(uid, modalRow.id, content); }}
+            onClose={() => setModalRowId(null)}
+          />
+        );
+      })()}
     </div>
   );
 }
