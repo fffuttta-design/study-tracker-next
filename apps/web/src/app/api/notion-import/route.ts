@@ -118,6 +118,25 @@ function convertBlock(block: Record<string, unknown>, childMetaMap?: Map<string,
       return { type: 'codeBlock', attrs: { language: (data.language as string) ?? '' }, content: [{ type: 'text', text: rt.map((t) => t.plain_text).join('') }] };
     case 'divider':
       return { type: 'horizontalRule' };
+    case 'table': {
+      // table ブロックの子(table_row)は childrenMap に既にフェッチ済み
+      const tableData = data as { has_column_header?: boolean };
+      const rows = childrenMap?.get(block.id as string) ?? [];
+      if (rows.length === 0) return null;
+      const tiptapRows = rows.map((row, rowIndex) => {
+        const rowData = ((row['table_row'] ?? {}) as Record<string, unknown>);
+        const cells = (rowData.cells ?? []) as Array<Array<Record<string, unknown>>>;
+        const isHeaderRow = !!(tableData.has_column_header && rowIndex === 0);
+        return {
+          type: 'tableRow',
+          content: cells.map((cellRichText) => ({
+            type: isHeaderRow ? 'tableHeader' : 'tableCell',
+            content: [{ type: 'paragraph', content: toTextNodes(cellRichText) }],
+          })),
+        };
+      });
+      return { type: 'table', content: tiptapRows };
+    }
     case 'callout': {
       const emoji = ((data.icon as Record<string, unknown>)?.emoji as string) ?? '';
       const firstLineNodes = toTextNodes(rt);
