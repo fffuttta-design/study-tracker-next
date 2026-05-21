@@ -153,9 +153,9 @@ type LogEntry =
 
 function NotionImportSection({ uid, addPage }: {
   uid: string;
-  addPage: (uid: string, params?: { parentId?: string; order?: number; type?: 'page' | 'database' }) => Promise<{ id: string; title: string; content: string; icon: string; isFavorite: boolean; order: number; updatedAt: string }>;
+  addPage: (uid: string, params?: { parentId?: string; order?: number; type?: 'page' | 'database'; notionId?: string }) => Promise<{ id: string; title: string; content: string; icon: string; isFavorite: boolean; order: number; updatedAt: string; notionId?: string }>;
 }) {
-  const { update, batchUpdate } = useNotionPageStore();
+  const { pages, update, batchUpdate } = useNotionPageStore();
   const { importRow } = useDbRowStore();
   const [url, setUrl] = useState('');
   const [step, setStep] = useState<'idle' | 'importing' | 'done'>('idle');
@@ -178,6 +178,14 @@ function NotionImportSection({ uid, addPage }: {
     setStep('importing');
     setProgress({ done: 0, total: 0, skipped: 0 });
     setLog([]);
+
+    // 既存ページの notionId → internalId マップ（重複インポート防止）
+    const existingNotionIdMap = new Map<string, string>();
+    for (const page of pages) {
+      if ((page as { notionId?: string }).notionId) {
+        existingNotionIdMap.set((page as { notionId?: string }).notionId!, page.id);
+      }
+    }
 
     try {
       const res = await fetch('/api/notion-import', {
@@ -225,19 +233,34 @@ function NotionImportSection({ uid, addPage }: {
             allPages.push(p);
             setProgress((prev) => ({ ...prev, total: prev.total + 1 }));
 
+            const existingId = existingNotionIdMap.get(p.notionId);
             const parentId = p.parentNotionId ? idMap.get(p.parentNotionId) : undefined;
-            const created = await addPage(uid, {
-              ...(parentId ? { parentId } : {}),
-              ...(p.type === 'database' ? { type: 'database' } : {}),
-            });
-            await update(uid, created.id, { title: p.title, icon: p.icon, content: p.content });
-            idMap.set(p.notionId, created.id);
+            let internalId: string;
+
+            if (existingId) {
+              // 既存ページを更新（重複作成しない）
+              internalId = existingId;
+              await update(uid, internalId, {
+                title: p.title, icon: p.icon, content: p.content,
+                ...(parentId ? { parentId } : {}),
+              });
+            } else {
+              // 新規作成
+              const created = await addPage(uid, {
+                ...(parentId ? { parentId } : {}),
+                ...(p.type === 'database' ? { type: 'database' } : {}),
+                notionId: p.notionId,
+              });
+              internalId = created.id;
+              await update(uid, internalId, { title: p.title, icon: p.icon, content: p.content });
+            }
+            idMap.set(p.notionId, internalId);
 
             if (p.type === 'database' && p.rows) {
               for (const row of p.rows) {
                 await importRow(uid, {
                   id: uuidv4(),
-                  databaseId: created.id,
+                  databaseId: internalId,
                   cells: row.cells,
                   pageContent: row.pageContent,
                   order: row.order,

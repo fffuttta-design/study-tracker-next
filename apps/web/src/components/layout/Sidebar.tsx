@@ -53,21 +53,40 @@ function PageTreeEntry({
     ? findActiveChild(pages, page.id, currentId)
     : null;
   const activeChild = activeChildId ? pages.find((p) => p.id === activeChildId) : null;
+  const update = useNotionPageStore((s) => s.update);
+  const { user } = useAuthStore();
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    const droppedPageId = e.dataTransfer.getData('application/x-page-id');
+    if (!droppedPageId || !user || droppedPageId === page.id) return;
+    await update(user.uid, droppedPageId, { parentId: page.id });
+  };
 
   return (
-    <div>
+    <div
+      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setIsDragOver(true); }}
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragOver(false); }}
+      onDrop={handleDrop}
+    >
       <Link
         href={`/notion-plus/${page.id}`}
         onContextMenu={(e) => { e.preventDefault(); onCtxMenu(e, page); }}
         className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors ${
           isActive
             ? 'bg-white font-semibold text-gray-900 shadow-sm'
-            : 'text-gray-600 hover:bg-white hover:text-gray-900'
+            : isDragOver
+              ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-300'
+              : 'text-gray-600 hover:bg-white hover:text-gray-900'
         }`}
       >
         <PageIcon icon={page.type === 'database' && page.icon === '📄' ? '📊' : page.icon} />
         <span className="min-w-0 flex-1 truncate">{page.title || 'Untitled'}</span>
-        {page.isFavorite && <span className="shrink-0 text-[10px] text-yellow-400">★</span>}
+        {isDragOver && <span className="shrink-0 text-[10px] text-brand-400">↳</span>}
+        {!isDragOver && page.isFavorite && <span className="shrink-0 text-[10px] text-yellow-400">★</span>}
       </Link>
       {/* 現在いるページへのパス上にある子ページを再帰表示 */}
       {activeChild && (

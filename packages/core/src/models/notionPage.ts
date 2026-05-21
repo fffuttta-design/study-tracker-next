@@ -10,12 +10,14 @@ export interface NotionPage {
   updatedAt: string; // ISO 8601
   isFavorite: boolean;
   type?: 'page' | 'database';
+  notionId?: string; // Notion側のページID（インポート時に設定、再インポート重複防止用）
 }
 
 export function createNotionPage(params?: {
   parentId?: string;
   order?: number;
   type?: 'page' | 'database';
+  notionId?: string;
 }): NotionPage {
   const isDb = params?.type === 'database';
   const page: NotionPage = {
@@ -29,5 +31,6 @@ export function createNotionPage(params?: {
   };
   if (isDb) page.type = 'database';
   if (params?.parentId !== undefined) page.parentId = params.parentId;
+  if (params?.notionId !== undefined) page.notionId = params.notionId;
   return page;
 }

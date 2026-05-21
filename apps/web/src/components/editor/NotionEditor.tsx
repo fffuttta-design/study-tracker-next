@@ -365,7 +365,16 @@ function PageLinkView({ node, updateAttributes, deleteNode }: NodeViewProps) {
             {title || 'Untitled'}
           </span>
         ) : (
-          <button onClick={() => onPageNavigate ? onPageNavigate(href) : router.push(href)} className="cursor-pointer hover:opacity-70">
+          <button
+            draggable
+            onDragStart={(e) => {
+              if (!pageId) return;
+              e.dataTransfer.setData('application/x-page-id', pageId);
+              e.dataTransfer.effectAllowed = 'move';
+            }}
+            onClick={() => onPageNavigate ? onPageNavigate(href) : router.push(href)}
+            className="cursor-pointer hover:opacity-70"
+          >
             <span className="text-[0.95em] text-gray-700 underline">{title || 'Untitled'}</span>
           </button>
         )}
