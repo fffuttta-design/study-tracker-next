@@ -769,13 +769,13 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
   const cardBg = showReviewAction && nextReview ? (STAGE_CARD_BG[nextReview.stageIndex] ?? 'bg-white') : 'bg-white';
 
   // ── コンパクトレイアウト（ダッシュボード専用）────────────────────────
-  if (compact && !expanded) {
+  if (compact) {
     return (
-      <div className={`rounded-lg border ${cardBg} border-gray-100 hover:border-gray-200 transition-shadow`}>
-        {/* 行1: 復習チェック + タイトル */}
+      <div className={`rounded-lg border transition-shadow ${cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}>
+        {/* 行1: 復習チェック + タイトル（クリックで展開） */}
         <div
           className="flex cursor-pointer items-center gap-2 px-3 pt-2 pb-0.5"
-          onClick={() => setExpanded(true)}
+          onClick={() => setExpanded((v) => !v)}
         >
           {showReviewAction && nextReview && !fullyDone && (
             <button
@@ -809,6 +809,58 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
             </span>
           )}
         </div>
+
+        {/* 展開コンテンツ（ダブルクリックで閉じる） */}
+        {expanded && (
+          <div className="border-t border-gray-100 px-4 pb-4 pt-3" onDoubleClick={() => setExpanded(false)}>
+            {item.content && (
+              <div className="mb-3 max-w-none text-sm text-gray-700
+                [&_strong]:font-bold [&_em]:italic [&_del]:line-through
+                [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5
+                [&_li]:my-0.5 [&_p]:my-1
+                [&_h1]:text-xl [&_h1]:font-bold [&_h1]:my-2
+                [&_h2]:text-lg [&_h2]:font-bold [&_h2]:my-1.5
+                [&_h3]:text-base [&_h3]:font-semibold [&_h3]:my-1
+                [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:rounded [&_code]:text-xs
+                [&_pre]:bg-gray-100 [&_pre]:p-2 [&_pre]:rounded [&_pre]:text-xs [&_pre]:overflow-x-auto
+                [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-3 [&_blockquote]:text-gray-500">
+                <ReactMarkdown rehypePlugins={[rehypeRaw]}>{item.content.replace(/\n(?!\n)/g, '  \n')}</ReactMarkdown>
+              </div>
+            )}
+
+            {/* 復習スケジュールチップ + 登録日 */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-wrap gap-1.5">
+                {item.reviews.map((r) => (
+                  <span
+                    key={r.stageIndex}
+                    className={`rounded border px-2 py-0.5 text-xs ${
+                      r.completed
+                        ? 'border-gray-100 bg-gray-50 text-gray-300 line-through'
+                        : r.stageIndex === nextReview?.stageIndex
+                        ? STAGE_COLORS[r.stageIndex]
+                        : 'border-gray-100 bg-gray-50 text-gray-400'
+                    }`}
+                  >
+                    {STAGE_LABELS[r.stageIndex]} {format(new Date(r.scheduledDate), 'M/d', { locale: ja })}
+                    {r.completed && ' ✓'}
+                  </span>
+                ))}
+              </div>
+              <span className="shrink-0 text-xs text-gray-400">{format(new Date(item.dateKey), 'M/d', { locale: ja })} 登録</span>
+            </div>
+
+            {showReviewAction && nextReview && !fullyDone && (
+              <button
+                onClick={completeReview}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-full border-2 border-brand-500 px-4 py-1 text-xs font-semibold text-brand-600 hover:bg-brand-50 transition-colors"
+              >
+                ◯ この復習を完了（{STAGE_LABELS[nextReview.stageIndex]}）
+              </button>
+            )}
+          </div>
+        )}
+
         {editing && <EditModal item={item} uid={uid} onClose={() => setEditing(false)} />}
       </div>
     );
