@@ -170,7 +170,14 @@ function NotionImportSection({ uid, addPage }: {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'import-url', url: url.trim() }),
       });
-      const data = await res.json() as { pages?: ImportPage[]; error?: string };
+      let data: { pages?: ImportPage[]; error?: string };
+      try {
+        data = await res.json() as { pages?: ImportPage[]; error?: string };
+      } catch {
+        setError(`サーバーエラー（ステータス: ${res.status}）。ページ数が多すぎる場合はより小さいページを試してください。`);
+        setStep('idle');
+        return;
+      }
       if (!res.ok || data.error) { setError(data.error ?? 'エラーが発生しました'); setStep('idle'); return; }
 
       const pages = data.pages ?? [];
@@ -228,8 +235,9 @@ function NotionImportSection({ uid, addPage }: {
       }
 
       setStep('done');
-    } catch {
-      setError('インポート中にエラーが発生しました');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(`インポート中にエラーが発生しました: ${msg}`);
       setStep('idle');
     }
   };

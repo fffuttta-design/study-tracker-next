@@ -3,6 +3,47 @@ import type { DbProperty, DbPropertyType, DbSelectOption } from '@study-tracker/
 
 export const maxDuration = 60;
 
+// 同時リクエスト数を制限するセマフォ（Notion APIレート制限対策）
+function createSemaphore(limit: number) {
+  let active = 0;
+  const queue: Array<() => void> = [];
+  return async function<T>(fn: () => Promise<T>): Promise<T> {
+    if (active >= limit) {
+      await new Promise<void>((resolve) => queue.push(resolve));
+    }
+    active++;
+    try {
+      return await fn();
+    } finally {
+      active--;
+      queue.shift()?.();
+    }
+  };
+}
+const sem = createSemaphore(5); // 同時5リクエストまで
+
+// 親→子の順になるようトポロジカルソート
+function topoSort(pages: PageData[]): PageData[] {
+  const sorted: PageData[] = [];
+  const added = new Set<string>();
+  const remaining = [...pages];
+  let changed = true;
+  while (changed && remaining.length > 0) {
+    changed = false;
+    for (let i = remaining.length - 1; i >= 0; i--) {
+      const p = remaining[i];
+      if (!p.parentNotionId || added.has(p.parentNotionId)) {
+        sorted.push(p);
+        added.add(p.notionId);
+        remaining.splice(i, 1);
+        changed = true;
+      }
+    }
+  }
+  sorted.push(...remaining); // 親が見つからない孤立ページも追加
+  return sorted;
+}
+
 const NOTION_VERSION = '2022-06-28';
 
 function notionHeaders(token: string) {
@@ -137,9 +178,9 @@ function convertBlock(block: Record<string, unknown>, childMetaMap?: Map<string,
 }
 
 async function fetchPageMeta(pageId: string, token: string) {
-  const res = await fetch(`https://api.notion.com/v1/pages/${pageId}`, {
+  const res = await sem(() => fetch(`https://api.notion.com/v1/pages/${pageId}`, {
     headers: notionHeaders(token),
-  });
+  }));
   if (!res.ok) return null;
   const p = await res.json() as Record<string, unknown>;
 
@@ -164,7 +205,7 @@ async function fetchAllBlocks(pageId: string, token: string): Promise<Record<str
     const url = new URL(`https://api.notion.com/v1/blocks/${pageId}/children`);
     url.searchParams.set('page_size', '100');
     if (cursor) url.searchParams.set('start_cursor', cursor);
-    const res = await fetch(url.toString(), { headers: notionHeaders(token) });
+    const res = await sem(() => fetch(url.toString(), { headers: notionHeaders(token) }));
     if (!res.ok) break;
     const data = await res.json() as { results: Record<string, unknown>[]; has_more: boolean; next_cursor?: string };
     blocks.push(...data.results);
@@ -176,9 +217,9 @@ async function fetchAllBlocks(pageId: string, token: string): Promise<Record<str
 // ── データベース専用 ──────────────────────────────────────────────────
 
 async function fetchDatabaseMeta(dbId: string, token: string) {
-  const res = await fetch(`https://api.notion.com/v1/databases/${dbId}`, {
+  const res = await sem(() => fetch(`https://api.notion.com/v1/databases/${dbId}`, {
     headers: notionHeaders(token),
-  });
+  }));
   if (!res.ok) return null;
   const db = await res.json() as Record<string, unknown>;
 
@@ -368,11 +409,11 @@ async function crawlDatabase(
   const notionRows: Record<string, unknown>[] = [];
   let cursor: string | undefined;
   do {
-    const res = await fetch(`https://api.notion.com/v1/databases/${dbId}/query`, {
+    const res = await sem(() => fetch(`https://api.notion.com/v1/databases/${dbId}/query`, {
       method: 'POST',
       headers: notionHeaders(token),
       body: JSON.stringify({ page_size: 100, ...(cursor ? { start_cursor: cursor } : {}) }),
-    });
+    }));
     if (!res.ok) break;
     const data = await res.json() as { results: Record<string, unknown>[]; has_more: boolean; next_cursor?: string };
     notionRows.push(...data.results);
@@ -449,7 +490,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({ pages: result });
+    return NextResponse.json({ pages: topoSort(result) });
   }
 
   return NextResponse.json({ error: 'unknown action' }, { status: 400 });
