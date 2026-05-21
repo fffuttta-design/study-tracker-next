@@ -170,51 +170,72 @@ function NotionImportSection({ uid, addPage }: {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'import-url', url: url.trim() }),
       });
-      let data: { pages?: ImportPage[]; error?: string };
-      try {
-        data = await res.json() as { pages?: ImportPage[]; error?: string };
-      } catch {
-        setError(`サーバーエラー（ステータス: ${res.status}）。ページ数が多すぎる場合はより小さいページを試してください。`);
+      if (!res.ok || !res.body) {
+        setError(`サーバーエラー（${res.status}）`);
         setStep('idle');
         return;
       }
-      if (!res.ok || data.error) { setError(data.error ?? 'エラーが発生しました'); setStep('idle'); return; }
 
-      const pages = data.pages ?? [];
-      setProgress({ done: 0, total: pages.length });
-
-      // 親が先に来る順（API側でdepth-firstソート済み）で順番に作成
+      // ストリームを1行ずつ読み取りながらリアルタイム処理
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
       const idMap = new Map<string, string>();
-      for (const p of pages) {
-        const parentId = p.parentNotionId ? idMap.get(p.parentNotionId) : undefined;
-        const created = await addPage(uid, {
-          ...(parentId ? { parentId } : {}),
-          ...(p.type === 'database' ? { type: 'database' } : {}),
-        });
-        await update(uid, created.id, { title: p.title, icon: p.icon, content: p.content });
-        idMap.set(p.notionId, created.id);
+      const allPages: ImportPage[] = []; // リンク置換フェーズ用
 
-        // データベースの場合、行データを Firestore に保存
-        if (p.type === 'database' && p.rows) {
-          for (const row of p.rows) {
-            await importRow(uid, {
-              id: uuidv4(),
-              databaseId: created.id,
-              cells: row.cells,
-              pageContent: row.pageContent,
-              order: row.order,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          let event: { type: string; data?: ImportPage; message?: string; total?: number };
+          try { event = JSON.parse(line); } catch { continue; }
+
+          if (event.type === 'error') {
+            setError(event.message ?? 'エラーが発生しました');
+            setStep('idle');
+            return;
+          }
+
+          if (event.type === 'page' && event.data) {
+            const p = event.data;
+            allPages.push(p);
+            setProgress((prev) => ({ done: prev.done, total: prev.total + 1 }));
+
+            // 受け取り次第すぐFirestoreに保存
+            const parentId = p.parentNotionId ? idMap.get(p.parentNotionId) : undefined;
+            const created = await addPage(uid, {
+              ...(parentId ? { parentId } : {}),
+              ...(p.type === 'database' ? { type: 'database' } : {}),
             });
+            await update(uid, created.id, { title: p.title, icon: p.icon, content: p.content });
+            idMap.set(p.notionId, created.id);
+
+            if (p.type === 'database' && p.rows) {
+              for (const row of p.rows) {
+                await importRow(uid, {
+                  id: uuidv4(),
+                  databaseId: created.id,
+                  cells: row.cells,
+                  pageContent: row.pageContent,
+                  order: row.order,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                });
+              }
+            }
+
+            setProgress((prev) => ({ ...prev, done: prev.done + 1 }));
           }
         }
-
-        setProgress((prev) => ({ ...prev, done: prev.done + 1 }));
       }
 
-      // notion-child://[notionId] → /notion-plus/[internalId]（ページリンク）
-      // notion-child-db://[notionId] → [internalId]（インラインデータベース）
-      for (const p of pages) {
+      // リンクのプレースホルダー置換（全ページ収集後）
+      for (const p of allPages) {
         const internalId = idMap.get(p.notionId);
         if (!internalId) continue;
         let content = p.content;
@@ -274,16 +295,21 @@ function NotionImportSection({ uid, addPage }: {
         <div className="py-4 text-center">
           <div className="mx-auto mb-3 h-6 w-6 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
           <p className="text-sm text-gray-700">
-            {progress.total === 0 ? 'ページを取得中...' : `インポート中... ${progress.done} / ${progress.total} ページ`}
+            {progress.total === 0
+              ? 'ページを取得中...'
+              : `インポート中... ${progress.done} / ${progress.total} ページ`}
           </p>
           {progress.total > 0 && (
             <div className="mt-3 h-1.5 w-full rounded-full bg-gray-100">
               <div
                 className="h-1.5 rounded-full bg-brand-500 transition-all"
-                style={{ width: `${(progress.done / progress.total) * 100}%` }}
+                style={{ width: `${Math.round((progress.done / progress.total) * 100)}%` }}
               />
             </div>
           )}
+          <p className="mt-2 text-xs text-gray-400">
+            ページを受け取り次第順番に保存しています
+          </p>
         </div>
       )}
 
