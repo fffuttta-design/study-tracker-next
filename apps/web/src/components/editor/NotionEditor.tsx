@@ -29,6 +29,7 @@ import { TextStyle, Color } from '@tiptap/extension-text-style';
 import Underline from '@tiptap/extension-underline';
 import Youtube from '@tiptap/extension-youtube';
 import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
+import { DragHandleExtension } from './DragHandleExtension';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useLearningStore } from '@/stores/learningStore';
@@ -59,6 +60,11 @@ function pmToMarkdown(node: PmNode): string {
         case 'code':   t = `\`${t}\``; break;
         case 'strike': t = `~~${t}~~`; break;
         case 'link':   t = `[${t}](${m.attrs.href as string})`; break;
+        case 'textStyle': {
+          const color = m.attrs.color as string | undefined;
+          if (color) t = `<span style="color:${color}">${t}</span>`;
+          break;
+        }
       }
     }
     return t;
@@ -1103,6 +1109,7 @@ export function NotionEditor({
       ToggleHeadingNode,
       TocNode,
       InlineDatabaseNode,
+      DragHandleExtension,
     ],
     content: (() => {
       if (!initialContent) return '';
