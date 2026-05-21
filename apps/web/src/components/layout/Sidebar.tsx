@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type User } from 'firebase/auth';
 import { type NotionPage } from '@study-tracker/core';
@@ -93,11 +93,23 @@ function UserFooter({ user }: { user: User }) {
   );
 }
 
+function BackToLearningLink() {
+  const searchParams = useSearchParams();
+  const fromTab = searchParams.get('from') ?? '0';
+  return (
+    <Link
+      href={`/learning?tab=${fromTab}`}
+      className="flex items-center gap-2 px-3 py-2.5 text-xs text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+    >
+      <span>←</span>
+      <span>学習リストに戻る</span>
+    </Link>
+  );
+}
+
 function NotionPageSidebar({ user }: { user: User }) {
   const pathname = usePathname();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const fromTab = searchParams.get('from') ?? '0';
   const { pages, add, remove, loading } = useNotionPageStore();
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; page: NotionPage } | null>(null);
   const [open, setOpen] = useState(true);
@@ -263,13 +275,13 @@ function NotionPageSidebar({ user }: { user: User }) {
 
       {/* フッター: 学習リストに戻る + ユーザー */}
       <div className="border-t border-gray-100">
-        <Link
-          href={`/learning?tab=${fromTab}`}
-          className="flex items-center gap-2 px-3 py-2.5 text-xs text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
-        >
-          <span>←</span>
-          <span>学習リストに戻る</span>
-        </Link>
+        <Suspense fallback={
+          <Link href="/learning" className="flex items-center gap-2 px-3 py-2.5 text-xs text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700">
+            <span>←</span><span>学習リストに戻る</span>
+          </Link>
+        }>
+          <BackToLearningLink />
+        </Suspense>
         <div className="border-t border-gray-100 py-1">
           <UserFooter user={user} />
         </div>

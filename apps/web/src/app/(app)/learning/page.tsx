@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef, useCallback, useEffect, memo } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect, memo, Suspense } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/stores/authStore';
 import { useLearningStore } from '@/stores/learningStore';
@@ -89,6 +89,14 @@ function toDateKey(d: Date): string {
 // ── メインページ ─────────────────────────────────────────────────────
 
 export default function LearningPage() {
+  return (
+    <Suspense fallback={<div className="flex h-full items-center justify-center"><Spinner /></div>}>
+      <LearningPageContent />
+    </Suspense>
+  );
+}
+
+function LearningPageContent() {
   const { user } = useAuthStore();
   const { items, loading } = useLearningStore();
   const searchParams = useSearchParams();
