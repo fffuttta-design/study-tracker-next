@@ -98,6 +98,7 @@ function NotionPageSidebar({ user }: { user: User }) {
   const router = useRouter();
   const { pages, add, remove, loading } = useNotionPageStore();
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; page: NotionPage } | null>(null);
+  const [open, setOpen] = useState(true);
 
   const currentId = pathname.match(/\/notion-plus\/([^/?#]+)/)?.[1];
   const [addMenuOpen, setAddMenuOpen] = useState(false);
@@ -137,14 +138,30 @@ function NotionPageSidebar({ user }: { user: User }) {
     setCtxMenu({ x: e.clientX, y: e.clientY, page });
   };
 
+  /* 閉じている間はナロー帯（w-8）のみ表示 */
+  if (!open) {
+    return (
+      <aside className="flex h-full w-8 flex-col items-center border-r border-gray-100 bg-gray-50 pt-3 transition-all duration-200">
+        <button
+          onClick={() => setOpen(true)}
+          title="サイドバーを開く"
+          className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700"
+        >
+          ›
+        </button>
+      </aside>
+    );
+  }
+
   return (
-    <aside className="flex h-full w-56 flex-col border-r border-gray-100 bg-gray-50">
+    <aside className="flex h-full w-56 flex-col border-r border-gray-100 bg-gray-50 transition-all duration-200">
       {/* ヘッダー */}
       <div className="flex items-center justify-between border-b border-gray-100 px-3 py-3">
         <Link href="/notion-plus" className="flex items-center gap-1.5 rounded px-1 hover:bg-gray-100">
           <span className="text-base">📝</span>
           <span className="text-sm font-semibold text-gray-800">NotionPlus</span>
         </Link>
+        <div className="flex items-center gap-0.5">
         <div ref={addMenuRef} className="relative">
           <button
             onClick={() => setAddMenuOpen((v) => !v)}
@@ -171,6 +188,15 @@ function NotionPageSidebar({ user }: { user: User }) {
               </button>
             </div>
           )}
+        </div>
+        {/* 閉じるボタン */}
+        <button
+          onClick={() => setOpen(false)}
+          title="サイドバーを閉じる"
+          className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700"
+        >
+          ‹
+        </button>
         </div>
       </div>
 
