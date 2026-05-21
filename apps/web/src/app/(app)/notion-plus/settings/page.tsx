@@ -278,6 +278,14 @@ function NotionImportSection({ uid, addPage }: {
   );
 }
 
+function LogIcon({ icon }: { icon: string }) {
+  if (icon.startsWith('http://') || icon.startsWith('https://') || icon.startsWith('data:')) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={icon} alt="" className="h-4 w-4 shrink-0 rounded object-cover" style={{ aspectRatio: '1/1' }} />;
+  }
+  return <span className="shrink-0 leading-none">{icon}</span>;
+}
+
 function ImportLog({ log, open, onToggle, logEndRef }: {
   log: LogEntry[];
   open: boolean;
@@ -301,8 +309,9 @@ function ImportLog({ log, open, onToggle, logEndRef }: {
               {entry.status === 'success' ? (
                 <>
                   <span className="mt-px shrink-0 text-green-500">✅</span>
-                  <span className="text-xs text-gray-600">
-                    {entry.icon} {entry.title}
+                  <span className="flex items-center gap-1 text-xs text-gray-600">
+                    <LogIcon icon={entry.icon} />
+                    {entry.title}
                     {entry.isDb && <span className="ml-1 rounded bg-blue-50 px-1 text-[10px] text-blue-500">DB</span>}
                   </span>
                 </>
