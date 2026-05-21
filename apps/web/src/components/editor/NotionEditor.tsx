@@ -219,7 +219,7 @@ const EMOJI_PRESETS = [
 
 // ── PageLink ノード ──────────────────────────────────────────────────
 
-function PageLinkView({ node, updateAttributes, deleteNode }: NodeViewProps) {
+function PageLinkView({ node, updateAttributes, deleteNode, getPos, editor: tiptapEditor }: NodeViewProps) {
   const router = useRouter();
   const onPageNavigate = useContext(PageNavigationContext);
   const { href, title: storedTitle, icon: storedIcon } = node.attrs as { href: string; title: string; icon: string };
@@ -301,6 +301,20 @@ function PageLinkView({ node, updateAttributes, deleteNode }: NodeViewProps) {
           style={{ top: contextMenu.y, left: contextMenu.x }}
         >
           <button
+            onMouseDown={(e) => {
+              e.preventDefault();
+              setContextMenu(null);
+              const pos = typeof getPos === 'function' ? getPos() : undefined;
+              if (typeof pos === 'number' && tiptapEditor) {
+                tiptapEditor.commands.setNodeSelection(pos);
+                setTimeout(() => document.execCommand('cut'), 10);
+              }
+            }}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            ✂️ 切り取り
+          </button>
+          <button
             onMouseDown={(e) => { e.preventDefault(); setContextMenu(null); deleteNode(); }}
             className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-red-500 hover:bg-red-50"
           >
@@ -376,8 +390,15 @@ function PageLinkView({ node, updateAttributes, deleteNode }: NodeViewProps) {
                   e.dataTransfer.setData('text/plain', pageId);
                   e.dataTransfer.effectAllowed = 'move';
                 }}
-                className="cursor-grab select-none px-0.5 text-gray-300 opacity-0 transition-opacity group-hover:opacity-100 hover:text-gray-500 active:cursor-grabbing"
-                title="ドラッグしてサイドバーのページに移動"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const pos = typeof getPos === 'function' ? getPos() : undefined;
+                  if (typeof pos === 'number' && tiptapEditor) {
+                    tiptapEditor.commands.setNodeSelection(pos);
+                  }
+                }}
+                className="cursor-pointer select-none px-0.5 text-gray-300 opacity-0 transition-opacity group-hover:opacity-100 hover:text-gray-500 active:cursor-grabbing"
+                title="クリックで選択（Ctrl+Xで切り取り）"
               >
                 ⠿
               </span>
