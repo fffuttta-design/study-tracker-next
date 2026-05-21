@@ -107,12 +107,45 @@ function BackToLearningLink() {
   );
 }
 
+const SIDEBAR_WIDTH_KEY = 'notionplus-sidebar-width';
+const SIDEBAR_MIN = 160;
+const SIDEBAR_MAX = 480;
+const SIDEBAR_DEFAULT = 224;
+
 function NotionPageSidebar({ user }: { user: User }) {
   const pathname = usePathname();
   const router = useRouter();
   const { pages, add, remove, loading } = useNotionPageStore();
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; page: NotionPage } | null>(null);
   const [open, setOpen] = useState(true);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    if (typeof window === 'undefined') return SIDEBAR_DEFAULT;
+    return Number(localStorage.getItem(SIDEBAR_WIDTH_KEY) ?? SIDEBAR_DEFAULT);
+  });
+  const draggingRef = useRef(false);
+  const startXRef = useRef(0);
+  const startWidthRef = useRef(SIDEBAR_DEFAULT);
+
+  const onDragStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    draggingRef.current = true;
+    startXRef.current = e.clientX;
+    startWidthRef.current = sidebarWidth;
+    const onMove = (ev: MouseEvent) => {
+      if (!draggingRef.current) return;
+      const delta = ev.clientX - startXRef.current;
+      const next = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, startWidthRef.current + delta));
+      setSidebarWidth(next);
+    };
+    const onUp = () => {
+      draggingRef.current = false;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      setSidebarWidth((w) => { localStorage.setItem(SIDEBAR_WIDTH_KEY, String(w)); return w; });
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
 
   const currentId = pathname.match(/\/notion-plus\/([^/?#]+)/)?.[1];
   const [addMenuOpen, setAddMenuOpen] = useState(false);
@@ -168,7 +201,16 @@ function NotionPageSidebar({ user }: { user: User }) {
   }
 
   return (
-    <aside className="flex h-full w-56 flex-col border-r border-gray-100 bg-gray-50 transition-all duration-200">
+    <aside
+      className="relative flex h-full flex-col border-r border-gray-100 bg-gray-50"
+      style={{ width: sidebarWidth, minWidth: SIDEBAR_MIN, maxWidth: SIDEBAR_MAX }}
+    >
+      {/* リサイズハンドル */}
+      <div
+        onMouseDown={onDragStart}
+        className="absolute right-0 top-0 z-10 h-full w-1 cursor-col-resize hover:bg-brand-300 active:bg-brand-400"
+        title="ドラッグでサイズ変更"
+      />
       {/* ヘッダー */}
       <div className="flex items-center justify-between border-b border-gray-100 px-3 py-3">
         <Link href="/notion-plus" className="flex items-center gap-1.5 rounded px-1 hover:bg-gray-100">

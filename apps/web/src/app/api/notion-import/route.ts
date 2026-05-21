@@ -79,7 +79,7 @@ function toTextNodes(richTexts: Array<Record<string, unknown>>) {
   });
 }
 
-function convertBlock(block: Record<string, unknown>, childMetaMap?: Map<string, { title: string; icon: string }>): Record<string, unknown> | null {
+function convertBlock(block: Record<string, unknown>, childMetaMap?: Map<string, { title: string; icon: string }>, childrenMap?: Map<string, Record<string, unknown>[]>): Record<string, unknown> | null {
   const type = block.type as string;
   const data = (block[type] ?? {}) as Record<string, unknown>;
   const rt = (data.rich_text ?? []) as Array<Record<string, unknown>>;
@@ -106,9 +106,18 @@ function convertBlock(block: Record<string, unknown>, childMetaMap?: Map<string,
       return { type: 'horizontalRule' };
     case 'callout': {
       const emoji = ((data.icon as Record<string, unknown>)?.emoji as string) ?? '';
-      const nodes = toTextNodes(rt);
-      if (emoji) nodes.unshift({ type: 'text', text: `${emoji} ` });
-      return { type: 'blockquote', content: [{ type: 'paragraph', content: nodes }] };
+      const firstLineNodes = toTextNodes(rt);
+      if (emoji) firstLineNodes.unshift({ type: 'text', text: `${emoji} ` });
+      const innerContent: Record<string, unknown>[] = [
+        { type: 'paragraph', content: firstLineNodes },
+      ];
+      // 子ブロック（ネストされたテキスト・ページリンクなど）を展開
+      const children = childrenMap?.get(block.id as string) ?? [];
+      for (const child of children) {
+        const converted = convertBlock(child, childMetaMap, childrenMap);
+        if (converted) innerContent.push(converted);
+      }
+      return { type: 'blockquote', content: innerContent };
     }
     case 'image': {
       const imgData = data as Record<string, Record<string, string>>;
@@ -261,7 +270,19 @@ async function crawlPage(
     try { const m = await fetchPageMeta(b.id as string, token); if (m) childMetaMap.set(b.id as string, m); } catch { /* 無視 */ }
   }));
 
-  const rawNodes = blocks.map((b) => convertBlock(b, childMetaMap)).filter(Boolean) as Record<string, unknown>[];
+  // has_children なブロック（コールアウトなど）の子ブロックを並列取得
+  const childrenMap = new Map<string, Record<string, unknown>[]>();
+  const hasChildBlocks = blocks.filter(
+    (b) => b.has_children && b.type !== 'child_page' && b.type !== 'child_database'
+  );
+  await Promise.all(hasChildBlocks.map(async (b) => {
+    try {
+      const children = await fetchAllBlocks(b.id as string, token);
+      if (children.length > 0) childrenMap.set(b.id as string, children);
+    } catch { /* 無視 */ }
+  }));
+
+  const rawNodes = blocks.map((b) => convertBlock(b, childMetaMap, childrenMap)).filter(Boolean) as Record<string, unknown>[];
   const nodes = rawNodes.filter((node, i) => {
     if (node.type !== 'paragraph') return true;
     const content = node.content as unknown[] | undefined;
