@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { DbProperty, DbPropertyType, DbSelectOption } from '@study-tracker/core';
 
+export const maxDuration = 60;
+
 const NOTION_VERSION = '2022-06-28';
 
 function notionHeaders(token: string) {
@@ -286,20 +288,33 @@ async function crawlPage(
   pageId: string,
   token: string,
   parentNotionId: string | null,
-  result: PageData[]
+  result: PageData[],
+  depth = 0
 ): Promise<void> {
-  const meta = await fetchPageMeta(pageId, token);
+  if (depth > 5) return; // 深さ制限（無限再帰防止）
+
+  let meta;
+  try {
+    meta = await fetchPageMeta(pageId, token);
+  } catch { return; }
   if (!meta) return;
 
-  const blocks = await fetchAllBlocks(pageId, token);
+  let blocks: Record<string, unknown>[] = [];
+  try {
+    blocks = await fetchAllBlocks(pageId, token);
+  } catch { /* ブロック取得失敗時は空コンテンツで続行 */ }
+
   const childPageBlocks = blocks.filter((b) => b.type === 'child_page');
   const childDbBlocks = blocks.filter((b) => b.type === 'child_database');
 
+  // 子ページのメタを並列取得
   const childMetaMap = new Map<string, { title: string; icon: string }>();
   await Promise.all(
     childPageBlocks.map(async (b) => {
-      const m = await fetchPageMeta(b.id as string, token);
-      if (m) childMetaMap.set(b.id as string, m);
+      try {
+        const m = await fetchPageMeta(b.id as string, token);
+        if (m) childMetaMap.set(b.id as string, m);
+      } catch { /* 個別失敗は無視 */ }
     })
   );
 
@@ -327,15 +342,15 @@ async function crawlPage(
     content: JSON.stringify({ type: 'doc', content: nodes }),
   });
 
-  // 子ページを再帰クロール
-  for (const child of childPageBlocks) {
-    await crawlPage(child.id as string, token, meta.id, result);
-  }
-
-  // 子データベースを再帰クロール（親ページの配下として登録）
-  for (const child of childDbBlocks) {
-    await crawlDatabase(child.id as string, token, meta.id, result);
-  }
+  // 子ページ・子DBを並列クロール（同一深さは並列、各ブランチは独立）
+  await Promise.all([
+    ...childPageBlocks.map((child) =>
+      crawlPage(child.id as string, token, meta.id, result, depth + 1).catch(() => { /* 個別失敗は無視 */ })
+    ),
+    ...childDbBlocks.map((child) =>
+      crawlDatabase(child.id as string, token, meta.id, result).catch(() => { /* 個別失敗は無視 */ })
+    ),
+  ]);
 }
 
 // ── データベースクロール ──────────────────────────────────────────────
