@@ -784,7 +784,7 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
               title="この復習を完了"
             />
           )}
-          <p className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">
+          <p className={`min-w-0 flex-1 truncate font-bold text-gray-900 ${expanded ? 'text-lg' : 'text-sm'}`}>
             {item.title || item.content.split('\n')[0].slice(0, 60)}
           </p>
         </div>
