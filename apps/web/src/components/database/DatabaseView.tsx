@@ -406,7 +406,6 @@ function PropertyHeader({
 function RowPageModal({
   row,
   schema,
-  uid,
   databaseTitle,
   onSaveCells,
   onSaveContent,
@@ -414,7 +413,6 @@ function RowPageModal({
 }: {
   row: DbRow;
   schema: { properties: DbProperty[] };
-  uid: string;
   databaseTitle: string;
   onSaveCells: (propId: string, val: string | number | boolean | null) => void;
   onSaveContent: (content: string) => Promise<void>;
@@ -1002,7 +1000,6 @@ export function DatabaseView({ page, uid, onSaveSchema }: DatabaseViewProps) {
           <RowPageModal
             row={modalRow}
             schema={schema}
-            uid={uid}
             databaseTitle={page.title || 'Untitled'}
             onSaveCells={(propId, val) => handleCellSave(modalRow, propId, val)}
             onSaveContent={async (content) => { await updateRowContent(uid, modalRow.id, content); }}
