@@ -408,9 +408,8 @@ async function crawlDatabase(
       const val = extractRowCellValue(entry as Record<string, unknown>);
       if (val !== null) cells[dbProp.id] = val;
     }
-    const rowBlocks = await fetchAllBlocks(rowId, token);
-    const rawNodes = rowBlocks.map((b) => convertBlock(b)).filter(Boolean) as Record<string, unknown>[];
-    const pageContent = JSON.stringify({ type: 'doc', content: rawNodes.length > 0 ? rawNodes : [{ type: 'paragraph' }] });
+    // 行のページコンテンツはスキップ（504タイムアウト防止）
+    const pageContent = JSON.stringify({ type: 'doc', content: [{ type: 'paragraph' }] });
     importedRows.push({ notionId: rowId, cells, pageContent, order: i });
   }
 
@@ -522,9 +521,8 @@ export async function POST(req: NextRequest) {
         const val = extractRowCellValue(entry as Record<string, unknown>);
         if (val !== null) cells[dbProp.id] = val;
       }
-      const rowBlocks = await fetchAllBlocks(rowId, token).catch(() => []);
-      const rawNodes = rowBlocks.map((b) => convertBlock(b)).filter(Boolean) as Record<string, unknown>[];
-      const pageContent = JSON.stringify({ type: 'doc', content: rawNodes.length > 0 ? rawNodes : [{ type: 'paragraph' }] });
+      // 行のページコンテンツはスキップ（504タイムアウト防止：行100件×API1回=25秒超過）
+      const pageContent = JSON.stringify({ type: 'doc', content: [{ type: 'paragraph' }] });
       rows.push({ notionId: rowId, cells, pageContent, order: i });
     }
 
