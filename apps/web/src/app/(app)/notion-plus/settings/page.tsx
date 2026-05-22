@@ -27,36 +27,45 @@ export default function NotionPlusSettingsPage() {
 
 // ── 型定義 ────────────────────────────────────────────────────────────
 
-interface ImportPage {
-  notionId: string;
-  title: string;
-  icon: string;
-  parentNotionId: string | null;
-  content: string;
-  type?: 'page' | 'database';
-  rows?: Array<{
-    notionId: string;
-    cells: Record<string, string | number | boolean | null>;
-    pageContent: string;
-    order: number;
-  }>;
-}
-
 type LogEntry =
   | { status: 'success'; title: string; icon: string; isDb: boolean }
   | { status: 'skip'; title: string; reason: string };
+
+interface FetchNodeResult {
+  notionId: string;
+  title: string;
+  icon: string;
+  content: string;
+  childPageIds: string[];
+  childDbIds: string[];
+  isDatabase?: boolean;
+  rows?: Array<{ notionId: string; cells: Record<string, string | number | boolean | null>; pageContent: string; order: number }>;
+}
+
+interface QueueItem { notionId: string; parentNotionId: string | null; depth: number; }
+
+// URLからNotionページIDを抽出（クライアント側）
+function extractNotionPageId(url: string): string | null {
+  const cleanUrl = url.split('?')[0].split('#')[0];
+  const lastSegment = cleanUrl.split('/').pop() ?? '';
+  const raw = lastSegment.replace(/-/g, '').match(/([a-f0-9]{32})$/i)?.[1];
+  if (!raw) return null;
+  return `${raw.slice(0,8)}-${raw.slice(8,12)}-${raw.slice(12,16)}-${raw.slice(16,20)}-${raw.slice(20)}`;
+}
+
+const IMPORT_DELAY_MS = 300; // Notion APIレート制限対策（300ms間隔）
 
 // ── Notionインポートセクション ────────────────────────────────────────
 
 function NotionImportSection({ uid, addPage }: {
   uid: string;
-  addPage: (uid: string, params?: { parentId?: string; order?: number; type?: 'page' | 'database'; notionId?: string }) => Promise<{ id: string; title: string; content: string; icon: string; isFavorite: boolean; order: number; updatedAt: string; notionId?: string }>;
+  addPage: (uid: string, params?: { parentId?: string; order?: number; type?: 'page' | 'database'; notionId?: string }) => Promise<{ id: string; notionId?: string }>;
 }) {
   const { pages, update, batchUpdate } = useNotionPageStore();
   const { importRow } = useDbRowStore();
   const [url, setUrl] = useState('');
   const [step, setStep] = useState<'idle' | 'importing' | 'done'>('idle');
-  const [progress, setProgress] = useState({ done: 0, total: 0, skipped: 0 });
+  const [progress, setProgress] = useState({ done: 0, skipped: 0, queueSize: 0 });
   const [error, setError] = useState('');
   const [log, setLog] = useState<LogEntry[]>([]);
   const [logOpen, setLogOpen] = useState(false);
@@ -70,9 +79,16 @@ function NotionImportSection({ uid, addPage }: {
 
   const doImport = async () => {
     if (!uid || !url.trim()) return;
+
+    const rootNotionId = extractNotionPageId(url.trim());
+    if (!rootNotionId) {
+      setError('有効なNotionページURLではありません');
+      return;
+    }
+
     setError('');
     setStep('importing');
-    setProgress({ done: 0, total: 0, skipped: 0 });
+    setProgress({ done: 0, skipped: 0, queueSize: 1 });
     setLog([]);
 
     // 既存ページの notionId → internalId マップ（重複インポート防止）
@@ -83,117 +99,124 @@ function NotionImportSection({ uid, addPage }: {
       }
     }
 
+    // クライアント側DFSキュー
+    const queue: QueueItem[] = [{ notionId: rootNotionId, parentNotionId: null, depth: 0 }];
+    const idMap = new Map<string, string>(); // notionId → internalId
+    const allImported: Array<{ notionId: string; content: string }> = [];
+
     try {
-      const res = await fetch('/api/notion-import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'import-url', url: url.trim() }),
-      });
-      if (!res.ok || !res.body) {
-        setError(`サーバーエラー（${res.status}）`);
-        setStep('idle');
-        return;
-      }
+      while (queue.length > 0) {
+        const item = queue.shift()!;
+        setProgress((prev) => ({ ...prev, queueSize: queue.length }));
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      const idMap = new Map<string, string>();
-      const allPages: ImportPage[] = [];
+        // 階層制限
+        if (item.depth > 8) {
+          addLog({ status: 'skip', title: '(depth limit)', reason: '階層が深すぎるためスキップ (depth > 8)' });
+          setProgress((prev) => ({ ...prev, skipped: prev.skipped + 1 }));
+          continue;
+        }
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
+        // 1ページ分をサーバーから取得
+        let res: Response;
+        try {
+          res = await fetch('/api/notion-import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'fetch-node', notionId: item.notionId }),
+          });
+        } catch (e) {
+          addLog({ status: 'skip', title: item.notionId, reason: `通信エラー: ${String(e)}` });
+          setProgress((prev) => ({ ...prev, skipped: prev.skipped + 1 }));
+          continue;
+        }
 
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          let event: { type: string; data?: ImportPage; message?: string; total?: number; skipped?: number; notionId?: string; title?: string; reason?: string };
-          try { event = JSON.parse(line); } catch { continue; }
+        // レート制限時は3秒待ってリトライ
+        if (res.status === 429) {
+          await new Promise((r) => setTimeout(r, 3000));
+          queue.unshift(item);
+          continue;
+        }
 
-          if (event.type === 'error') {
-            setError(event.message ?? 'エラーが発生しました');
-            setStep('idle');
-            return;
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({})) as { error?: string };
+          addLog({ status: 'skip', title: item.notionId, reason: err.error ?? `HTTP ${res.status}` });
+          setProgress((prev) => ({ ...prev, skipped: prev.skipped + 1 }));
+          continue;
+        }
+
+        const page = await res.json() as FetchNodeResult;
+
+        // Firestoreに保存（upsert）
+        const existingId = existingNotionIdMap.get(page.notionId);
+        const parentId = item.parentNotionId ? idMap.get(item.parentNotionId) : undefined;
+        let internalId: string;
+
+        if (existingId) {
+          internalId = existingId;
+          await update(uid, internalId, {
+            title: page.title, icon: page.icon, content: page.content,
+            ...(parentId ? { parentId } : {}),
+          });
+        } else {
+          const created = await addPage(uid, {
+            ...(parentId ? { parentId } : {}),
+            ...(page.isDatabase ? { type: 'database' } : {}),
+            notionId: page.notionId,
+          });
+          internalId = created.id;
+          await update(uid, internalId, { title: page.title, icon: page.icon, content: page.content });
+        }
+
+        idMap.set(page.notionId, internalId);
+        allImported.push({ notionId: page.notionId, content: page.content });
+
+        // DBの行データ保存
+        if (page.isDatabase && page.rows) {
+          for (const row of page.rows) {
+            await importRow(uid, {
+              id: uuidv4(), databaseId: internalId,
+              cells: row.cells, pageContent: row.pageContent, order: row.order,
+              createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+            });
           }
+        }
 
-          if (event.type === 'skip') {
-            addLog({ status: 'skip', title: event.title ?? '???', reason: event.reason ?? '' });
-            setProgress((prev) => ({ ...prev, skipped: prev.skipped + 1 }));
-          }
+        addLog({ status: 'success', title: page.title || 'Untitled', icon: page.icon || '📄', isDb: !!page.isDatabase });
+        setProgress((prev) => ({ ...prev, done: prev.done + 1 }));
 
-          if (event.type === 'page' && event.data) {
-            const p = event.data;
-            allPages.push(p);
-            setProgress((prev) => ({ ...prev, total: prev.total + 1 }));
+        // 子ページ・子DBをキュー先頭に追加（DFS順を維持）
+        const childItems: QueueItem[] = [
+          ...page.childPageIds.map((id) => ({ notionId: id, parentNotionId: page.notionId, depth: item.depth + 1 })),
+          ...page.childDbIds.map((id) => ({ notionId: id, parentNotionId: page.notionId, depth: item.depth + 1 })),
+        ];
+        queue.unshift(...childItems);
 
-            const existingId = existingNotionIdMap.get(p.notionId);
-            const parentId = p.parentNotionId ? idMap.get(p.parentNotionId) : undefined;
-            let internalId: string;
-
-            if (existingId) {
-              internalId = existingId;
-              await update(uid, internalId, {
-                title: p.title, icon: p.icon, content: p.content,
-                ...(parentId ? { parentId } : {}),
-              });
-            } else {
-              const created = await addPage(uid, {
-                ...(parentId ? { parentId } : {}),
-                ...(p.type === 'database' ? { type: 'database' } : {}),
-                notionId: p.notionId,
-              });
-              internalId = created.id;
-              await update(uid, internalId, { title: p.title, icon: p.icon, content: p.content });
-            }
-            idMap.set(p.notionId, internalId);
-
-            if (p.type === 'database' && p.rows) {
-              for (const row of p.rows) {
-                await importRow(uid, {
-                  id: uuidv4(),
-                  databaseId: internalId,
-                  cells: row.cells,
-                  pageContent: row.pageContent,
-                  order: row.order,
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                });
-              }
-            }
-
-            addLog({ status: 'success', title: p.title || 'Untitled', icon: p.icon || '📄', isDb: p.type === 'database' });
-            setProgress((prev) => ({ ...prev, done: prev.done + 1 }));
-          }
+        // Notion APIレート制限対策
+        if (queue.length > 0) {
+          await new Promise((r) => setTimeout(r, IMPORT_DELAY_MS));
         }
       }
 
       // リンクプレースホルダー置換（一括バッチ書き込み）
       const replacements: Array<{ id: string; content: string }> = [];
-      for (const p of allPages) {
+      for (const p of allImported) {
         const internalId = idMap.get(p.notionId);
         if (!internalId) continue;
         let content = p.content;
         let changed = false;
         for (const [notionId, pageId] of idMap.entries()) {
-          const pagePlaceholder = `notion-child://${notionId}`;
-          if (content.includes(pagePlaceholder)) {
-            content = content.replaceAll(pagePlaceholder, `/notion-plus/${pageId}`);
+          if (content.includes(`notion-child://${notionId}`)) {
+            content = content.replaceAll(`notion-child://${notionId}`, `/notion-plus/${pageId}`);
             changed = true;
           }
-          const dbPlaceholder = `notion-child-db://${notionId}`;
-          if (content.includes(dbPlaceholder)) {
-            content = content.replaceAll(dbPlaceholder, pageId);
+          if (content.includes(`notion-child-db://${notionId}`)) {
+            content = content.replaceAll(`notion-child-db://${notionId}`, pageId);
             changed = true;
           }
         }
         if (changed) replacements.push({ id: internalId, content });
       }
-      if (replacements.length > 0) {
-        await batchUpdate(uid, replacements);
-      }
+      if (replacements.length > 0) await batchUpdate(uid, replacements);
 
       setStep('done');
     } catch (e) {
@@ -239,19 +262,11 @@ function NotionImportSection({ uid, addPage }: {
           <div className="mb-3 flex items-center gap-2">
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
             <p className="text-sm text-gray-700">
-              {progress.total === 0
-                ? 'ページを取得中...'
-                : `インポート中... ${progress.done} / ${progress.total} ページ${progress.skipped > 0 ? `（${progress.skipped} スキップ）` : ''}`}
+              {progress.done === 0
+                ? '最初のページを取得中...'
+                : `${progress.done} ページ完了${progress.queueSize > 0 ? `（残り約 ${progress.queueSize} 件）` : ''}${progress.skipped > 0 ? ` / ${progress.skipped} スキップ` : ''}`}
             </p>
           </div>
-          {progress.total > 0 && (
-            <div className="mb-3 h-1.5 w-full rounded-full bg-gray-100">
-              <div
-                className="h-1.5 rounded-full bg-brand-500 transition-all"
-                style={{ width: `${Math.round((progress.done / progress.total) * 100)}%` }}
-              />
-            </div>
-          )}
           <ImportLog log={log} open={logOpen} onToggle={() => setLogOpen((v) => !v)} logEndRef={logEndRef} />
         </div>
       )}

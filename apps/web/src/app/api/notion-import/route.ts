@@ -423,13 +423,120 @@ async function crawlDatabase(
 
 // ── エントリポイント ──────────────────────────────────────────────────
 
+export interface FetchNodeResult {
+  notionId: string;
+  title: string;
+  icon: string;
+  content: string;
+  childPageIds: string[];
+  childDbIds: string[];
+  isDatabase?: boolean;
+  rows?: ImportedDbRow[];
+}
+
 export async function POST(req: NextRequest) {
   const token = process.env.NOTION_TOKEN;
   if (!token) {
     return new Response(JSON.stringify({ error: 'NOTION_TOKEN が設定されていません' }), { status: 500 });
   }
 
-  const body = await req.json() as { action: string; url?: string };
+  const body = await req.json() as { action: string; url?: string; notionId?: string };
+
+  // ── 新方式: 1ページ分だけ処理して返す（クライアント側でループ）──
+  if (body.action === 'fetch-node') {
+    const { notionId } = body;
+    if (!notionId) return Response.json({ error: 'missing notionId' }, { status: 400 });
+
+    // まずページとして試みる
+    const pageMeta = await fetchPageMeta(notionId, token);
+
+    if (pageMeta) {
+      let blocks: Record<string, unknown>[] = [];
+      try { blocks = await fetchAllBlocks(notionId, token); } catch {
+        return Response.json({ error: 'block-fetch-failed' }, { status: 500 });
+      }
+
+      const childPageBlocks = blocks.filter((b) => b.type === 'child_page');
+      const childDbBlocks = blocks.filter((b) => b.type === 'child_database');
+
+      // 子ページのメタ（ページリンク表示用）
+      const childMetaMap = new Map<string, { title: string; icon: string }>();
+      await Promise.all(childPageBlocks.map(async (b) => {
+        try { const m = await fetchPageMeta(b.id as string, token); if (m) childMetaMap.set(b.id as string, m); } catch { /* 無視 */ }
+      }));
+
+      // has_children ブロック（コールアウトなど）の子を取得
+      const childrenMap = new Map<string, Record<string, unknown>[]>();
+      const hasChildBlocks = blocks.filter((b) => b.has_children && b.type !== 'child_page' && b.type !== 'child_database');
+      await Promise.all(hasChildBlocks.map(async (b) => {
+        try {
+          const children = await fetchAllBlocks(b.id as string, token);
+          if (children.length > 0) childrenMap.set(b.id as string, children);
+        } catch { /* 無視 */ }
+      }));
+
+      const rawNodes = blocks.map((b) => convertBlock(b, childMetaMap, childrenMap)).filter(Boolean) as Record<string, unknown>[];
+      const nodes = rawNodes.filter((node, i) => {
+        if (node.type !== 'paragraph') return true;
+        const content = node.content as unknown[] | undefined;
+        if (content && content.length > 0) return true;
+        const prev = i > 0 ? rawNodes[i - 1] : null;
+        const next = i < rawNodes.length - 1 ? rawNodes[i + 1] : null;
+        return !((prev && prev.type === 'pageLink') || (next && next.type === 'pageLink'));
+      });
+
+      return Response.json({
+        notionId: pageMeta.id, title: pageMeta.title, icon: pageMeta.icon,
+        content: JSON.stringify({ type: 'doc', content: nodes }),
+        childPageIds: childPageBlocks.map((b) => b.id as string),
+        childDbIds: childDbBlocks.map((b) => b.id as string),
+      } satisfies FetchNodeResult);
+    }
+
+    // データベースとして試みる
+    const dbMeta = await fetchDatabaseMeta(notionId, token);
+    if (!dbMeta) return Response.json({ error: 'not-found' }, { status: 404 });
+
+    const notionRows: Record<string, unknown>[] = [];
+    let dbCursor: string | undefined;
+    do {
+      const res = await sem(() => fetch(`https://api.notion.com/v1/databases/${notionId}/query`, {
+        method: 'POST', headers: notionHeaders(token),
+        body: JSON.stringify({ page_size: 100, ...(dbCursor ? { start_cursor: dbCursor } : {}) }),
+      }));
+      if (!res.ok) break;
+      const data = await res.json() as { results: Record<string, unknown>[]; has_more: boolean; next_cursor?: string };
+      notionRows.push(...data.results);
+      dbCursor = data.has_more ? data.next_cursor : undefined;
+    } while (dbCursor);
+
+    const rows: ImportedDbRow[] = [];
+    for (let i = 0; i < notionRows.length; i++) {
+      const notionRow = notionRows[i];
+      const rowId = notionRow.id as string;
+      const rowProps = (notionRow.properties ?? {}) as Record<string, Record<string, unknown>>;
+      const cells: Record<string, string | number | boolean | null> = {};
+      for (const dbProp of dbMeta.schema.properties) {
+        const entry = Object.values(rowProps).find((v) => (v as Record<string, unknown>).id === dbProp.id);
+        if (!entry) continue;
+        const val = extractRowCellValue(entry as Record<string, unknown>);
+        if (val !== null) cells[dbProp.id] = val;
+      }
+      const rowBlocks = await fetchAllBlocks(rowId, token).catch(() => []);
+      const rawNodes = rowBlocks.map((b) => convertBlock(b)).filter(Boolean) as Record<string, unknown>[];
+      const pageContent = JSON.stringify({ type: 'doc', content: rawNodes.length > 0 ? rawNodes : [{ type: 'paragraph' }] });
+      rows.push({ notionId: rowId, cells, pageContent, order: i });
+    }
+
+    return Response.json({
+      notionId: dbMeta.id, title: dbMeta.title, icon: dbMeta.icon,
+      content: JSON.stringify(dbMeta.schema),
+      childPageIds: [], childDbIds: [],
+      isDatabase: true, rows,
+    } satisfies FetchNodeResult);
+  }
+
+  // ── 旧方式: ストリーミング一括インポート（後方互換として残す）──
   if (body.action !== 'import-url') {
     return new Response(JSON.stringify({ error: 'unknown action' }), { status: 400 });
   }
