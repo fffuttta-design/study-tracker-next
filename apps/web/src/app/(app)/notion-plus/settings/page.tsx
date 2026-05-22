@@ -20,8 +20,57 @@ export default function NotionPlusSettingsPage() {
 
       <div className="max-w-md space-y-4">
         <NotionImportSection uid={user?.uid ?? ''} addPage={addPage} />
+        <CleanupSection uid={user?.uid ?? ''} />
       </div>
     </div>
+  );
+}
+
+// ── 孤児ページ削除セクション ──────────────────────────────────────────
+
+function CleanupSection({ uid }: { uid: string }) {
+  const { pages } = useNotionPageStore();
+  const [status, setStatus] = useState<'idle' | 'running' | 'done'>('idle');
+  const [deletedCount, setDeletedCount] = useState(0);
+
+  const pageIds = new Set(pages.map((p) => p.id));
+  const orphans = pages.filter((p) => p.parentId && !pageIds.has(p.parentId));
+
+  const handleCleanup = async () => {
+    if (!uid || orphans.length === 0) return;
+    if (!confirm(`孤児ページ ${orphans.length} 件を削除します。よろしいですか？`)) return;
+    setStatus('running');
+    // notionPageStore の remove は子孫も消すが、ここでは孤児自身のIDを直接バッチ削除
+    // （孤児の子孫も孤児として同リストに含まれているはずなので一括で問題ない）
+    const { batchDelete } = await import('@study-tracker/firebase');
+    await batchDelete(uid, 'notionPages', orphans.map((p) => p.id));
+    setDeletedCount(orphans.length);
+    setStatus('done');
+  };
+
+  return (
+    <Section title="データクリーンアップ">
+      <p className="mb-3 text-xs text-gray-400">
+        過去のインポート失敗などで残った孤児ページ（親が存在しないページ）を削除します。
+      </p>
+      <div className="mb-3 flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2">
+        <span className="text-sm text-gray-600">検出された孤児ページ</span>
+        <span className={`ml-auto text-sm font-semibold ${orphans.length > 0 ? 'text-red-500' : 'text-green-500'}`}>
+          {orphans.length} 件
+        </span>
+      </div>
+      {status === 'done' ? (
+        <p className="text-sm text-green-600">✅ {deletedCount} 件削除しました</p>
+      ) : (
+        <button
+          onClick={handleCleanup}
+          disabled={orphans.length === 0 || status === 'running'}
+          className="rounded-lg border border-red-200 px-4 py-2 text-sm text-red-500 hover:bg-red-50 disabled:opacity-40"
+        >
+          {status === 'running' ? '削除中...' : '孤児ページを削除'}
+        </button>
+      )}
+    </Section>
   );
 }
 
@@ -64,12 +113,29 @@ function NotionImportSection({ uid, addPage }: {
   const { pages, update, batchUpdate } = useNotionPageStore();
   const { importRow } = useDbRowStore();
   const [url, setUrl] = useState('');
+  const [parentPageId, setParentPageId] = useState<string>(''); // '' = ルート
   const [step, setStep] = useState<'idle' | 'importing' | 'done'>('idle');
   const [progress, setProgress] = useState({ done: 0, skipped: 0, queueSize: 0 });
   const [error, setError] = useState('');
   const [log, setLog] = useState<LogEntry[]>([]);
   const [logOpen, setLogOpen] = useState(false);
   const logEndRef = React.useRef<HTMLDivElement>(null);
+
+  // ページ一覧をツリー順にフラット化してセレクト用に準備
+  const pageOptions = React.useMemo(() => {
+    const result: Array<{ id: string; label: string; depth: number }> = [];
+    const buildTree = (parentId: string | undefined, depth: number) => {
+      const children = pages
+        .filter((p) => p.parentId === parentId)
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      for (const p of children) {
+        result.push({ id: p.id, label: p.title || 'Untitled', depth });
+        buildTree(p.id, depth + 1);
+      }
+    };
+    buildTree(undefined, 0);
+    return result;
+  }, [pages]);
 
   React.useEffect(() => {
     if (logOpen) logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -100,6 +166,8 @@ function NotionImportSection({ uid, addPage }: {
     }
 
     // クライアント側DFSキュー
+    // parentPageId が指定されている場合はルートページの親として使用
+    const rootInternalParentId = parentPageId || undefined;
     const queue: QueueItem[] = [{ notionId: rootNotionId, parentNotionId: null, depth: 0 }];
     const idMap = new Map<string, string>(); // notionId → internalId
     const allImported: Array<{ notionId: string; content: string }> = [];
@@ -151,15 +219,20 @@ function NotionImportSection({ uid, addPage }: {
         const parentId = item.parentNotionId ? idMap.get(item.parentNotionId) : undefined;
         let internalId: string;
 
+        // ルートページ（parentNotionId === null）には rootInternalParentId を適用
+        const effectiveParentId = item.parentNotionId === null
+          ? rootInternalParentId
+          : parentId;
+
         if (existingId) {
           internalId = existingId;
           await update(uid, internalId, {
             title: page.title, icon: page.icon, content: page.content,
-            ...(parentId ? { parentId } : {}),
+            ...(effectiveParentId ? { parentId: effectiveParentId } : {}),
           });
         } else {
           const created = await addPage(uid, {
-            ...(parentId ? { parentId } : {}),
+            ...(effectiveParentId ? { parentId: effectiveParentId } : {}),
             ...(page.isDatabase ? { type: 'database' } : {}),
             notionId: page.notionId,
           });
@@ -226,7 +299,7 @@ function NotionImportSection({ uid, addPage }: {
     }
   };
 
-  const reset = () => { setStep('idle'); setUrl(''); setError(''); setLog([]); };
+  const reset = () => { setStep('idle'); setUrl(''); setError(''); setLog([]); setParentPageId(''); };
 
   const successCount = log.filter((e) => e.status === 'success').length;
   const skipCount = log.filter((e) => e.status === 'skip').length;
@@ -246,6 +319,21 @@ function NotionImportSection({ uid, addPage }: {
             placeholder="https://www.notion.so/..."
             className="mb-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-400"
           />
+          <div className="mb-3">
+            <label className="mb-1 block text-xs font-medium text-gray-500">取り込み先ページ（親ページ）</label>
+            <select
+              value={parentPageId}
+              onChange={(e) => setParentPageId(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none focus:border-brand-400 bg-white"
+            >
+              <option value="">📁 ルート（親なし）</option>
+              {pageOptions.map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {'　'.repeat(opt.depth)}{opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
           {error && <p className="mb-2 text-xs text-red-500">{error}</p>}
           <button
             onClick={doImport}
