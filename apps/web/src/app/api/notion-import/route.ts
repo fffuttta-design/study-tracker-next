@@ -33,7 +33,11 @@ function notionHeaders(token: string) {
 }
 
 function extractPageId(url: string): string | null {
-  const raw = url.replace(/-/g, '').match(/([a-f0-9]{32})/i)?.[1];
+  // クエリパラメーター・フラグメントを除去してから最後のパスセグメントを取得
+  // （タイトル末尾がhex文字の場合に誤マッチしないよう $ でアンカー）
+  const cleanUrl = url.split('?')[0].split('#')[0];
+  const lastSegment = cleanUrl.split('/').pop() ?? '';
+  const raw = lastSegment.replace(/-/g, '').match(/([a-f0-9]{32})$/i)?.[1];
   if (!raw) return null;
   return `${raw.slice(0,8)}-${raw.slice(8,12)}-${raw.slice(12,16)}-${raw.slice(16,20)}-${raw.slice(20)}`;
 }
