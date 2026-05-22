@@ -55,12 +55,16 @@ function PageTreeEntry({
   const activeChild = activeChildId ? pages.find((p) => p.id === activeChildId) : null;
   const update = useNotionPageStore((s) => s.update);
   const { user } = useAuthStore();
+  const router = useRouter();
   const [isDragOver, setIsDragOver] = useState(false);
 
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(false);
+    // 並び替えドラッグは無視（application/x-reorder-page-id のみ持つ）
+    if (e.dataTransfer.types.includes('application/x-reorder-page-id') &&
+        !e.dataTransfer.types.includes('application/x-page-id')) return;
     // application/x-page-id が取れない場合は text/plain にフォールバック
     const droppedPageId =
       e.dataTransfer.getData('application/x-page-id') ||
@@ -69,6 +73,8 @@ function PageTreeEntry({
     // UUIDっぽくない文字列（URLなど）は無視
     if (!/^[0-9a-f-]{36}$/.test(droppedPageId)) return;
     await update(user.uid, droppedPageId, { parentId: page.id });
+    // 移動後に対象ページへ遷移（消えたように見えるのを防止）
+    router.push(`/notion-plus/${droppedPageId}`);
   };
 
   return (
@@ -120,7 +126,8 @@ function RootPageList({
   const handleDragStart = useCallback((e: React.DragEvent, pageId: string) => {
     setDragId(pageId);
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('application/x-page-id', pageId);
+    // 並び替え専用キー（application/x-page-id とは別）→ PageTreeEntry の reparent を誤発火させない
+    e.dataTransfer.setData('application/x-reorder-page-id', pageId);
   }, []);
 
   const handleDragEnd = useCallback(() => {
@@ -129,18 +136,19 @@ function RootPageList({
   }, []);
 
   const handleZoneDragOver = useCallback((e: React.DragEvent, zoneIndex: number) => {
-    // ルートページのドラッグのみ受け付ける
-    if (!dragId || !roots.find((p) => p.id === dragId)) return;
+    // 並び替え専用キーのみ受け付ける
+    if (!e.dataTransfer.types.includes('application/x-reorder-page-id')) return;
     e.preventDefault();
     e.stopPropagation();
     setDropZoneIndex(zoneIndex);
-  }, [dragId, roots]);
+  }, []);
 
   const handleZoneDrop = useCallback(async (e: React.DragEvent, zoneIndex: number) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!dragId || !uid) { setDropZoneIndex(null); return; }
-    const fromIndex = roots.findIndex((p) => p.id === dragId);
+    const reorderPageId = e.dataTransfer.getData('application/x-reorder-page-id');
+    if (!reorderPageId || !uid) { setDropZoneIndex(null); return; }
+    const fromIndex = roots.findIndex((p) => p.id === reorderPageId);
     if (fromIndex === -1) { setDropZoneIndex(null); return; }
 
     // 同じ位置へのドロップは無視
