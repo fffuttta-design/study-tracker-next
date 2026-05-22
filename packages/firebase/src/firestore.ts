@@ -89,6 +89,27 @@ export function subscribeWhere<T>(
   });
 }
 
+// 複数ドキュメントを一括削除（500件チャンク）
+export async function batchDelete(
+  uid: string,
+  colName: string,
+  ids: string[]
+): Promise<void> {
+  if (ids.length === 0) return;
+  const db = getDb();
+  const chunks = [];
+  for (let i = 0; i < ids.length; i += 500) {
+    chunks.push(ids.slice(i, i + 500));
+  }
+  for (const chunk of chunks) {
+    const batch = writeBatch(db);
+    for (const id of chunk) {
+      batch.delete(doc(db, 'users', uid, colName, id));
+    }
+    await batch.commit();
+  }
+}
+
 // 500件チャンク分割バッチ（旧Flutter版と同じ制約）
 export async function batchUpsert(
   uid: string,

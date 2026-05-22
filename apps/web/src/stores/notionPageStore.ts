@@ -1,7 +1,7 @@
 ﻿
 import { create } from 'zustand';
 import { type NotionPage, createNotionPage } from '@study-tracker/core';
-import { subscribeCol, upsertDoc, deleteDocById, fetchWhere, batchUpsert } from '@study-tracker/firebase';
+import { subscribeCol, upsertDoc, deleteDocById, fetchWhere, batchUpsert, batchDelete } from '@study-tracker/firebase';
 
 export interface PageHistorySnapshot {
   id: string;
@@ -52,7 +52,15 @@ export const useNotionPageStore = create<NotionPageState>((set) => ({
   },
 
   remove: async (uid, id) => {
-    await deleteDocById(uid, 'notionPages', id);
+    // 子孫ページをすべて収集して一括削除（孤児ページ防止）
+    const { pages } = useNotionPageStore.getState();
+    const collectDescendants = (parentId: string): string[] => {
+      const children = pages.filter((p) => p.parentId === parentId);
+      return children.flatMap((c) => [c.id, ...collectDescendants(c.id)]);
+    };
+    const descendants = collectDescendants(id);
+    const allIds = [id, ...descendants];
+    await batchDelete(uid, 'notionPages', allIds);
   },
 
   saveHistory: async (uid, pageId, title, content) => {
