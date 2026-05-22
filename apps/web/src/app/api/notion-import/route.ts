@@ -301,8 +301,8 @@ async function crawlPage(
   emit: (event: StreamEvent) => void,
   depth = 0
 ): Promise<void> {
-  if (depth > 5) {
-    emit({ type: 'skip', notionId: pageId, title: '(depth limit)', reason: '階層が深すぎるためスキップ (depth > 5)' });
+  if (depth > 8) {
+    emit({ type: 'skip', notionId: pageId, title: '(depth limit)', reason: '階層が深すぎるためスキップ (depth > 8)' });
     return;
   }
   let meta;
