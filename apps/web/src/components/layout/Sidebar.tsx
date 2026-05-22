@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState, useCallback } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type User } from 'firebase/auth';
 import { type NotionPage } from '@study-tracker/core';
@@ -100,6 +100,128 @@ function PageTreeEntry({
         </div>
       )}
     </div>
+  );
+}
+
+// ── ルートページ並び替えリスト ─────────────────────────────────────────
+function RootPageList({
+  roots, pages, currentId, onCtxMenu, uid,
+}: {
+  roots: NotionPage[];
+  pages: NotionPage[];
+  currentId: string | undefined;
+  onCtxMenu: (e: React.MouseEvent, page: NotionPage) => void;
+  uid: string;
+}) {
+  const { update } = useNotionPageStore();
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropZoneIndex, setDropZoneIndex] = useState<number | null>(null);
+
+  const handleDragStart = useCallback((e: React.DragEvent, pageId: string) => {
+    setDragId(pageId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('application/x-page-id', pageId);
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    setDragId(null);
+    setDropZoneIndex(null);
+  }, []);
+
+  const handleZoneDragOver = useCallback((e: React.DragEvent, zoneIndex: number) => {
+    // ルートページのドラッグのみ受け付ける
+    if (!dragId || !roots.find((p) => p.id === dragId)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setDropZoneIndex(zoneIndex);
+  }, [dragId, roots]);
+
+  const handleZoneDrop = useCallback(async (e: React.DragEvent, zoneIndex: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!dragId || !uid) { setDropZoneIndex(null); return; }
+    const fromIndex = roots.findIndex((p) => p.id === dragId);
+    if (fromIndex === -1) { setDropZoneIndex(null); return; }
+
+    // 同じ位置へのドロップは無視
+    if (zoneIndex === fromIndex || zoneIndex === fromIndex + 1) {
+      setDropZoneIndex(null);
+      setDragId(null);
+      return;
+    }
+
+    const newOrder = [...roots];
+    const [moved] = newOrder.splice(fromIndex, 1);
+    const insertAt = fromIndex < zoneIndex ? zoneIndex - 1 : zoneIndex;
+    newOrder.splice(insertAt, 0, moved);
+
+    // order を一括更新
+    await Promise.all(
+      newOrder
+        .map((p, i) => ({ page: p, newOrder: i }))
+        .filter(({ page, newOrder: o }) => page.order !== o)
+        .map(({ page, newOrder: o }) => update(uid, page.id, { order: o }))
+    );
+
+    setDragId(null);
+    setDropZoneIndex(null);
+  }, [dragId, roots, uid, update]);
+
+  const handleZoneDragLeave = useCallback(() => {
+    setDropZoneIndex(null);
+  }, []);
+
+  const isDraggingRoot = dragId !== null && roots.some((p) => p.id === dragId);
+
+  return (
+    <div className="space-y-0">
+      {/* ドロップゾーン: 先頭 */}
+      <DropZone
+        active={dropZoneIndex === 0 && isDraggingRoot}
+        onDragOver={(e) => handleZoneDragOver(e, 0)}
+        onDrop={(e) => handleZoneDrop(e, 0)}
+        onDragLeave={handleZoneDragLeave}
+      />
+      {roots.map((page, i) => (
+        <div key={page.id}>
+          <div
+            draggable
+            onDragStart={(e) => handleDragStart(e, page.id)}
+            onDragEnd={handleDragEnd}
+            className={`rounded-md transition-opacity ${dragId === page.id ? 'opacity-40' : ''}`}
+          >
+            <PageTreeEntry page={page} pages={pages} currentId={currentId} onCtxMenu={onCtxMenu} />
+          </div>
+          {/* ドロップゾーン: 各アイテムの後 */}
+          <DropZone
+            active={dropZoneIndex === i + 1 && isDraggingRoot}
+            onDragOver={(e) => handleZoneDragOver(e, i + 1)}
+            onDrop={(e) => handleZoneDrop(e, i + 1)}
+            onDragLeave={handleZoneDragLeave}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DropZone({
+  active, onDragOver, onDrop, onDragLeave,
+}: {
+  active: boolean;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent) => void;
+  onDragLeave: () => void;
+}) {
+  return (
+    <div
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onDragLeave={onDragLeave}
+      className={`mx-1 rounded transition-all duration-100 ${
+        active ? 'h-1 bg-brand-400' : 'h-1 bg-transparent'
+      }`}
+    />
   );
 }
 
@@ -307,12 +429,14 @@ function NotionPageSidebar({ user }: { user: User }) {
           </div>
         )}
 
-        {/* 全ページツリー（再帰的にアクティブパスを表示） */}
-        <div className="space-y-0.5">
-          {roots.map((page) => (
-            <PageTreeEntry key={page.id} page={page} pages={pages} currentId={currentId} onCtxMenu={handleCtxMenu} />
-          ))}
-        </div>
+        {/* 全ページツリー（ドラッグで並び替え可能） */}
+        <RootPageList
+          roots={roots}
+          pages={pages}
+          currentId={currentId}
+          onCtxMenu={handleCtxMenu}
+          uid={user.uid}
+        />
 
         {/* コンテキストメニュー */}
         {ctxMenu && (
