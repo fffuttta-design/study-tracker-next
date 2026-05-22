@@ -141,6 +141,17 @@ function NotionImportSection({ uid, addPage }: {
     if (logOpen) logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [log.length, logOpen]);
 
+  // インポート中にタブを離れると状態が消えるので警告
+  React.useEffect(() => {
+    if (step !== 'importing') return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = 'インポート中です。ページを離れるとインポートが中断されます。';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [step]);
+
   const addLog = (entry: LogEntry) => setLog((prev) => [...prev, entry]);
 
   const doImport = async () => {
@@ -347,6 +358,10 @@ function NotionImportSection({ uid, addPage }: {
 
       {step === 'importing' && (
         <div className="py-2">
+          <div className="mb-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 flex items-center gap-2">
+            <span className="text-amber-500 text-sm">⚠️</span>
+            <p className="text-xs text-amber-700 font-medium">インポート中はこのタブを離れないでください。離れると中断されます。</p>
+          </div>
           <div className="mb-3 flex items-center gap-2">
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
             <p className="text-sm text-gray-700">
