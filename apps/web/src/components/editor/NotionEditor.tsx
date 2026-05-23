@@ -11,7 +11,7 @@ export const PageNavigationContext = createContext<((href: string) => void) | nu
 // ── エディタUID コンテキスト ──────────────────────────────────────────
 export const EditorUidContext = createContext<string>('');
 
-import { Node as TiptapNode, InputRule } from '@tiptap/core';
+import { Node as TiptapNode, InputRule, Extension, wrappingInputRule } from '@tiptap/core';
 import {
   useEditor, EditorContent,
   NodeViewWrapper, NodeViewContent,
@@ -876,6 +876,21 @@ const CustomTableHeader = TableHeader.extend({
   },
 });
 
+// ── マークダウンショートカット（- スペース → 箇条書き）────────────────
+// StarterKit の BulletList にも同等の InputRule が含まれているが、
+// カスタム拡張との競合対策として明示的に追加して確実に動作させる
+const MarkdownBulletShortcut = Extension.create({
+  name: 'markdownBulletShortcut',
+  addInputRules() {
+    return [
+      wrappingInputRule({
+        find: /^\s*-\s$/,
+        type: this.editor.schema.nodes.bulletList,
+      }),
+    ];
+  },
+});
+
 // ── スラッシュコマンド ──────────────────────────────────────────────
 
 interface SlashCommand {
@@ -1135,6 +1150,7 @@ export function NotionEditor({
       TocNode,
       InlineDatabaseNode,
       DragHandleExtension,
+      MarkdownBulletShortcut,
     ],
     content: (() => {
       if (!initialContent) return '';
@@ -1485,28 +1501,83 @@ export function NotionEditor({
       {ctxMenu && (
         <>
           <div className="fixed inset-0 z-[65]" onClick={() => setCtxMenu(null)} />
-          <div className="fixed z-[70] w-52 overflow-hidden rounded-xl border border-gray-100 bg-white py-1 shadow-2xl" style={{ top: ctxMenu.y, left: ctxMenu.x, transform: 'translateY(-50%)' }}>
-            {onCreateSubPage && (
-              <button onClick={handleCtxCreatePage} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
-                <span className="text-base">📄</span>新規ページを作成
+          <div className="fixed z-[70] w-56 overflow-hidden rounded-xl border border-gray-100 bg-white shadow-2xl" style={{ top: ctxMenu.y, left: ctxMenu.x, transform: 'translateY(-50%)' }}>
+
+            {/* ── 書式セクション ─────────────────────────────── */}
+            <div className="border-b border-gray-100 px-2 pt-2 pb-1.5">
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">書式</p>
+              <div className="flex flex-wrap items-center gap-0.5">
+                {/* インライン書式 */}
+                {[
+                  { label: <strong>B</strong>,   title: '太字 (Ctrl+B)',   active: editor?.isActive('bold'),      act: () => editor?.chain().focus().toggleBold().run() },
+                  { label: <em>I</em>,            title: '斜体 (Ctrl+I)',   active: editor?.isActive('italic'),    act: () => editor?.chain().focus().toggleItalic().run() },
+                  { label: <u>U</u>,              title: '下線 (Ctrl+U)',   active: editor?.isActive('underline'), act: () => editor?.chain().focus().toggleUnderline().run() },
+                  { label: <s>S</s>,              title: '打消し',           active: editor?.isActive('strike'),    act: () => editor?.chain().focus().toggleStrike().run() },
+                  { label: <code>`</code>,        title: 'インラインコード', active: editor?.isActive('code'),      act: () => editor?.chain().focus().toggleCode().run() },
+                ].map((b, i) => (
+                  <button key={i} title={b.title}
+                    onMouseDown={(e) => { e.preventDefault(); b.act(); setCtxMenu(null); }}
+                    className={`rounded px-2 py-1 text-xs transition ${b.active ? 'bg-brand-100 text-brand-700' : 'text-gray-500 hover:bg-gray-100'}`}>
+                    {b.label}
+                  </button>
+                ))}
+                <span className="mx-0.5 self-stretch border-r border-gray-100" />
+                {/* 見出し */}
+                {([1, 2, 3] as const).map((level) => (
+                  <button key={level} title={`見出し${level}`}
+                    onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleHeading({ level }).run(); setCtxMenu(null); }}
+                    className={`rounded px-2 py-1 text-xs font-bold transition ${editor?.isActive('heading', { level }) ? 'bg-brand-100 text-brand-700' : 'text-gray-500 hover:bg-gray-100'}`}>
+                    H{level}
+                  </button>
+                ))}
+                <span className="mx-0.5 self-stretch border-r border-gray-100" />
+                {/* リスト */}
+                {[
+                  { label: '•',  title: '箇条書き',       active: editor?.isActive('bulletList'),  act: () => editor?.chain().focus().toggleBulletList().run() },
+                  { label: '1.', title: '番号付きリスト', active: editor?.isActive('orderedList'), act: () => editor?.chain().focus().toggleOrderedList().run() },
+                  { label: '☑',  title: 'チェックリスト', active: editor?.isActive('taskList'),    act: () => editor?.chain().focus().toggleTaskList().run() },
+                ].map((b, i) => (
+                  <button key={i} title={b.title}
+                    onMouseDown={(e) => { e.preventDefault(); b.act(); setCtxMenu(null); }}
+                    className={`rounded px-2 py-1 text-xs transition ${b.active ? 'bg-brand-100 text-brand-700' : 'text-gray-500 hover:bg-gray-100'}`}>
+                    {b.label}
+                  </button>
+                ))}
+                <span className="mx-0.5 self-stretch border-r border-gray-100" />
+                {/* ブロック */}
+                {[
+                  { label: '❝',   title: '引用',         active: editor?.isActive('blockquote'), act: () => editor?.chain().focus().toggleBlockquote().run() },
+                  { label: '</>', title: 'コードブロック', active: editor?.isActive('codeBlock'),  act: () => editor?.chain().focus().toggleCodeBlock().run() },
+                ].map((b, i) => (
+                  <button key={i} title={b.title}
+                    onMouseDown={(e) => { e.preventDefault(); b.act(); setCtxMenu(null); }}
+                    className={`rounded px-2 py-1 text-xs transition ${b.active ? 'bg-brand-100 text-brand-700' : 'text-gray-500 hover:bg-gray-100'}`}>
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* ── アクションセクション ───────────────────────── */}
+            <div className="py-1">
+              {onCreateSubPage && (
+                <button onClick={handleCtxCreatePage} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
+                  <span className="text-base">📄</span>新規ページを作成
+                </button>
+              )}
+              <button onClick={handleCtxCallout} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
+                <span className="text-base">💡</span>コールアウトを挿入
               </button>
-            )}
-            <button onClick={handleCtxCallout} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
-              <span className="text-base">💡</span>コールアウトを挿入
-            </button>
-            <button
-              onClick={() => {
-                setCtxMenu(null);
-                editor?.commands.focus();
-                setTimeout(() => document.execCommand('paste'), 10);
-              }}
-              className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
-            >
-              <span className="text-base">📋</span>貼り付け
-            </button>
-            <button onClick={handleRecord} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
-              <span className="text-base">📚</span>学習リストに記録
-            </button>
+              <button
+                onClick={() => { setCtxMenu(null); editor?.commands.focus(); setTimeout(() => document.execCommand('paste'), 10); }}
+                className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+              >
+                <span className="text-base">📋</span>貼り付け
+              </button>
+              <button onClick={handleRecord} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
+                <span className="text-base">📚</span>学習リストに記録
+              </button>
+            </div>
           </div>
         </>
       )}
