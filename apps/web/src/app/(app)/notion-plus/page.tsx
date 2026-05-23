@@ -239,11 +239,12 @@ function DropZone({
       onDragOver={onDragOver}
       onDrop={onDrop}
       onDragLeave={onDragLeave}
-      className={`relative mx-1 transition-all duration-100 ${dragging ? 'h-5' : 'h-0.5'}`}
+      // ドラッグ中はヒットエリアを確保。アクティブ時だけ視覚的に拡大
+      className={`relative mx-1 transition-all duration-100 ${active ? 'h-4' : dragging ? 'h-2' : 'h-0.5'}`}
     >
-      <div className={`absolute inset-x-0 top-1/2 h-0.5 -translate-y-px rounded transition-colors ${
-        active ? 'bg-brand-400' : 'bg-transparent'
-      }`} />
+      {active && (
+        <div className="absolute inset-x-0 top-1/2 h-0.5 -translate-y-px rounded bg-brand-400" />
+      )}
     </div>
   );
 }
@@ -259,7 +260,7 @@ function PageRow({ page, uid, onRemove, isDragging = false }: {
     <div className="group flex items-center rounded px-2 py-1 hover:bg-gray-50">
       {/* ドラッグハンドル */}
       <span className="mr-1 cursor-grab select-none text-gray-300 opacity-0 transition-opacity group-hover:opacity-100">
-        ⠿⠿
+        ⠿
       </span>
       <Link
         href={`/notion-plus/${page.id}`}

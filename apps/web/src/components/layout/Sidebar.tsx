@@ -235,12 +235,12 @@ function DropZone({
       onDragOver={onDragOver}
       onDrop={onDrop}
       onDragLeave={onDragLeave}
-      // ドラッグ中はヒットエリアを h-5(20px) に拡大、視覚は中央の細線のみ
-      className={`relative mx-1 transition-all duration-100 ${dragging ? 'h-5' : 'h-0.5'}`}
+      // アクティブ時のみ拡大、非アクティブは控えめなヒットエリア
+      className={`relative mx-1 transition-all duration-100 ${active ? 'h-4' : dragging ? 'h-2' : 'h-0.5'}`}
     >
-      <div className={`absolute inset-x-0 top-1/2 h-0.5 -translate-y-px rounded transition-colors ${
-        active ? 'bg-brand-400' : 'bg-transparent'
-      }`} />
+      {active && (
+        <div className="absolute inset-x-0 top-1/2 h-0.5 -translate-y-px rounded bg-brand-400" />
+      )}
     </div>
   );
 }
