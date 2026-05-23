@@ -1120,6 +1120,8 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
   const { update, remove } = useLearningStore();
   const { pages } = useNotionPageStore();
   const linkedPage = item.notionPageId ? pages.find((p) => p.id === item.notionPageId) : null;
+  // リンク先ページが削除済み（IDはあるがページが見つからない）
+  const pageDeleted = !!item.notionPageId && pages.length > 0 && !linkedPage;
   const nextReview = item.reviews.find((r) => !r.completed);
   const fullyDone = isFullyCompleted(item);
 
@@ -1161,8 +1163,9 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
   if (compact) {
     return (
       <div
-        className={`rounded-lg border transition-shadow cursor-pointer ${cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}
+        className={`rounded-lg border transition-shadow cursor-pointer ${pageDeleted ? 'bg-gray-50 opacity-50 grayscale' : cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}
         onClick={() => setExpanded((v) => !v)}
+        title={pageDeleted ? 'リンク先のノートが削除されました' : undefined}
       >
         {/* 行1: 復習チェック + タイトル */}
         <div className="flex items-center gap-2 px-3 pt-2 pb-0.5">
@@ -1260,8 +1263,9 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
   // ── 通常レイアウト（他タブ、またはコンパクトカードを展開した状態）────
   return (
     <div
-      className={`rounded-lg border transition-shadow cursor-pointer ${cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}
+      className={`rounded-lg border transition-shadow cursor-pointer ${pageDeleted ? 'bg-gray-50 opacity-50 grayscale' : cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}
       onClick={() => setExpanded((v) => !v)}
+      title={pageDeleted ? 'リンク先のノートが削除されました' : undefined}
     >
       {/* カードヘッダー */}
       <div className={`flex gap-3 px-4 py-3 ${expanded ? 'items-center' : 'items-start'}`}>
