@@ -874,6 +874,8 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const { update, remove } = useLearningStore();
+  const { pages } = useNotionPageStore();
+  const linkedPage = item.notionPageId ? pages.find((p) => p.id === item.notionPageId) : null;
   const nextReview = item.reviews.find((r) => !r.completed);
   const fullyDone = isFullyCompleted(item);
 
@@ -919,8 +921,8 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
             {item.title || item.content.split('\n')[0].slice(0, 60)}
           </p>
         </div>
-        {/* 行2: ノートを開く + 3アイコン + カテゴリ */}
-        <div className="flex items-center gap-1 px-3 pb-2" onClick={(e) => e.stopPropagation()}>
+        {/* 行2: ノートを開く + 3アイコン */}
+        <div className="flex items-center gap-1 px-3 pb-1" onClick={(e) => e.stopPropagation()}>
           {noteLinkHref && (
             <Link
               href={noteLinkHref}
@@ -933,13 +935,14 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
           <button onClick={copyContent} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="コピー">⎘</button>
           <button onClick={() => setEditing(true)} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="編集">✎</button>
           <button onClick={handleDelete} className="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-400" title="削除">✕</button>
-          {item.notionPagePath && (
-            <span className="ml-auto flex items-center gap-0.5 text-xs text-gray-400 min-w-0">
-              <span className="shrink-0">📁</span>
-              <span className="truncate max-w-[80px]">{item.notionPagePath}</span>
-            </span>
-          )}
         </div>
+        {/* 行3: ノートパス（独立行でフル幅表示） */}
+        {item.notionPagePath && (
+          <div className="flex min-w-0 items-center gap-1 px-3 pb-2 text-xs text-gray-400" onClick={(e) => e.stopPropagation()}>
+            <NotionPageIconInline page={linkedPage} fallbackIcon="📁" />
+            <span className="min-w-0 truncate">{item.notionPagePath}</span>
+          </div>
+        )}
 
         {/* 展開コンテンツ（ダブルクリックで閉じる） */}
         {expanded && (
@@ -1040,8 +1043,9 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
             <button onClick={handleDelete} className="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-400" title="削除">✕</button>
           </div>
           {item.notionPagePath && (
-            <div className="flex items-center gap-0.5 text-xs text-gray-400">
-              <span>📁</span><span>{item.notionPagePath}</span>
+            <div className="flex min-w-0 items-center gap-1 text-xs text-gray-400">
+              <NotionPageIconInline page={linkedPage} fallbackIcon="📁" />
+              <span className="min-w-0 truncate">{item.notionPagePath}</span>
             </div>
           )}
         </div>
@@ -1127,7 +1131,7 @@ function EditModal({ item, uid, onClose }: {
         <h3 className="mb-4 text-sm font-semibold text-gray-800">アイテム編集</h3>
         {item.notionPagePath && (
           <p className="mb-3 flex items-center gap-1 text-xs text-gray-400">
-            <span>📁</span><span>{item.notionPagePath}</span>
+            <span>📁</span><span className="min-w-0 truncate">{item.notionPagePath}</span>
           </p>
         )}
         <div className="space-y-3">
@@ -1141,6 +1145,29 @@ function EditModal({ item, uid, onClose }: {
       </div>
     </div>
   );
+}
+
+// ── ノートページのアイコンをインライン表示（URL画像 or 絵文字） ───────
+function NotionPageIconInline({
+  page, fallbackIcon = '📁',
+}: {
+  page: { icon: string } | null | undefined;
+  fallbackIcon?: string;
+}) {
+  const icon = page?.icon;
+  if (!icon) return <span className="shrink-0">{fallbackIcon}</span>;
+  if (icon.startsWith('http://') || icon.startsWith('https://') || icon.startsWith('data:')) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={icon}
+        alt=""
+        className="h-3.5 w-3.5 shrink-0 rounded object-cover"
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+      />
+    );
+  }
+  return <span className="shrink-0">{icon}</span>;
 }
 
 // ── 共通UIパーツ ─────────────────────────────────────────────────────
