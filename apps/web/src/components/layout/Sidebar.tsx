@@ -8,6 +8,7 @@ import { type User } from 'firebase/auth';
 import { type NotionPage } from '@study-tracker/core';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotionPageStore } from '@/stores/notionPageStore';
+import { useImprovementTaskStore } from '@/stores/improvementTaskStore';
 import { APP_VERSION } from '@/lib/version';
 import appIcon from '@/app/icon.png';
 
@@ -502,6 +503,198 @@ function NotionPageSidebar({ user }: { user: User }) {
   );
 }
 
+// ── 要改修リスト ─────────────────────────────────────────────────────
+function ImprovementTaskPanel({ uid }: { uid: string }) {
+  const { tasks, add, update, remove, reorder } = useImprovementTaskStore();
+  const [open, setOpen] = useState(true);
+  const [addOpen, setAddOpen] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newDetail, setNewDetail] = useState('');
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dropZone, setDropZone] = useState<number | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const activeTasks = tasks.filter((t) => !t.completed);
+  const completedTasks = tasks.filter((t) => t.completed);
+
+  const handleAdd = async () => {
+    if (!newName.trim()) return;
+    await add(uid, newName.trim(), newDetail.trim());
+    setNewName('');
+    setNewDetail('');
+    setAddOpen(false);
+  };
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDragIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(index));
+  };
+
+  const handleDragOver = (e: React.DragEvent, zone: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDropZone(zone);
+  };
+
+  const handleDrop = async (e: React.DragEvent, zone: number) => {
+    e.preventDefault();
+    if (dragIndex === null) return;
+    const toIndex = dragIndex < zone ? zone - 1 : zone;
+    if (toIndex !== dragIndex) await reorder(uid, dragIndex, toIndex);
+    setDragIndex(null);
+    setDropZone(null);
+  };
+
+  const handleDragEnd = () => { setDragIndex(null); setDropZone(null); };
+
+  return (
+    <div className="border-t border-gray-100">
+      {/* ヘッダー */}
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-semibold text-gray-500 hover:bg-gray-100"
+      >
+        <span>🔧 要改修リスト</span>
+        <span className="text-gray-400">{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div className="px-2 pb-2">
+          {/* アクティブタスク */}
+          {activeTasks.length === 0 && !addOpen && (
+            <p className="px-1 py-1 text-[10px] text-gray-400">改修項目なし</p>
+          )}
+
+          {/* ドロップゾーン: 先頭 */}
+          {activeTasks.length > 0 && (
+            <div
+              onDragOver={(e) => handleDragOver(e, 0)}
+              onDrop={(e) => handleDrop(e, 0)}
+              onDragLeave={() => setDropZone(null)}
+              className={`mx-1 rounded transition-all duration-100 ${dropZone === 0 && dragIndex !== null ? 'h-0.5 bg-brand-400' : 'h-0.5 bg-transparent'}`}
+            />
+          )}
+
+          {activeTasks.map((task, i) => (
+            <div key={task.id}>
+              <div
+                draggable
+                onDragStart={(e) => handleDragStart(e, i)}
+                onDragEnd={handleDragEnd}
+                className={`group flex items-start gap-1 rounded px-1 py-1 transition-opacity hover:bg-gray-100 ${dragIndex === i ? 'opacity-40' : ''}`}
+              >
+                {/* ドラッグハンドル */}
+                <span className="mt-0.5 cursor-grab text-[10px] text-gray-300 opacity-0 group-hover:opacity-100">⠿</span>
+                {/* No. */}
+                <span className="mt-0.5 shrink-0 text-[10px] font-mono text-gray-400">{String(i + 1).padStart(2, '0')}.</span>
+                {/* 内容 */}
+                <div
+                  className="min-w-0 flex-1 cursor-pointer"
+                  onClick={() => setExpandedId(expandedId === task.id ? null : task.id)}
+                >
+                  <p className="truncate text-[11px] font-medium text-gray-700">{task.name}</p>
+                  {expandedId === task.id && task.detail && (
+                    <p className="mt-0.5 whitespace-pre-wrap text-[10px] text-gray-500">{task.detail}</p>
+                  )}
+                </div>
+                {/* 完了ボタン */}
+                <button
+                  onClick={() => update(uid, task.id, { completed: true })}
+                  title="完了"
+                  className="mt-0.5 shrink-0 rounded p-0.5 text-[10px] text-gray-300 hover:bg-green-100 hover:text-green-600"
+                >
+                  ✓
+                </button>
+                {/* 削除ボタン */}
+                <button
+                  onClick={() => remove(uid, task.id)}
+                  title="削除"
+                  className="mt-0.5 shrink-0 rounded p-0.5 text-[10px] text-gray-300 hover:bg-red-100 hover:text-red-500 opacity-0 group-hover:opacity-100"
+                >
+                  ✕
+                </button>
+              </div>
+              {/* ドロップゾーン */}
+              <div
+                onDragOver={(e) => handleDragOver(e, i + 1)}
+                onDrop={(e) => handleDrop(e, i + 1)}
+                onDragLeave={() => setDropZone(null)}
+                className={`mx-1 rounded transition-all duration-100 ${dropZone === i + 1 && dragIndex !== null ? 'h-0.5 bg-brand-400' : 'h-0.5 bg-transparent'}`}
+              />
+            </div>
+          ))}
+
+          {/* 完了済み（折りたたみ表示） */}
+          {completedTasks.length > 0 && (
+            <details className="mt-1">
+              <summary className="cursor-pointer px-1 text-[10px] text-gray-400 hover:text-gray-600">
+                完了済み ({completedTasks.length})
+              </summary>
+              {completedTasks.map((task) => (
+                <div key={task.id} className="group flex items-center gap-1 rounded px-1 py-0.5 hover:bg-gray-100">
+                  <span className="shrink-0 text-[10px] font-mono text-gray-300 line-through">{task.name}</span>
+                  <button
+                    onClick={() => remove(uid, task.id)}
+                    title="削除"
+                    className="ml-auto shrink-0 rounded p-0.5 text-[10px] text-gray-300 hover:bg-red-100 hover:text-red-500 opacity-0 group-hover:opacity-100"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </details>
+          )}
+
+          {/* 追加フォーム */}
+          {addOpen ? (
+            <div className="mt-1 space-y-1 rounded border border-gray-200 p-2">
+              <input
+                autoFocus
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') setAddOpen(false); }}
+                placeholder="改修名"
+                className="w-full rounded border border-gray-200 px-2 py-1 text-[11px] outline-none focus:border-brand-400"
+              />
+              <textarea
+                value={newDetail}
+                onChange={(e) => setNewDetail(e.target.value)}
+                placeholder="詳細（任意）"
+                rows={2}
+                className="w-full resize-none rounded border border-gray-200 px-2 py-1 text-[11px] outline-none focus:border-brand-400"
+              />
+              <div className="flex gap-1">
+                <button
+                  onClick={handleAdd}
+                  disabled={!newName.trim()}
+                  className="flex-1 rounded bg-brand-500 px-2 py-1 text-[11px] font-medium text-white disabled:opacity-40 hover:bg-brand-600"
+                >
+                  追加
+                </button>
+                <button
+                  onClick={() => { setAddOpen(false); setNewName(''); setNewDetail(''); }}
+                  className="rounded border border-gray-200 px-2 py-1 text-[11px] text-gray-500 hover:bg-gray-100"
+                >
+                  キャンセル
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setAddOpen(true)}
+              className="mt-1 flex w-full items-center gap-1 rounded px-1 py-1 text-[11px] text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            >
+              <span>+</span>
+              <span>改修項目を追加</span>
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Sidebar({ user }: SidebarProps) {
   const pathname = usePathname();
   const signOut = useAuthStore((s) => s.signOut);
@@ -542,6 +735,9 @@ export function Sidebar({ user }: SidebarProps) {
           );
         })}
       </nav>
+
+      {/* 要改修リスト */}
+      <ImprovementTaskPanel uid={user.uid} />
 
       {/* 設定 + ユーザー情報 */}
       <div className="border-t border-gray-100 p-3 space-y-1">
