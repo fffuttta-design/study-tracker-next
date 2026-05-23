@@ -7,6 +7,7 @@ import { useCategoryStore } from '@/stores/categoryStore';
 import { useLearningStore } from '@/stores/learningStore';
 import { useNotionPageStore } from '@/stores/notionPageStore';
 import { useImprovementTaskStore } from '@/stores/improvementTaskStore';
+import { useGoalStore } from '@/stores/goalStore';
 import { Sidebar } from '@/components/layout/Sidebar';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -16,6 +17,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const subscribeItems = useLearningStore((s) => s.subscribe);
   const subscribePages = useNotionPageStore((s) => s.subscribe);
   const subscribeTasks = useImprovementTaskStore((s) => s.subscribe);
+  const subscribeGoals = useGoalStore((s) => s.subscribe);
 
   useEffect(() => {
     if (!loading && !user) router.replace('/login');
@@ -27,8 +29,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const unsub2 = subscribeItems(user.uid);
     const unsub3 = subscribePages(user.uid);
     const unsub4 = subscribeTasks(user.uid);
-    return () => { unsub1(); unsub2(); unsub3(); unsub4(); };
-  }, [user, subscribeCategories, subscribeItems, subscribePages, subscribeTasks]);
+    const unsub5 = subscribeGoals(user.uid);
+    return () => { unsub1(); unsub2(); unsub3(); unsub4(); unsub5(); };
+  }, [user, subscribeCategories, subscribeItems, subscribePages, subscribeTasks, subscribeGoals]);
 
   if (loading || !user) {
     return (
