@@ -1262,7 +1262,16 @@ export function NotionEditor({
   // highlightText が指定された場合、ブロック単位で検索して一時ハイライト（保存対象外、フォーカスなし）
   useEffect(() => {
     if (!editor || !highlightText) return;
-    const search = highlightText.trim().slice(0, 80);
+    // Markdown 記号を除去（見出し ## や リスト - など）
+    const search = highlightText.trim()
+      .replace(/^#{1,6}\s+/, '')
+      .replace(/^\*{1,3}/, '').replace(/\*{1,3}$/, '')
+      .replace(/^_{1,3}/, '').replace(/_{1,3}$/, '')
+      .replace(/^[-*+]\s+/, '')
+      .replace(/^>\s+/, '')
+      .replace(/^`{1,3}/, '').replace(/`{1,3}$/, '')
+      .trim()
+      .slice(0, 80);
     if (!search) return;
 
     const timer = setTimeout(() => {

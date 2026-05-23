@@ -1139,9 +1139,21 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
     navigator.clipboard.writeText([item.title, item.content].filter(Boolean).join('\n'));
   };
 
-  const noteLinkHref = item.notionPageId
-    ? `/notion-plus/${item.notionPageId}?hl=${encodeURIComponent((item.content.split('\n').find(l => l.trim().length > 5) ?? item.content).trim().slice(0, 80))}&from=${fromTab ?? 0}`
-    : null;
+  const noteLinkHref = (() => {
+    if (!item.notionPageId) return null;
+    const rawLine = (item.content.split('\n').find(l => l.trim().length > 5) ?? item.content).trim();
+    // Markdown 記号を除去してからハイライト文字列を作る
+    const hlText = rawLine
+      .replace(/^#{1,6}\s+/, '')   // ## 見出し → 見出し
+      .replace(/^\*{1,3}/, '').replace(/\*{1,3}$/, '')  // **bold**
+      .replace(/^_{1,3}/, '').replace(/_{1,3}$/, '')    // __italic__
+      .replace(/^[-*+]\s+/, '')    // - リスト → リスト
+      .replace(/^>\s+/, '')        // > 引用 → 引用
+      .replace(/^`{1,3}/, '').replace(/`{1,3}$/, '')    // `code`
+      .trim()
+      .slice(0, 80);
+    return `/notion-plus/${item.notionPageId}?hl=${encodeURIComponent(hlText)}&from=${fromTab ?? 0}`;
+  })();
 
   const cardBg = showReviewAction && nextReview ? (STAGE_CARD_BG[nextReview.stageIndex] ?? 'bg-white') : 'bg-white';
 
