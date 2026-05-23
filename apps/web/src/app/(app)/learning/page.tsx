@@ -1120,12 +1120,12 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
   // ── コンパクトレイアウト（ダッシュボード専用）────────────────────────
   if (compact) {
     return (
-      <div className={`rounded-lg border transition-shadow ${cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}>
-        {/* 行1: 復習チェック + タイトル（クリックで展開） */}
-        <div
-          className="flex cursor-pointer items-center gap-2 px-3 pt-2 pb-0.5"
-          onClick={() => setExpanded((v) => !v)}
-        >
+      <div
+        className={`rounded-lg border transition-shadow cursor-pointer ${cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}
+        onClick={() => setExpanded((v) => !v)}
+      >
+        {/* 行1: 復習チェック + タイトル */}
+        <div className="flex items-center gap-2 px-3 pt-2 pb-0.5">
           {showReviewAction && nextReview && !fullyDone && (
             <button
               onClick={(e) => { e.stopPropagation(); completeReview(); }}
@@ -1137,32 +1137,33 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
             {item.title || item.content.split('\n')[0].slice(0, 60)}
           </p>
         </div>
-        {/* 行2: ノートを開く + 3アイコン */}
-        <div className="flex items-center gap-1 px-3 pb-1" onClick={(e) => e.stopPropagation()}>
+        {/* 行2: ノートを開く + 3アイコン（ボタン個別にstopPropagation） */}
+        <div className="flex items-center gap-1 px-3 pb-1">
           {noteLinkHref && (
             <Link
               href={noteLinkHref}
+              onClick={(e) => e.stopPropagation()}
               className="flex items-center gap-0.5 rounded-md bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-600 hover:bg-brand-100"
               title="ノートを開く"
             >
               <span>📖</span><span>ノートを開く</span>
             </Link>
           )}
-          <button onClick={copyContent} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="コピー">⎘</button>
-          <button onClick={() => setEditing(true)} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="編集">✎</button>
-          <button onClick={handleDelete} className="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-400" title="削除">✕</button>
+          <button onClick={(e) => { e.stopPropagation(); copyContent(); }} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="コピー">⎘</button>
+          <button onClick={(e) => { e.stopPropagation(); setEditing(true); }} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="編集">✎</button>
+          <button onClick={(e) => { e.stopPropagation(); handleDelete(); }} className="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-400" title="削除">✕</button>
         </div>
-        {/* 行3: ノートパス（独立行でフル幅表示） */}
+        {/* 行3: ノートパス（空白クリックでも開閉） */}
         {item.notionPagePath && (
-          <div className="flex min-w-0 items-center gap-1 px-3 pb-2 text-xs text-gray-400" onClick={(e) => e.stopPropagation()}>
+          <div className="flex min-w-0 items-center gap-1 px-3 pb-2 text-xs text-gray-400">
             <NotionPageIconInline page={linkedPage} fallbackIcon="📁" />
             <span className="min-w-0 truncate">{item.notionPagePath}</span>
           </div>
         )}
 
-        {/* 展開コンテンツ（ダブルクリックで閉じる） */}
+        {/* 展開コンテンツ（中のクリックでは閉じない） */}
         {expanded && (
-          <div className="border-t border-gray-100 px-4 pb-4 pt-3" onDoubleClick={() => setExpanded(false)}>
+          <div className="border-t border-gray-100 px-4 pb-4 pt-3" onClick={(e) => e.stopPropagation()} onDoubleClick={() => setExpanded(false)}>
             {item.content && (
               <div className="mb-3 max-w-none text-sm text-gray-700
                 [&_strong]:font-bold [&_em]:italic [&_del]:line-through
@@ -1218,12 +1219,12 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
 
   // ── 通常レイアウト（他タブ、またはコンパクトカードを展開した状態）────
   return (
-    <div className={`rounded-lg border transition-shadow ${cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}>
-      {/* カードヘッダー全体をクリックで開閉 */}
-      <div
-        className={`flex cursor-pointer gap-3 px-4 py-3 ${expanded ? 'items-center' : 'items-start'}`}
-        onClick={() => setExpanded((v) => !v)}
-      >
+    <div
+      className={`rounded-lg border transition-shadow cursor-pointer ${cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}
+      onClick={() => setExpanded((v) => !v)}
+    >
+      {/* カードヘッダー */}
+      <div className={`flex gap-3 px-4 py-3 ${expanded ? 'items-center' : 'items-start'}`}>
         {showReviewAction && nextReview && !fullyDone && (
           <button
             onClick={(e) => { e.stopPropagation(); completeReview(); }}
@@ -1243,20 +1244,21 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
           )}
         </div>
 
-        <div className="flex shrink-0 flex-col items-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
           <div className="flex items-center gap-1">
             {noteLinkHref && (
               <Link
                 href={noteLinkHref}
+                onClick={(e) => e.stopPropagation()}
                 className="flex items-center gap-1 rounded-md bg-brand-50 px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-100"
                 title="ノートを開く（ハイライト表示）"
               >
                 <span>📖</span><span>ノートを開く</span>
               </Link>
             )}
-            <button onClick={copyContent} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="コピー">⎘</button>
-            <button onClick={() => setEditing(true)} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="編集">✎</button>
-            <button onClick={handleDelete} className="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-400" title="削除">✕</button>
+            <button onClick={(e) => { e.stopPropagation(); copyContent(); }} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="コピー">⎘</button>
+            <button onClick={(e) => { e.stopPropagation(); setEditing(true); }} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="編集">✎</button>
+            <button onClick={(e) => { e.stopPropagation(); handleDelete(); }} className="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-400" title="削除">✕</button>
           </div>
           {item.notionPagePath && (
             <div className="flex min-w-0 items-center gap-1 text-xs text-gray-400">
@@ -1267,9 +1269,9 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
         </div>
       </div>
 
-      {/* 本文エリアはダブルクリックで閉じる */}
+      {/* 本文エリア（中のクリックでは閉じない） */}
       {expanded && (
-        <div className="border-t border-gray-100 px-4 pb-4 pt-3" onDoubleClick={() => setExpanded(false)}>
+        <div className="border-t border-gray-100 px-4 pb-4 pt-3" onClick={(e) => e.stopPropagation()} onDoubleClick={() => setExpanded(false)}>
           {item.content && (
             <div className="mb-3 max-w-none text-sm text-gray-700
               [&_strong]:font-bold [&_em]:italic [&_del]:line-through
