@@ -80,7 +80,12 @@ function PageTreeEntry({
 
   return (
     <div
-      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setIsDragOver(true); }}
+      onDragOver={(e) => {
+        // 並び替えドラッグ中はこの要素をドロップターゲットにしない（DropZone に任せる）
+        if (e.dataTransfer.types.includes('application/x-reorder-page-id') &&
+            !e.dataTransfer.types.includes('application/x-page-id')) return;
+        e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setIsDragOver(true);
+      }}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragOver(false); }}
       onDrop={handleDrop}
     >
@@ -187,6 +192,7 @@ function RootPageList({
       {/* ドロップゾーン: 先頭 */}
       <DropZone
         active={dropZoneIndex === 0 && isDraggingRoot}
+        dragging={isDraggingRoot}
         onDragOver={(e) => handleZoneDragOver(e, 0)}
         onDrop={(e) => handleZoneDrop(e, 0)}
         onDragLeave={handleZoneDragLeave}
@@ -204,6 +210,7 @@ function RootPageList({
           {/* ドロップゾーン: 各アイテムの後 */}
           <DropZone
             active={dropZoneIndex === i + 1 && isDraggingRoot}
+            dragging={isDraggingRoot}
             onDragOver={(e) => handleZoneDragOver(e, i + 1)}
             onDrop={(e) => handleZoneDrop(e, i + 1)}
             onDragLeave={handleZoneDragLeave}
@@ -215,9 +222,10 @@ function RootPageList({
 }
 
 function DropZone({
-  active, onDragOver, onDrop, onDragLeave,
+  active, dragging, onDragOver, onDrop, onDragLeave,
 }: {
   active: boolean;
+  dragging: boolean;
   onDragOver: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
   onDragLeave: () => void;
@@ -227,10 +235,13 @@ function DropZone({
       onDragOver={onDragOver}
       onDrop={onDrop}
       onDragLeave={onDragLeave}
-      className={`mx-1 rounded transition-all duration-100 ${
-        active ? 'h-1 bg-brand-400' : 'h-1 bg-transparent'
-      }`}
-    />
+      // ドラッグ中はヒットエリアを h-5(20px) に拡大、視覚は中央の細線のみ
+      className={`relative mx-1 transition-all duration-100 ${dragging ? 'h-5' : 'h-0.5'}`}
+    >
+      <div className={`absolute inset-x-0 top-1/2 h-0.5 -translate-y-px rounded transition-colors ${
+        active ? 'bg-brand-400' : 'bg-transparent'
+      }`} />
+    </div>
   );
 }
 
