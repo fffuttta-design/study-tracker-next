@@ -142,7 +142,7 @@ function LearningPageContent() {
   const searchParams = useSearchParams();
   const [tab, setTab] = useState(() => {
     const t = Number(searchParams.get('tab') ?? '0');
-    return isNaN(t) ? 0 : Math.min(Math.max(t, 0), 3);
+    return isNaN(t) ? 0 : Math.min(Math.max(t, 0), 4);
   });
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -179,7 +179,7 @@ function LearningPageContent() {
 
       {/* タブ */}
       <div className="flex border-b border-gray-100 px-6">
-        {['ダッシュボード', '本日の学習', '今日の復習', '通知ログ'].map((label, i) => (
+        {['ダッシュボード', '本日の学習', '今日の復習', '全学習リスト', '通知ログ'].map((label, i) => (
           <button
             key={i}
             onClick={() => setTab(i)}
@@ -198,7 +198,8 @@ function LearningPageContent() {
         {tab === 0 && <DashboardTab todayItems={todayItems} dueItems={dueItems} uid={user?.uid ?? ''} onAdd={() => setAddDialogOpen(true)} />}
         {tab === 1 && <TodayTab items={todayItems} uid={user?.uid ?? ''} onAdd={() => setAddDialogOpen(true)} />}
         {tab === 2 && <ReviewTab dueItems={dueItems} uid={user?.uid ?? ''} />}
-        {tab === 3 && <LogTab />}
+        {tab === 3 && <AllItemsTab items={items} uid={user?.uid ?? ''} />}
+        {tab === 4 && <LogTab />}
       </div>
 
       {/* AddItemDialog */}
@@ -830,6 +831,221 @@ function ReviewTab({ dueItems, uid }: {
             <ItemList items={g.items} uid={uid} showReviewAction fromTab={2} />
           </div>
         ))}
+    </div>
+  );
+}
+
+// ── 全学習リストタブ ──────────────────────────────────────────────────
+
+function AllItemsTab({ items, uid }: { items: LearningItem[]; uid: string }) {
+  const [view, setView] = useState<'list' | 'calendar'>('list');
+  const [calYear, setCalYear] = useState(() => new Date().getFullYear());
+  const [calMonth, setCalMonth] = useState(() => new Date().getMonth()); // 0-indexed
+  const [popupDate, setPopupDate] = useState<string | null>(null);
+
+  // dateKey でグループ化（降順）
+  const byDate = useMemo(() => {
+    const map = new Map<string, LearningItem[]>();
+    for (const item of items) {
+      const key = item.dateKey ?? toDateKey(new Date(item.createdAt ?? Date.now()));
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(item);
+    }
+    return Array.from(map.entries())
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([dateKey, list]) => ({ dateKey, list: list.sort((a, b) => a.sortOrder - b.sortOrder) }));
+  }, [items]);
+
+  const totalCount = items.length;
+
+  return (
+    <div className="p-6">
+      {/* ヘッダー */}
+      <div className="mb-4 flex items-center justify-between">
+        <p className="text-sm text-gray-500">全 <span className="font-bold text-gray-800">{totalCount}</span> 件</p>
+        {/* ビュー切り替え */}
+        <div className="flex overflow-hidden rounded-lg border border-gray-200 text-xs">
+          <button
+            onClick={() => setView('list')}
+            className={`flex items-center gap-1 px-3 py-1.5 transition ${view === 'list' ? 'bg-brand-500 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+          >
+            <span>☰</span> リスト
+          </button>
+          <button
+            onClick={() => setView('calendar')}
+            className={`flex items-center gap-1 border-l border-gray-200 px-3 py-1.5 transition ${view === 'calendar' ? 'bg-brand-500 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+          >
+            <span>📅</span> カレンダー
+          </button>
+        </div>
+      </div>
+
+      {/* リストビュー */}
+      {view === 'list' && (
+        <div className="space-y-6">
+          {byDate.length === 0 && <Empty text="まだ学習アイテムがありません" />}
+          {byDate.map(({ dateKey, list }) => {
+            const d = new Date(`${dateKey}T00:00:00`);
+            const label = format(d, 'yyyy年M月d日（E）', { locale: ja });
+            return (
+              <div key={dateKey}>
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="text-sm font-semibold text-gray-700">{label}</span>
+                  <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-500">{list.length}件</span>
+                </div>
+                <ItemList items={list} uid={uid} showReviewAction={false} compact fromTab={3} />
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* カレンダービュー */}
+      {view === 'calendar' && (
+        <AllItemsCalendar
+          items={items}
+          year={calYear}
+          month={calMonth}
+          onPrev={() => {
+            if (calMonth === 0) { setCalYear((y) => y - 1); setCalMonth(11); }
+            else setCalMonth((m) => m - 1);
+          }}
+          onNext={() => {
+            if (calMonth === 11) { setCalYear((y) => y + 1); setCalMonth(0); }
+            else setCalMonth((m) => m + 1);
+          }}
+          popupDate={popupDate}
+          onDayClick={(dk) => setPopupDate(dk === popupDate ? null : dk)}
+          onClosePopup={() => setPopupDate(null)}
+          uid={uid}
+        />
+      )}
+    </div>
+  );
+}
+
+function AllItemsCalendar({
+  items, year, month, onPrev, onNext, popupDate, onDayClick, onClosePopup, uid,
+}: {
+  items: LearningItem[];
+  year: number;
+  month: number;
+  onPrev: () => void;
+  onNext: () => void;
+  popupDate: string | null;
+  onDayClick: (dk: string) => void;
+  onClosePopup: () => void;
+  uid: string;
+}) {
+  // dateKey → アイテム数マップ
+  const countMap = useMemo(() => {
+    const map = new Map<string, LearningItem[]>();
+    for (const item of items) {
+      const key = item.dateKey ?? toDateKey(new Date(item.createdAt ?? Date.now()));
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(item);
+    }
+    return map;
+  }, [items]);
+
+  // その月のカレンダーグリッドを生成
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const startDow = firstDay.getDay(); // 0=日
+  const daysInMonth = lastDay.getDate();
+
+  const cells: (string | null)[] = [
+    ...Array(startDow).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => {
+      const d = i + 1;
+      return `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    }),
+  ];
+  // 6行になるように末尾を埋める
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const popupItems = popupDate ? (countMap.get(popupDate) ?? []) : [];
+  const todayKey = toDateKey(new Date());
+
+  // 最大件数（カラースケール用）
+  const maxCount = Math.max(1, ...Array.from(countMap.values()).map((v) => v.length));
+
+  return (
+    <div>
+      {/* ナビゲーション */}
+      <div className="mb-4 flex items-center justify-between">
+        <button onClick={onPrev} className="rounded p-1.5 text-gray-400 hover:bg-gray-100">‹</button>
+        <span className="text-sm font-semibold text-gray-700">
+          {format(new Date(year, month, 1), 'yyyy年M月', { locale: ja })}
+        </span>
+        <button onClick={onNext} className="rounded p-1.5 text-gray-400 hover:bg-gray-100">›</button>
+      </div>
+
+      {/* 曜日ヘッダー */}
+      <div className="mb-1 grid grid-cols-7 text-center text-xs font-medium text-gray-400">
+        {['日', '月', '火', '水', '木', '金', '土'].map((d) => (
+          <div key={d} className={d === '日' ? 'text-red-400' : d === '土' ? 'text-blue-400' : ''}>{d}</div>
+        ))}
+      </div>
+
+      {/* 日付グリッド */}
+      <div className="grid grid-cols-7 gap-1">
+        {cells.map((dk, idx) => {
+          if (!dk) return <div key={idx} />;
+          const count = countMap.get(dk)?.length ?? 0;
+          const isToday = dk === todayKey;
+          const isActive = dk === popupDate;
+          // 件数に応じた濃さ
+          const intensity = count > 0 ? Math.ceil((count / maxCount) * 4) : 0;
+          const heatClass = [
+            '',
+            'bg-brand-100',
+            'bg-brand-200',
+            'bg-brand-300',
+            'bg-brand-400',
+          ][intensity];
+          const day = parseInt(dk.split('-')[2]);
+          const dow = (idx % 7);
+          return (
+            <button
+              key={dk}
+              onClick={() => count > 0 && onDayClick(dk)}
+              className={`relative flex h-12 flex-col items-center justify-start rounded-lg pt-1 text-xs transition-all
+                ${count > 0 ? 'cursor-pointer hover:ring-2 hover:ring-brand-400' : 'cursor-default'}
+                ${isActive ? 'ring-2 ring-brand-500' : ''}
+                ${isToday ? 'font-bold' : ''}
+                ${heatClass || 'bg-gray-50'}
+              `}
+            >
+              <span className={`leading-none ${dow === 0 ? 'text-red-400' : dow === 6 ? 'text-blue-400' : isToday ? 'text-brand-600' : 'text-gray-600'}`}>
+                {day}
+              </span>
+              {count > 0 && (
+                <span className={`mt-0.5 rounded-full px-1 text-[10px] font-semibold leading-none
+                  ${intensity >= 3 ? 'text-white' : 'text-brand-700'}`}>
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ポップアップ（クリックした日のリスト） */}
+      {popupDate && popupItems.length > 0 && (
+        <div className="mt-4 rounded-xl border border-brand-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-gray-100 px-4 py-2">
+            <span className="text-sm font-semibold text-gray-700">
+              {format(new Date(`${popupDate}T00:00:00`), 'M月d日（E）', { locale: ja })}
+              <span className="ml-2 text-xs font-normal text-gray-400">{popupItems.length}件</span>
+            </span>
+            <button onClick={onClosePopup} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
+          </div>
+          <div className="p-2">
+            <ItemList items={popupItems} uid={uid} showReviewAction={false} compact fromTab={3} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
