@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
-import { useNotionPageStore, type PageHistorySnapshot } from '@/stores/notionPageStore';
+import { useNotionPageStore, WORKSPACE_ID, type PageHistorySnapshot } from '@/stores/notionPageStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { type NotionPage } from '@study-tracker/core';
 import { DatabaseView } from '@/components/database/DatabaseView';
@@ -130,8 +130,8 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
   const breadcrumbs = buildBreadcrumbs(pages, id);
 
   useEffect(() => {
-    if (pages.length > 0 && !page) router.replace('/notion-plus');
-  }, [page, pages.length, router]);
+    if (pages.length > 0 && !page && id !== WORKSPACE_ID) router.replace('/notion-plus');
+  }, [page, pages.length, router, id]);
 
   // アイコンピッカー / 設定パネルの外クリックで閉じる
   useEffect(() => {
@@ -293,14 +293,16 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
             )}
           </div>
 
-          {/* お気に入りトグル */}
-          <button
-            onClick={handleFavoriteToggle}
-            className={`rounded p-1 text-lg transition ${page.isFavorite ? 'text-yellow-400 hover:text-yellow-300' : 'text-gray-200 hover:text-yellow-300'}`}
-            title={page.isFavorite ? 'お気に入り解除' : 'お気に入りに追加'}
-          >
-            ★
-          </button>
+          {/* お気に入りトグル（ワークスペースは非表示） */}
+          {id !== WORKSPACE_ID && (
+            <button
+              onClick={handleFavoriteToggle}
+              className={`rounded p-1 text-lg transition ${page.isFavorite ? 'text-yellow-400 hover:text-yellow-300' : 'text-gray-200 hover:text-yellow-300'}`}
+              title={page.isFavorite ? 'お気に入り解除' : 'お気に入りに追加'}
+            >
+              ★
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -347,15 +349,17 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
                     左寄せ
                   </button>
                 </div>
-                <div className="mt-2 border-t border-gray-100 pt-2">
-                  <button
-                    onClick={handleDelete}
-                    className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-red-500 hover:bg-red-50"
-                  >
-                    <span>🗑️</span>
-                    <span>このページを削除</span>
-                  </button>
-                </div>
+                {id !== WORKSPACE_ID && (
+                  <div className="mt-2 border-t border-gray-100 pt-2">
+                    <button
+                      onClick={handleDelete}
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-red-500 hover:bg-red-50"
+                    >
+                      <span>🗑️</span>
+                      <span>このページを削除</span>
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

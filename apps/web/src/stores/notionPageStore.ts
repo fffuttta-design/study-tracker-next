@@ -3,6 +3,8 @@ import { create } from 'zustand';
 import { type NotionPage, createNotionPage } from '@study-tracker/core';
 import { subscribeCol, upsertDoc, deleteDocById, fetchWhere, batchUpsert, batchDelete } from '@study-tracker/firebase';
 
+export const WORKSPACE_ID = '__workspace__';
+
 export interface PageHistorySnapshot {
   id: string;
   pageId: string;
@@ -19,6 +21,7 @@ interface NotionPageState {
   update: (uid: string, id: string, data: Partial<NotionPage>) => Promise<void>;
   batchUpdate: (uid: string, updates: Array<{ id: string; content: string }>) => Promise<void>;
   remove: (uid: string, id: string) => Promise<void>;
+  ensureWorkspace: (uid: string) => Promise<void>;
   saveHistory: (uid: string, pageId: string, title: string, content: string) => Promise<void>;
   loadPageHistory: (uid: string, pageId: string) => Promise<PageHistorySnapshot[]>;
 }
@@ -49,6 +52,21 @@ export const useNotionPageStore = create<NotionPageState>((set) => ({
     const now = new Date().toISOString();
     const items = updates.map(({ id, content }) => ({ id, content, updatedAt: now }));
     await batchUpsert(uid, 'notionPages', items);
+  },
+
+  ensureWorkspace: async (uid) => {
+    const { pages } = useNotionPageStore.getState();
+    if (pages.find((p) => p.id === WORKSPACE_ID)) return;
+    const workspace: NotionPage = {
+      id: WORKSPACE_ID,
+      title: 'ワークスペース',
+      content: '',
+      icon: '🏠',
+      order: -9999,
+      updatedAt: new Date().toISOString(),
+      isFavorite: false,
+    };
+    await upsertDoc(uid, 'notionPages', WORKSPACE_ID, workspace as unknown as Record<string, unknown>);
   },
 
   remove: async (uid, id) => {

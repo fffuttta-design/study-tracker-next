@@ -7,7 +7,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type User } from 'firebase/auth';
 import { type NotionPage } from '@study-tracker/core';
 import { useAuthStore } from '@/stores/authStore';
-import { useNotionPageStore } from '@/stores/notionPageStore';
+import { useNotionPageStore, WORKSPACE_ID } from '@/stores/notionPageStore';
 import { APP_VERSION } from '@/lib/version';
 import appIcon from '@/app/icon.png';
 
@@ -319,7 +319,7 @@ function NotionPageSidebar({ user }: { user: User }) {
   const addMenuRef = useRef<HTMLDivElement>(null);
 
   const roots = pages
-    .filter((p) => !p.parentId)
+    .filter((p) => !p.parentId && p.id !== WORKSPACE_ID)
     .sort((a, b) => {
       if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1;
       return a.order - b.order;
