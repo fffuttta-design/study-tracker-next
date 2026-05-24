@@ -7,6 +7,8 @@
 }
 
 .notion-editor p { margin: 0.25rem 0; }
+/* Shift+Enter（hardBreak = <br>）を含む段落だけ行間を詰める */
+.notion-editor p:has(br) { line-height: 1.15; }
 .notion-editor h1 { font-size: 1.875rem; font-weight: 700; margin: 1.25rem 0 0.5rem; }
 .notion-editor h2 { font-size: 1.5rem; font-weight: 600; margin: 1rem 0 0.375rem; }
 .notion-editor h3 { font-size: 1.25rem; font-weight: 600; margin: 0.75rem 0 0.25rem; }
