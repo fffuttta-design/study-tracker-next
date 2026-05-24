@@ -1496,8 +1496,14 @@ export function NotionEditor({
       attrs: { href: `/notion-plus/${newPage.id}`, title: newPage.title || 'Untitled', icon: '📄' },
     }).run();
     await onSave(titleValue.current, JSON.stringify(editor.getJSON()));
-    router.push(`/notion-plus/${newPage.id}`);
-  }, [editor, onCreateSubPage, onSave, router]);
+    // onPageNavigate がある（モーダル内など）場合は onCreateSubPage 内で遷移済み
+    // → router.push すると画面全体が遷移してモーダルが閉じてしまうのでスキップ
+    if (onPageNavigate) {
+      onPageNavigate(`/notion-plus/${newPage.id}`);
+    } else {
+      router.push(`/notion-plus/${newPage.id}`);
+    }
+  }, [editor, onCreateSubPage, onSave, router, onPageNavigate]);
 
   const handleCtxCallout = useCallback(() => {
     setCtxMenu(null);

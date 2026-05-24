@@ -307,6 +307,9 @@ function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
   const { user } = useAuthStore();
   const [recordedText, setRecordedText] = useState('');
   const [confirming, setConfirming] = useState(false);
+  const [savedToast, setSavedToast] = useState(false);
+  const savedToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (savedToastTimerRef.current) clearTimeout(savedToastTimerRef.current); }, []);
   const [creating, setCreating] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [pageHistory, setPageHistory] = useState<string[]>([]);
@@ -392,7 +395,12 @@ function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
       notionPageId: selectedPageId,
       notionPagePath: page?.title || 'Untitled',
     });
-    onClose();
+    // ConfirmDialog を閉じるが、モーダル本体は開けたまま
+    setConfirming(false);
+    // 「登録しました」トーストを 2.5 秒表示
+    if (savedToastTimerRef.current) clearTimeout(savedToastTimerRef.current);
+    setSavedToast(true);
+    savedToastTimerRef.current = setTimeout(() => setSavedToast(false), 2500);
   };
 
   const handleCreate = async () => {
@@ -602,6 +610,12 @@ function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
               <span className="text-sm text-amber-700">テキストを選択して 🔥 ボタンで登録</span>
             </div>
             <div className="flex items-center gap-2">
+              {/* 登録完了トースト */}
+              {savedToast && (
+                <span className="flex items-center gap-1 rounded-lg bg-green-100 px-3 py-1.5 text-sm font-medium text-green-700">
+                  ✅ 登録しました
+                </span>
+              )}
               <button
                 onClick={() => recordTriggerRef.current?.()}
                 disabled={!selectedPageId}
