@@ -9,7 +9,7 @@ const isDev = !app.isPackaged
 
 // ── URL ───────────────────────────────────────────────────────────
 // デプロイ後に VERCEL_URL を実際の URL に書き換えてください
-const VERCEL_URL = 'https://YOUR_APP.vercel.app'
+const VERCEL_URL = 'https://study-tracker-next-web.vercel.app'
 const DEV_URL    = 'http://localhost:3000'
 
 const APP_URL = isDev ? DEV_URL : VERCEL_URL
