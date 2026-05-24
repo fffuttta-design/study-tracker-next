@@ -20,6 +20,7 @@ const NAV = [
   { href: '/notion-plus', label: 'NotionPlus', icon: '📝' },
   { href: '/goals', label: '身につけたいことリスト', icon: '🎯' },
   { href: '/improvements', label: '要改修リスト', icon: '🔧' },
+  { href: '/memo', label: 'メモ', icon: '🗒️' },
 ];
 
 function PageIcon({ icon }: { icon: string }) {
