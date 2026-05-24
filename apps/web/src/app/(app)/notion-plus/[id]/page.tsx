@@ -114,7 +114,11 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
   const router = useRouter();
   const searchParams = useSearchParams();
   const highlightText = searchParams.get('hl') ?? undefined;
-  const { notionPlusLayout, setNotionPlusLayout } = useSettingsStore();
+  const {
+    notionPlusLayout, setNotionPlusLayout,
+    notionPlusParaLineHeight, setNotionPlusParaLineHeight,
+    notionPlusSoftLineHeight, setNotionPlusSoftLineHeight,
+  } = useSettingsStore();
   const [saving, setSaving] = useState(false);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [iconUrlDraft, setIconUrlDraft] = useState('');
@@ -348,6 +352,42 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
                     <span className="text-base">▤</span>
                     左寄せ
                   </button>
+                </div>
+                {/* 行間設定 */}
+                <div className="mt-3 border-t border-gray-100 pt-3">
+                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">Enter 行間</p>
+                  <div className="flex gap-1">
+                    {([
+                      { label: '狭', v: 1.3 },
+                      { label: '標準', v: 1.55 },
+                      { label: '広', v: 1.7 },
+                      { label: '特広', v: 2.0 },
+                    ] as const).map(({ label, v }) => (
+                      <button
+                        key={v}
+                        onClick={() => setNotionPlusParaLineHeight(v)}
+                        className={`flex-1 rounded border py-1 text-[11px] transition ${notionPlusParaLineHeight === v ? 'border-brand-400 bg-brand-50 text-brand-600 font-medium' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mb-1.5 mt-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Shift+Enter 行間</p>
+                  <div className="flex gap-1">
+                    {([
+                      { label: '詰め', v: 1.0 },
+                      { label: '標準', v: 1.15 },
+                      { label: '普通', v: 1.35 },
+                    ] as const).map(({ label, v }) => (
+                      <button
+                        key={v}
+                        onClick={() => setNotionPlusSoftLineHeight(v)}
+                        className={`flex-1 rounded border py-1 text-[11px] transition ${notionPlusSoftLineHeight === v ? 'border-brand-400 bg-brand-50 text-brand-600 font-medium' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 {id !== WORKSPACE_ID && (
                   <div className="mt-2 border-t border-gray-100 pt-2">

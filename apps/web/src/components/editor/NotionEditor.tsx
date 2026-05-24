@@ -1072,6 +1072,8 @@ export function NotionEditor({
   recordTriggerRef, onRecordText, notionPageId, notionPagePath, highlightText, onPageNavigate,
 }: NotionEditorProps) {
   const notionPlusLayout = useSettingsStore((s) => s.notionPlusLayout);
+  const notionPlusParaLineHeight = useSettingsStore((s) => s.notionPlusParaLineHeight);
+  const notionPlusSoftLineHeight = useSettingsStore((s) => s.notionPlusSoftLineHeight);
   const router = useRouter();
   const titleRef = useRef<HTMLInputElement>(null);
   const titleValue = useRef(initialTitle);
@@ -1476,7 +1478,12 @@ export function NotionEditor({
   return (
     <EditorUidContext.Provider value={user?.uid ?? ''}>
     <PageNavigationContext.Provider value={onPageNavigate ?? null}>
-    <div className={outerClass} onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }); }} onMouseDown={handleOuterMouseDown}>
+    <div
+      className={outerClass}
+      style={{ '--para-lh': notionPlusParaLineHeight, '--soft-lh': notionPlusSoftLineHeight } as React.CSSProperties}
+      onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }); }}
+      onMouseDown={handleOuterMouseDown}
+    >
       <div className="w-full" ref={contentDivRef}>
         <input
           ref={titleRef}
@@ -1563,6 +1570,60 @@ export function NotionEditor({
                     className={`rounded px-2 py-1 text-xs transition ${b.active ? 'bg-brand-100 text-brand-700' : 'text-gray-500 hover:bg-gray-100'}`}>
                     {b.label}
                   </button>
+                ))}
+              </div>
+            </div>
+
+            {/* ── 文字色・背景色セクション ───────────────────── */}
+            <div className="border-b border-gray-100 px-2 pt-1.5 pb-1.5">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">文字色</p>
+              <div className="flex flex-wrap gap-1">
+                {[
+                  { color: null,      bg: 'bg-gray-800', title: 'デフォルト' },
+                  { color: '#EF4444', bg: 'bg-red-500',    title: '赤' },
+                  { color: '#F97316', bg: 'bg-orange-500', title: 'オレンジ' },
+                  { color: '#EAB308', bg: 'bg-yellow-500', title: '黄' },
+                  { color: '#22C55E', bg: 'bg-green-500',  title: '緑' },
+                  { color: '#3B82F6', bg: 'bg-blue-500',   title: '青' },
+                  { color: '#8B5CF6', bg: 'bg-purple-500', title: '紫' },
+                  { color: '#6B7280', bg: 'bg-gray-500',   title: 'グレー' },
+                ].map(({ color, bg, title }) => (
+                  <button
+                    key={title}
+                    title={title}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      if (color) editor?.chain().focus().setColor(color).run();
+                      else editor?.chain().focus().unsetColor().run();
+                      setCtxMenu(null);
+                    }}
+                    className={`h-5 w-5 rounded-full ${bg} ring-offset-1 hover:ring-2 hover:ring-gray-400`}
+                  />
+                ))}
+              </div>
+              <p className="mb-1 mt-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">背景色</p>
+              <div className="flex flex-wrap gap-1">
+                {[
+                  { color: null,      bg: 'bg-white border border-gray-300', title: 'なし' },
+                  { color: '#FDE68A', bg: 'bg-yellow-200', title: '黄' },
+                  { color: '#BBF7D0', bg: 'bg-green-200',  title: '緑' },
+                  { color: '#BFDBFE', bg: 'bg-blue-200',   title: '青' },
+                  { color: '#FECACA', bg: 'bg-red-200',    title: '赤' },
+                  { color: '#DDD6FE', bg: 'bg-purple-200', title: '紫' },
+                  { color: '#FED7AA', bg: 'bg-orange-200', title: 'オレンジ' },
+                  { color: '#F3F4F6', bg: 'bg-gray-200',   title: 'グレー' },
+                ].map(({ color, bg, title }) => (
+                  <button
+                    key={title}
+                    title={title}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      if (color) editor?.chain().focus().setHighlight({ color }).run();
+                      else editor?.chain().focus().unsetHighlight().run();
+                      setCtxMenu(null);
+                    }}
+                    className={`h-5 w-5 rounded-full ${bg} ring-offset-1 hover:ring-2 hover:ring-gray-400`}
+                  />
                 ))}
               </div>
             </div>
