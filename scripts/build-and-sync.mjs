@@ -176,9 +176,10 @@ try {
     ANDROID_HOME: androidHome,
     Path: `${javaHome}\\bin;${androidHome}\\platform-tools;${process.env.Path ?? ''}`,
   }
+  const gradlew = path.join(androidSrcDir, 'android', 'gradlew.bat')
   // assembleRelease を試みる（署名未設定なら debug にフォールバック）
   try {
-    execSync('gradlew.bat assembleRelease', {
+    execSync(`"${gradlew}" assembleRelease`, {
       cwd: path.join(androidSrcDir, 'android'),
       stdio: 'inherit',
       shell: true,
@@ -187,7 +188,7 @@ try {
     console.log('[build-and-sync] Android Release ビルド完了 ✓')
   } catch {
     console.log('[build-and-sync] Release 失敗 → Debug ビルドにフォールバック')
-    execSync('gradlew.bat assembleDebug', {
+    execSync(`"${gradlew}" assembleDebug`, {
       cwd: path.join(androidSrcDir, 'android'),
       stdio: 'inherit',
       shell: true,
