@@ -41,7 +41,7 @@ function dragHandlePlugin() {
         hideTimer = setTimeout(() => { handle.style.opacity = '0'; }, 150);
       };
 
-      // ドラッグ中のスクロールコンテナを遅延取得（overflow-y:auto な祖先要素）
+      // ── スクロールコンテナを遅延取得（overflow-y:auto / scroll な祖先要素）──
       const findScrollEl = (): HTMLElement | null => {
         if (scrollEl) return scrollEl;
         let el: HTMLElement | null = view.dom.parentElement;
@@ -53,18 +53,57 @@ function dragHandlePlugin() {
         return null;
       };
 
-      // drag 中にホイールでスクロール（passive:false で preventDefault してから手動スクロール）
-      const onWheelDuringDrag = (e: WheelEvent) => {
-        if (!isDragging) return;
-        const container = findScrollEl();
-        if (!container) return;
-        e.preventDefault();
-        let delta = e.deltaY;
-        if (e.deltaMode === 1) delta *= 20;                     // LINE mode（Firefox 等）
-        else if (e.deltaMode === 2) delta *= container.clientHeight; // PAGE mode
-        container.scrollTop += delta;
+      // ── drag 中オートスクロール（dragover + rAF ベース）─────────────────────
+      // Chrome は HTML5 DnD 中に wheel イベントを発火しないため、
+      // dragover イベント（DnD 中も必ず発火）でカーソル位置を監視してスクロールする
+      let scrollSpeed = 0;       // px/frame（正 = 下向き、負 = 上向き）
+      let scrollRaf: number | null = null;
+      const SCROLL_ZONE = 100;   // スクロールゾーンの高さ（px）
+      const MAX_SPEED   = 18;    // 最大スクロール速度（px/frame ≒ px/16ms）
+
+      // rAF ループ: isDragging の間 scrollSpeed に応じてコンテナを移動
+      const scrollTick = () => {
+        if (!isDragging) { scrollRaf = null; return; }
+        if (scrollSpeed !== 0) {
+          const c = findScrollEl();
+          if (c) c.scrollTop += scrollSpeed;
+        }
+        scrollRaf = requestAnimationFrame(scrollTick);
       };
 
+      // dragover: カーソルが上下ゾーンに入ったら速度を計算
+      const onDragOverForScroll = (e: DragEvent) => {
+        if (!isDragging) return;
+        const c = findScrollEl();
+        if (!c) return;
+        const rect = c.getBoundingClientRect();
+        const y = e.clientY;
+        if (y < rect.top + SCROLL_ZONE) {
+          // 上ゾーン：上端に近いほど速く
+          const ratio = 1 - Math.max(0, y - rect.top) / SCROLL_ZONE;
+          scrollSpeed = -Math.round(ratio * MAX_SPEED);
+        } else if (y > rect.bottom - SCROLL_ZONE) {
+          // 下ゾーン：下端に近いほど速く
+          const ratio = 1 - Math.max(0, rect.bottom - y) / SCROLL_ZONE;
+          scrollSpeed = Math.round(ratio * MAX_SPEED);
+        } else {
+          scrollSpeed = 0;
+        }
+      };
+
+      // wheel: Chrome 以外のブラウザや将来の変更に備えて残す
+      const onWheelDuringDrag = (e: WheelEvent) => {
+        if (!isDragging) return;
+        const c = findScrollEl();
+        if (!c) return;
+        e.preventDefault();
+        let delta = e.deltaY;
+        if (e.deltaMode === 1) delta *= 20;
+        else if (e.deltaMode === 2) delta *= c.clientHeight;
+        c.scrollTop += delta;
+      };
+
+      document.addEventListener('dragover', onDragOverForScroll, true); // capture で確実に受信
       document.addEventListener('wheel', onWheelDuringDrag, { passive: false });
 
       // ── top-levelブロックのPM位置を取得 ──
@@ -136,18 +175,26 @@ function dragHandlePlugin() {
           (view as unknown as PmViewInternal).dragging = { slice, move: true };
           handle.style.opacity = '0';
           isDragging = true;
+          // rAF スクロールループを開始
+          if (!scrollRaf) scrollRaf = requestAnimationFrame(scrollTick);
         } catch { e.preventDefault(); }
       });
 
       handle.addEventListener('dragend', () => {
         isDragging = false;
+        scrollSpeed = 0;
         (view as unknown as PmViewInternal).dragging = null;
         handle.style.opacity = '0';
+        // scrollRaf は scrollTick 内で isDragging=false を検知して自動停止
       });
 
       return {
         destroy() {
+          isDragging = false;
+          scrollSpeed = 0;
+          if (scrollRaf) { cancelAnimationFrame(scrollRaf); scrollRaf = null; }
           document.removeEventListener('mousemove', onMouseMove);
+          document.removeEventListener('dragover', onDragOverForScroll, true);
           document.removeEventListener('wheel', onWheelDuringDrag);
           handle.remove();
         },
