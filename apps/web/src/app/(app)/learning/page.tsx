@@ -1191,13 +1191,13 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
   if (compact) {
     return (
       <div
-        className={`rounded-lg border transition-shadow cursor-pointer ${pageDeleted ? 'bg-red-50 border-red-200' : `${cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}`}
+        className={`rounded-lg border transition-shadow cursor-pointer ${pageDeleted ? 'bg-gray-100 border-gray-300' : `${cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-300 hover:border-gray-400'}`}`}
         onClick={() => setExpanded((v) => !v)}
       >
         {/* 削除済みノート警告バナー */}
         {pageDeleted && (
-          <div className="flex items-center gap-1 rounded-t-lg bg-red-100 px-3 py-1 text-xs text-red-500">
-            <span>⚠️</span><span>リンク先のノートが削除されました</span>
+          <div className="flex items-center gap-1 rounded-t-lg bg-gray-200 px-3 py-1 text-xs text-gray-500">
+            <span>🗑️</span><span>リンク先のノートが削除されました</span>
           </div>
         )}
         {/* 行1: 復習チェック + タイトル */}
@@ -1296,7 +1296,7 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
   // ── 通常レイアウト（他タブ、またはコンパクトカードを展開した状態）────
   return (
     <div
-      className={`rounded-lg border transition-shadow cursor-pointer ${pageDeleted ? 'bg-red-50 border-red-200' : `${cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}`}
+      className={`rounded-lg border transition-shadow cursor-pointer ${pageDeleted ? 'bg-gray-100 border-gray-300' : `${cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-300 hover:border-gray-400'}`}`}
       onClick={() => setExpanded((v) => !v)}
     >
       {/* 削除済みノート警告バナー */}
