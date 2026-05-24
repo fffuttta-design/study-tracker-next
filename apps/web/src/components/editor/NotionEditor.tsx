@@ -891,6 +891,64 @@ const MarkdownBulletShortcut = Extension.create({
   },
 });
 
+// ── Ctrl+B 行全体 bold トグル ──────────────────────────────────────────
+// テキスト未選択時のみ発動。選択中は StarterKit の toggleBold に委譲。
+// ・行のすべてが bold → 全解除
+// ・一部だけ bold / bold なし → 一旦すべて解除してから全体に bold 適用
+const LineBoldShortcut = Extension.create({
+  name: 'lineBoldShortcut',
+  priority: 200, // StarterKit の Bold (priority 100) より先にキーを捕捉
+  addKeyboardShortcuts() {
+    return {
+      'Mod-b': () => {
+        const { state } = this.editor.view;
+        const { selection } = state;
+
+        // テキスト選択中は通常の toggleBold に任せる
+        if (!selection.empty) return false;
+
+        const { $from } = selection;
+        const boldMark = state.schema.marks.bold;
+        if (!boldMark) return false;
+
+        // カーソルがいるブロック（段落・見出し等）の内容範囲を取得
+        const depth = $from.depth;
+        const blockStart = $from.start(depth);
+        const blockEnd = $from.end(depth);
+
+        if (blockStart >= blockEnd) return true; // 空行は何もしない
+
+        // 行内の全テキストノードが bold かチェック
+        let allBold = true;
+        let hasText = false;
+
+        state.doc.nodesBetween(blockStart, blockEnd, (node) => {
+          if (node.isText) {
+            hasText = true;
+            if (!boldMark.isInSet(node.marks)) {
+              allBold = false;
+            }
+          }
+          return true;
+        });
+
+        if (!hasText) return true; // テキストノードなし（画像のみ等）
+
+        const tr = state.tr;
+        // まず行全体の bold をすべて除去
+        tr.removeMark(blockStart, blockEnd, boldMark);
+        // 全部 bold でなかった場合（none or partial）→ 全体に bold を付与
+        if (!allBold) {
+          tr.addMark(blockStart, blockEnd, boldMark.create());
+        }
+
+        this.editor.view.dispatch(tr);
+        return true;
+      },
+    };
+  },
+});
+
 // ── スラッシュコマンド ──────────────────────────────────────────────
 
 interface SlashCommand {
@@ -1153,6 +1211,7 @@ export function NotionEditor({
       InlineDatabaseNode,
       DragHandleExtension,
       MarkdownBulletShortcut,
+      LineBoldShortcut,
     ],
     content: (() => {
       if (!initialContent) return '';
