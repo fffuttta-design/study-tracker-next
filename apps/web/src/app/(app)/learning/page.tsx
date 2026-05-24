@@ -194,7 +194,7 @@ function LearningPageContent() {
       </div>
 
       {/* タブコンテンツ */}
-      <div className="flex-1 overflow-y-auto bg-gray-100">
+      <div className="flex-1 overflow-y-auto bg-white">
         {tab === 0 && <DashboardTab todayItems={todayItems} dueItems={dueItems} uid={user?.uid ?? ''} onAdd={() => setAddDialogOpen(true)} />}
         {tab === 1 && <TodayTab items={todayItems} uid={user?.uid ?? ''} onAdd={() => setAddDialogOpen(true)} />}
         {tab === 2 && <ReviewTab dueItems={dueItems} uid={user?.uid ?? ''} />}
