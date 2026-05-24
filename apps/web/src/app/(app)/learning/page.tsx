@@ -52,11 +52,11 @@ const STAGE_COLORS = [
 ];
 
 const STAGE_CARD_BG = [
-  'bg-red-50',
-  'bg-yellow-50',
-  'bg-green-50',
-  'bg-blue-50',
-  'bg-purple-50',
+  'bg-red-100',
+  'bg-yellow-100',
+  'bg-green-100',
+  'bg-blue-100',
+  'bg-purple-100',
 ];
 
 const STAGE_BADGE_COUNT_BG = ['bg-red-500', 'bg-yellow-500', 'bg-green-600', 'bg-blue-500', 'bg-purple-500'];
@@ -1191,12 +1191,12 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
   if (compact) {
     return (
       <div
-        className={`rounded-lg border transition-shadow cursor-pointer ${pageDeleted ? 'bg-gray-100 border-gray-300' : `${cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-300 hover:border-gray-400'}`}`}
+        className={`rounded-lg border transition-shadow cursor-pointer ${pageDeleted ? 'bg-gray-300 border-gray-400' : `${cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-300 hover:border-gray-400'}`}`}
         onClick={() => setExpanded((v) => !v)}
       >
         {/* 削除済みノート警告バナー */}
         {pageDeleted && (
-          <div className="flex items-center gap-1 rounded-t-lg bg-gray-200 px-3 py-1 text-xs text-gray-500">
+          <div className="flex items-center gap-1 rounded-t-lg bg-gray-400 px-3 py-1 text-xs text-white">
             <span>🗑️</span><span>リンク先のノートが削除されました</span>
           </div>
         )}
@@ -1296,7 +1296,7 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
   // ── 通常レイアウト（他タブ、またはコンパクトカードを展開した状態）────
   return (
     <div
-      className={`rounded-lg border transition-shadow cursor-pointer ${pageDeleted ? 'bg-gray-100 border-gray-300' : `${cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-300 hover:border-gray-400'}`}`}
+      className={`rounded-lg border transition-shadow cursor-pointer ${pageDeleted ? 'bg-gray-300 border-gray-400' : `${cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-300 hover:border-gray-400'}`}`}
       onClick={() => setExpanded((v) => !v)}
     >
       {/* 削除済みノート警告バナー */}
