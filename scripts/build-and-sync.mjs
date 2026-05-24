@@ -154,7 +154,7 @@ try {
   const diffOut = execSync('git status --porcelain', { cwd: ROOT, encoding: 'utf-8' })
   if (diffOut.trim()) {
     execSync(`git commit -m "electron: build ${newBuildNumber} (v${newVersion})"`, { cwd: ROOT, stdio: 'pipe' })
-    execSync('git push origin main', { cwd: ROOT, stdio: 'pipe' })
+    execSync('git push origin master', { cwd: ROOT, stdio: 'pipe' })
     console.log(`[build-and-sync] GitHub プッシュ完了 ✓ (build ${newBuildNumber})`)
   } else {
     console.log('[build-and-sync] 変更なし、プッシュスキップ')
