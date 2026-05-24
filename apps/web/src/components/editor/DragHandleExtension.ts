@@ -31,6 +31,8 @@ function dragHandlePlugin() {
 
       let hoveredPos = -1;
       let hideTimer: ReturnType<typeof setTimeout> | null = null;
+      let isDragging = false;
+      let scrollEl: HTMLElement | null = null;
 
       const showHandle = () => {
         if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
@@ -38,6 +40,32 @@ function dragHandlePlugin() {
       const scheduleHide = () => {
         hideTimer = setTimeout(() => { handle.style.opacity = '0'; }, 150);
       };
+
+      // ドラッグ中のスクロールコンテナを遅延取得（overflow-y:auto な祖先要素）
+      const findScrollEl = (): HTMLElement | null => {
+        if (scrollEl) return scrollEl;
+        let el: HTMLElement | null = view.dom.parentElement;
+        while (el && el !== document.body) {
+          const ov = getComputedStyle(el).overflowY;
+          if (ov === 'auto' || ov === 'scroll') { scrollEl = el; return el; }
+          el = el.parentElement;
+        }
+        return null;
+      };
+
+      // drag 中にホイールでスクロール（passive:false で preventDefault してから手動スクロール）
+      const onWheelDuringDrag = (e: WheelEvent) => {
+        if (!isDragging) return;
+        const container = findScrollEl();
+        if (!container) return;
+        e.preventDefault();
+        let delta = e.deltaY;
+        if (e.deltaMode === 1) delta *= 20;                     // LINE mode（Firefox 等）
+        else if (e.deltaMode === 2) delta *= container.clientHeight; // PAGE mode
+        container.scrollTop += delta;
+      };
+
+      document.addEventListener('wheel', onWheelDuringDrag, { passive: false });
 
       // ── top-levelブロックのPM位置を取得 ──
       const getTopLevelPos = (x: number, y: number): number => {
@@ -107,10 +135,12 @@ function dragHandlePlugin() {
           e.dataTransfer!.effectAllowed = 'move';
           (view as unknown as PmViewInternal).dragging = { slice, move: true };
           handle.style.opacity = '0';
+          isDragging = true;
         } catch { e.preventDefault(); }
       });
 
       handle.addEventListener('dragend', () => {
+        isDragging = false;
         (view as unknown as PmViewInternal).dragging = null;
         handle.style.opacity = '0';
       });
@@ -118,6 +148,7 @@ function dragHandlePlugin() {
       return {
         destroy() {
           document.removeEventListener('mousemove', onMouseMove);
+          document.removeEventListener('wheel', onWheelDuringDrag);
           handle.remove();
         },
       };
