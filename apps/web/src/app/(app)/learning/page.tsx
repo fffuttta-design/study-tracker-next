@@ -60,6 +60,7 @@ const STAGE_CARD_BG = [
 ];
 
 const STAGE_BADGE_COUNT_BG = ['bg-red-500', 'bg-yellow-500', 'bg-green-600', 'bg-blue-500', 'bg-purple-500'];
+const STAGE_SECTION_BORDER = ['border-red-200', 'border-yellow-200', 'border-green-200', 'border-blue-200', 'border-purple-200'];
 
 function dailyQuote(): string {
   const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
@@ -743,7 +744,7 @@ function DashboardTab({ todayItems, dueItems, uid, onAdd }: {
                 ).sort(([a], [b]) => a.localeCompare(b));
 
                 return (
-                  <div key={g.index}>
+                  <div key={g.index} className={`mb-3 rounded-xl border p-3 ${STAGE_CARD_BG[g.index]} ${STAGE_SECTION_BORDER[g.index]}`}>
                     <BadgeDivider
                       label={g.label}
                       count={g.items.length}
@@ -751,7 +752,7 @@ function DashboardTab({ todayItems, dueItems, uid, onAdd }: {
                       countBg={STAGE_BADGE_COUNT_BG[g.index]}
                       leftAlign
                     />
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                       {byDate.map(([dateKey, dateItems]) => (
                         <div key={dateKey}>
                           {byDate.length > 1 && (
@@ -858,7 +859,7 @@ function ReviewTab({ dueItems, uid }: {
           ).sort(([a], [b]) => a.localeCompare(b)); // 古い学習日が上
 
           return (
-            <div key={g.index}>
+            <div key={g.index} className={`rounded-xl border p-3 ${STAGE_CARD_BG[g.index]} ${STAGE_SECTION_BORDER[g.index]}`}>
               <BadgeDivider
                 label={g.label}
                 count={g.items.length}
@@ -866,7 +867,7 @@ function ReviewTab({ dueItems, uid }: {
                 countBg={STAGE_BADGE_COUNT_BG[g.index]}
                 leftAlign
               />
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {byDate.map(([dateKey, dateItems]) => (
                   <div key={dateKey}>
                     {/* 学習日サブヘッダー（複数日がある場合のみ表示） */}
