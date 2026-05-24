@@ -731,18 +731,45 @@ function DashboardTab({ todayItems, dueItems, uid, onAdd }: {
             <Empty text="復習待ちのアイテムはありません 🎉" />
           ) : (
             <div>
-              {dueGrouped.map((g) => (
-                <div key={g.index}>
-                  <BadgeDivider
-                    label={g.label}
-                    count={g.items.length}
-                    badgeClass={STAGE_COLORS[g.index]}
-                    countBg={STAGE_BADGE_COUNT_BG[g.index]}
-                    leftAlign
-                  />
-                  <ItemList items={g.items} uid={uid} showReviewAction compact fromTab={0} />
-                </div>
-              ))}
+              {dueGrouped.map((g) => {
+                // ステージ内をさらに学習日（dateKey）でサブグループ化（古い順）
+                const byDate = Array.from(
+                  g.items.reduce((map, item) => {
+                    const key = item.dateKey ?? item.createdAt?.slice(0, 10) ?? 'unknown';
+                    if (!map.has(key)) map.set(key, []);
+                    map.get(key)!.push(item);
+                    return map;
+                  }, new Map<string, LearningItem[]>())
+                ).sort(([a], [b]) => a.localeCompare(b));
+
+                return (
+                  <div key={g.index}>
+                    <BadgeDivider
+                      label={g.label}
+                      count={g.items.length}
+                      badgeClass={STAGE_COLORS[g.index]}
+                      countBg={STAGE_BADGE_COUNT_BG[g.index]}
+                      leftAlign
+                    />
+                    <div className="space-y-3">
+                      {byDate.map(([dateKey, dateItems]) => (
+                        <div key={dateKey}>
+                          {byDate.length > 1 && (
+                            <div className="mb-1.5 flex items-center gap-2 text-xs text-gray-400">
+                              <span className="shrink-0">
+                                {format(new Date(dateKey), 'M/d（E）', { locale: ja })} に学習
+                              </span>
+                              <div className="h-px flex-1 bg-gray-200" />
+                              <span className="shrink-0 tabular-nums">{dateItems.length}件</span>
+                            </div>
+                          )}
+                          <ItemList items={dateItems} uid={uid} showReviewAction compact fromTab={0} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -1163,7 +1190,7 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
   if (compact) {
     return (
       <div
-        className={`rounded-lg border transition-shadow cursor-pointer ${pageDeleted ? 'bg-gray-50 opacity-50 grayscale' : cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}
+        className={`rounded-lg border transition-shadow cursor-pointer ${pageDeleted ? 'bg-gray-200 opacity-70 grayscale' : cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}
         onClick={() => setExpanded((v) => !v)}
         title={pageDeleted ? 'リンク先のノートが削除されました' : undefined}
       >
@@ -1263,7 +1290,7 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
   // ── 通常レイアウト（他タブ、またはコンパクトカードを展開した状態）────
   return (
     <div
-      className={`rounded-lg border transition-shadow cursor-pointer ${pageDeleted ? 'bg-gray-50 opacity-50 grayscale' : cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}
+      className={`rounded-lg border transition-shadow cursor-pointer ${pageDeleted ? 'bg-gray-200 opacity-70 grayscale' : cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}
       onClick={() => setExpanded((v) => !v)}
       title={pageDeleted ? 'リンク先のノートが削除されました' : undefined}
     >
