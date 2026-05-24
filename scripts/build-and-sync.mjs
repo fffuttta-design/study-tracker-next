@@ -67,6 +67,16 @@ const newBuildInfo = { version: newVersion, buildNumber: newBuildNumber, builtAt
 writeFileSync(buildInfoPath, JSON.stringify(newBuildInfo, null, 2) + '\n', 'utf-8')
 console.log(`[build-and-sync] build-info.json 書き込み完了`)
 
+// Android の updateService.ts のビルド番号も更新
+try {
+  execSync(`node scripts/update-mobile-build-number.mjs ${newBuildNumber} ${newVersion}`, {
+    cwd: ROOT, stdio: 'pipe',
+  })
+  console.log(`[build-and-sync] updateService.ts ビルド番号更新完了`)
+} catch (e) {
+  console.warn('[build-and-sync] updateService.ts 更新失敗:', e.message)
+}
+
 // ── Step 2.5: ビルド前にアプリを終了（DLL ロック解除）────────────
 console.log('\n[build-and-sync] 起動中の 学習トラッカー.exe を終了（ビルド前）...')
 try {
@@ -147,7 +157,65 @@ if (existsSync(exeLaunchPath)) {
   console.log(`[build-and-sync] 起動完了 ✓ (v${newVersion} / build ${newBuildNumber})\n`)
 }
 
-// ── Step 7: GitHub へ自動プッシュ ────────────────────────────────
+// ── Step 7: Android APK ビルド & Drive 同期 ───────────────────────
+const androidSrcDir  = path.join(ROOT, 'apps', 'mobile')
+const androidDestDir = path.join(destDir, 'android')
+const apkSrcPath     = path.join(androidSrcDir, 'android', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk')
+const apkDebugPath   = path.join(androidSrcDir, 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk')
+
+console.log('\n[build-and-sync] Android APK ビルド中...')
+try {
+  // JAVA_HOME を設定してビルド
+  const javaHome = 'C:\\Program Files\\Android\\Android Studio\\jbr'
+  const androidHome = process.env.LOCALAPPDATA
+    ? path.join(process.env.LOCALAPPDATA, 'Android', 'Sdk')
+    : 'C:\\Users\\visit\\AppData\\Local\\Android\\Sdk'
+  const env = {
+    ...process.env,
+    JAVA_HOME: javaHome,
+    ANDROID_HOME: androidHome,
+    Path: `${javaHome}\\bin;${androidHome}\\platform-tools;${process.env.Path ?? ''}`,
+  }
+  // assembleRelease を試みる（署名未設定なら debug にフォールバック）
+  try {
+    execSync('gradlew.bat assembleRelease', {
+      cwd: path.join(androidSrcDir, 'android'),
+      stdio: 'inherit',
+      shell: true,
+      env,
+    })
+    console.log('[build-and-sync] Android Release ビルド完了 ✓')
+  } catch {
+    console.log('[build-and-sync] Release 失敗 → Debug ビルドにフォールバック')
+    execSync('gradlew.bat assembleDebug', {
+      cwd: path.join(androidSrcDir, 'android'),
+      stdio: 'inherit',
+      shell: true,
+      env,
+    })
+    console.log('[build-and-sync] Android Debug ビルド完了 ✓')
+  }
+
+  // APK を Drive に同期
+  const apkPath = existsSync(apkSrcPath) ? apkSrcPath : apkDebugPath
+  if (existsSync(apkPath)) {
+    // android/ サブフォルダを作成
+    execSync(`if not exist "${androidDestDir}" mkdir "${androidDestDir}"`, { shell: true, stdio: 'pipe' })
+    // APK をコピー
+    execSync(`copy /Y "${apkPath}" "${path.join(androidDestDir, 'study-tracker.apk')}"`, { shell: true, stdio: 'pipe' })
+    // version.json をコピー
+    const versionJsonContent = JSON.stringify(newBuildInfo, null, 2) + '\n'
+    writeFileSync(path.join(androidDestDir, 'version.json'), versionJsonContent, 'utf-8')
+    console.log(`[build-and-sync] Android APK → Drive 同期完了 ✓`)
+    console.log(`  APK: ${androidDestDir}\\study-tracker.apk`)
+  } else {
+    console.warn('[build-and-sync] APK ファイルが見つかりません（スキップ）')
+  }
+} catch (e) {
+  console.warn('[build-and-sync] Android ビルド失敗（Windows ビルドは成功）:', e.message)
+}
+
+// ── Step 8: GitHub へ自動プッシュ ────────────────────────────────
 console.log('[build-and-sync] GitHub へプッシュ中...')
 try {
   execSync('git add -A', { cwd: ROOT, stdio: 'pipe' })

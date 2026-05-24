@@ -4,6 +4,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import auth from '@react-native-firebase/auth';
 import AppNavigator from './src/navigation';
 import { useAuthStore } from './src/store/authStore';
+import { checkForUpdate } from './src/services/updateService';
 
 function AuthListener() {
   const { setUser } = useAuthStore();
@@ -11,6 +12,10 @@ function AuthListener() {
   useEffect(() => {
     const unsubscribe = auth().onAuthStateChanged(user => {
       setUser(user);
+      // ログイン済みの場合、起動後2秒で更新チェック
+      if (user) {
+        setTimeout(() => checkForUpdate(), 2000);
+      }
     });
     return unsubscribe;
   }, []);

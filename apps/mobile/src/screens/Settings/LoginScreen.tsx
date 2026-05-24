@@ -13,7 +13,10 @@ import auth from '@react-native-firebase/auth';
 // Web クライアント ID（Firebase Console > Authentication > Google > ウェブ クライアント ID）
 const WEB_CLIENT_ID = '723877374529-0leqjaor6b4218127sdul1jp9929gbvj.apps.googleusercontent.com';
 
-GoogleSignin.configure({ webClientId: WEB_CLIENT_ID });
+GoogleSignin.configure({
+  webClientId: WEB_CLIENT_ID,
+  scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+});
 
 export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
