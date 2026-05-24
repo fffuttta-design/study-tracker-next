@@ -1,19 +1,49 @@
 {
   "name": "study-tracker",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "private": true,
+  "type": "module",
+  "main": "electron/main.js",
   "workspaces": [
     "apps/web",
-    "apps/desktop",
     "packages/*"
   ],
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
     "lint": "turbo lint",
-    "type-check": "turbo type-check"
+    "type-check": "turbo type-check",
+    "electron:dev": "electron .",
+    "dist:win:dir": "npx electron-builder --win --dir",
+    "dist:win": "npx electron-builder --win",
+    "dist:win:sync": "node scripts/build-and-sync.mjs"
+  },
+  "build": {
+    "appId": "com.studytracker.app",
+    "productName": "学習トラッカー",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/icon.ico",
+        "to": "icon.ico"
+      }
+    ],
+    "win": {
+      "target": "dir",
+      "icon": "build/icon.ico"
+    }
   },
   "devDependencies": {
+    "electron": "^36.9.5",
+    "electron-builder": "^26.8.1",
+    "png-to-ico": "^3.0.1",
+    "sharp": "^0.34.5",
     "turbo": "^2.3.3",
     "typescript": "^5.7.2"
   },

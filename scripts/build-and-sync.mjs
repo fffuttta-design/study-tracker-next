@@ -1,0 +1,164 @@
+/**
+ * build-and-sync.mjs
+ * ビルド → Google Drive 同期を一本で行うスクリプト
+ *
+ * やること:
+ *   0. electron/build-info.json の buildNumber をインクリメント
+ *   1. builtAt タイムスタンプを生成
+ *   2. electron/build-info.json に version + buildNumber + builtAt を書き込む
+ *   3. 起動中のアプリを終了（DLL ロック解除）
+ *   4. electron-builder で win-unpacked ビルド（インストーラーなし）
+ *   5. win-unpacked/version.json に version + buildNumber + builtAt を書き込む
+ *   6. robocopy で Google Drive に同期（version.json も含む）
+ *   7. アプリを再起動
+ *   8. GitHub へ自動プッシュ
+ *
+ * 前提:
+ *   .sync-dest ファイルに Google Drive のフォルダパスを書いておく
+ *   例: H:\マイドライブ\ツール\StudyTracker
+ *
+ * 使い方:
+ *   npm run dist:win:sync
+ */
+
+import { existsSync, readFileSync, writeFileSync } from 'fs'
+import { execSync, spawn } from 'child_process'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const ROOT = path.resolve(__dirname, '..')
+
+const configFile   = path.join(ROOT, '.sync-dest')
+const srcDir       = path.join(ROOT, 'dist-electron', 'win-unpacked')
+const buildInfoPath = path.join(ROOT, 'electron', 'build-info.json')
+
+// ── .sync-dest チェック ────────────────────────────────────────────
+if (!existsSync(configFile)) {
+  console.log('')
+  console.log('================================================================')
+  console.log('  .sync-dest ファイルが見つかりません')
+  console.log('  プロジェクトルートに同期先パスを書いて作成してください')
+  console.log('  例: H:\\マイドライブ\\ツール\\StudyTracker')
+  console.log('================================================================')
+  console.log('')
+  process.exit(0)
+}
+
+const destDir = readFileSync(configFile, 'utf-8').trim()
+if (!destDir) {
+  console.error('[build-and-sync] .sync-dest が空です')
+  process.exit(1)
+}
+
+// ── Step 0: buildNumber をインクリメント ─────────────────────────
+const buildInfo = JSON.parse(readFileSync(buildInfoPath, 'utf-8'))
+const prevBuildNumber = buildInfo.buildNumber ?? 0
+const newBuildNumber  = prevBuildNumber + 1
+const newVersion      = buildInfo.version ?? '1.0.0'
+console.log(`\n[build-and-sync] buildNumber: ${prevBuildNumber} → ${newBuildNumber}  (v${newVersion})`)
+
+// ── Step 1: builtAt を生成 ────────────────────────────────────────
+const builtAt = new Date().toISOString()
+console.log(`[build-and-sync] ビルド開始: ${builtAt}`)
+
+// ── Step 2: electron/build-info.json に書き込む ───────────────────
+const newBuildInfo = { version: newVersion, buildNumber: newBuildNumber, builtAt }
+writeFileSync(buildInfoPath, JSON.stringify(newBuildInfo, null, 2) + '\n', 'utf-8')
+console.log(`[build-and-sync] build-info.json 書き込み完了`)
+
+// ── Step 2.5: ビルド前にアプリを終了（DLL ロック解除）────────────
+console.log('\n[build-and-sync] 起動中の 学習トラッカー.exe を終了（ビルド前）...')
+try {
+  execSync('taskkill /IM "学習トラッカー.exe" /F /T', { stdio: 'pipe' })
+  console.log('[build-and-sync] アプリを終了しました。プロセス消滅を待機中...')
+  for (let i = 0; i < 20; i++) {
+    await new Promise(r => setTimeout(r, 500))
+    try {
+      const out = execSync('tasklist /FI "IMAGENAME eq 学習トラッカー.exe" /NH', { encoding: 'utf-8', stdio: 'pipe' })
+      if (!out.includes('学習トラッカー.exe')) break
+    } catch { break }
+  }
+  console.log('[build-and-sync] プロセス終了確認 ✓')
+  await new Promise(r => setTimeout(r, 2000))
+} catch {
+  console.log('[build-and-sync] 起動中のアプリなし（スキップ）')
+}
+
+// win-unpacked を事前削除してロック後を防ぐ
+console.log('[build-and-sync] win-unpacked を事前クリア...')
+try {
+  execSync('if exist "dist-electron\\win-unpacked" rmdir /s /q "dist-electron\\win-unpacked"', {
+    cwd: ROOT, stdio: 'pipe', shell: true,
+  })
+  console.log('[build-and-sync] クリア完了')
+} catch {
+  console.log('[build-and-sync] クリアスキップ（存在しない）')
+}
+
+// ── Step 3: electron-builder でビルド（win-unpacked のみ）────────
+console.log('\n[build-and-sync] ビルド中...\n')
+try {
+  execSync('npx electron-builder --win --dir', {
+    cwd: ROOT,
+    stdio: 'inherit',
+    shell: true,
+  })
+} catch {
+  const exePath = path.join(srcDir, '学習トラッカー.exe')
+  if (!existsSync(exePath)) {
+    console.error('[build-and-sync] ビルド失敗（学習トラッカー.exe が存在しない）')
+    process.exit(1)
+  }
+  console.log('[build-and-sync] electron-builder がログエラーで終了しましたが exe は存在します。続行します。')
+}
+console.log('\n[build-and-sync] ビルド完了 ✓')
+
+// ── Step 4: version.json を win-unpacked に書き込む ───────────────
+writeFileSync(
+  path.join(srcDir, 'version.json'),
+  JSON.stringify(newBuildInfo, null, 2) + '\n',
+  'utf-8'
+)
+console.log(`[build-and-sync] version.json 書き込み完了 (build ${newBuildNumber})`)
+
+// ── Step 5: robocopy で Google Drive に同期 ───────────────────────
+console.log(`\n[build-and-sync] 同期開始`)
+console.log(`  FROM: ${srcDir}`)
+console.log(`  TO  : ${destDir}\n`)
+try {
+  execSync(
+    `robocopy "${srcDir}" "${destDir}" /MIR /R:0 /W:0 /NFL /NDL /NJH /NJS /NC /NS /NP`,
+    { stdio: 'inherit' }
+  )
+} catch (e) {
+  if ((e.status ?? 0) >= 8) {
+    console.error(`[build-and-sync] 同期に失敗しました (exit code ${e.status})`)
+    process.exit(1)
+  }
+}
+console.log('[build-and-sync] 同期完了 ✓')
+
+// ── Step 6: アプリを再起動 ────────────────────────────────────────
+const exeLaunchPath = path.join(destDir, '学習トラッカー.exe')
+if (existsSync(exeLaunchPath)) {
+  console.log('[build-and-sync] アプリを再起動...')
+  spawn(exeLaunchPath, [], { detached: true, stdio: 'ignore' }).unref()
+  console.log(`[build-and-sync] 起動完了 ✓ (v${newVersion} / build ${newBuildNumber})\n`)
+}
+
+// ── Step 7: GitHub へ自動プッシュ ────────────────────────────────
+console.log('[build-and-sync] GitHub へプッシュ中...')
+try {
+  execSync('git add -A', { cwd: ROOT, stdio: 'pipe' })
+  const diffOut = execSync('git status --porcelain', { cwd: ROOT, encoding: 'utf-8' })
+  if (diffOut.trim()) {
+    execSync(`git commit -m "electron: build ${newBuildNumber} (v${newVersion})"`, { cwd: ROOT, stdio: 'pipe' })
+    execSync('git push origin main', { cwd: ROOT, stdio: 'pipe' })
+    console.log(`[build-and-sync] GitHub プッシュ完了 ✓ (build ${newBuildNumber})`)
+  } else {
+    console.log('[build-and-sync] 変更なし、プッシュスキップ')
+  }
+} catch (e) {
+  console.warn('[build-and-sync] GitHub プッシュ失敗（ビルド自体は成功）:', e.message)
+}

@@ -3,9 +3,12 @@ node_modules/
 .next/
 dist/
 out/
-build/
 *.local
 .env
 .env.*
 !.env.example
 .DS_Store
+
+# Electron
+dist-electron/
+.sync-dest
