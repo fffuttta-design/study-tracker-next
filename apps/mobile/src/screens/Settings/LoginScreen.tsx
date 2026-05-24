@@ -11,7 +11,7 @@ import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import auth from '@react-native-firebase/auth';
 
 // Web クライアント ID（Firebase Console > Authentication > Google > ウェブ クライアント ID）
-const WEB_CLIENT_ID = ''; // TODO: Firebase コンソールから取得して設定
+const WEB_CLIENT_ID = '723877374529-0leqjaor6b4218127sdul1jp9929gbvj.apps.googleusercontent.com';
 
 GoogleSignin.configure({ webClientId: WEB_CLIENT_ID });
 
