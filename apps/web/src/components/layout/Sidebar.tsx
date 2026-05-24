@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { Suspense, useEffect, useRef, useState, useCallback } from 'react';
+import { Suspense, useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type User } from 'firebase/auth';
 import { type NotionPage } from '@study-tracker/core';
@@ -128,49 +128,69 @@ function RootPageList({
 }) {
   const { update } = useNotionPageStore();
   const [dragId, setDragId] = useState<string | null>(null);
-  const [dropZoneIndex, setDropZoneIndex] = useState<number | null>(null);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  const isDragging = dragId !== null && roots.some((p) => p.id === dragId);
 
   const handleDragStart = useCallback((e: React.DragEvent, pageId: string) => {
     setDragId(pageId);
     e.dataTransfer.effectAllowed = 'move';
-    // 並び替え専用キー（application/x-page-id とは別）→ PageTreeEntry の reparent を誤発火させない
     e.dataTransfer.setData('application/x-reorder-page-id', pageId);
   }, []);
 
   const handleDragEnd = useCallback(() => {
     setDragId(null);
-    setDropZoneIndex(null);
+    setDropIndex(null);
   }, []);
 
-  const handleZoneDragOver = useCallback((e: React.DragEvent, zoneIndex: number) => {
-    // 並び替え専用キーのみ受け付ける
+  // コンテナ全体の dragOver でマウスY座標から挿入位置を計算
+  const handleContainerDragOver = useCallback((e: React.DragEvent) => {
     if (!e.dataTransfer.types.includes('application/x-reorder-page-id')) return;
     e.preventDefault();
     e.stopPropagation();
-    setDropZoneIndex(zoneIndex);
+
+    const mouseY = e.clientY;
+    let target = roots.length; // デフォルト: 末尾
+    for (let i = 0; i < itemRefs.current.length; i++) {
+      const el = itemRefs.current[i];
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (mouseY < rect.top + rect.height / 2) {
+        target = i;
+        break;
+      }
+    }
+    setDropIndex(target);
+  }, [roots.length]);
+
+  const handleContainerDragLeave = useCallback((e: React.DragEvent) => {
+    // コンテナの外に出たときのみクリア（子要素間の移動は無視）
+    if (!containerRef.current?.contains(e.relatedTarget as Node)) {
+      setDropIndex(null);
+    }
   }, []);
 
-  const handleZoneDrop = useCallback(async (e: React.DragEvent, zoneIndex: number) => {
+  const handleContainerDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     const reorderPageId = e.dataTransfer.getData('application/x-reorder-page-id');
-    if (!reorderPageId || !uid) { setDropZoneIndex(null); return; }
+    if (!reorderPageId || !uid || dropIndex === null) { setDropIndex(null); setDragId(null); return; }
     const fromIndex = roots.findIndex((p) => p.id === reorderPageId);
-    if (fromIndex === -1) { setDropZoneIndex(null); return; }
+    if (fromIndex === -1) { setDropIndex(null); setDragId(null); return; }
 
-    // 同じ位置へのドロップは無視
-    if (zoneIndex === fromIndex || zoneIndex === fromIndex + 1) {
-      setDropZoneIndex(null);
+    if (dropIndex === fromIndex || dropIndex === fromIndex + 1) {
+      setDropIndex(null);
       setDragId(null);
       return;
     }
 
     const newOrder = [...roots];
     const [moved] = newOrder.splice(fromIndex, 1);
-    const insertAt = fromIndex < zoneIndex ? zoneIndex - 1 : zoneIndex;
+    const insertAt = fromIndex < dropIndex ? dropIndex - 1 : dropIndex;
     newOrder.splice(insertAt, 0, moved);
 
-    // order を一括更新
     await Promise.all(
       newOrder
         .map((p, i) => ({ page: p, newOrder: i }))
@@ -179,69 +199,38 @@ function RootPageList({
     );
 
     setDragId(null);
-    setDropZoneIndex(null);
-  }, [dragId, roots, uid, update]);
-
-  const handleZoneDragLeave = useCallback(() => {
-    setDropZoneIndex(null);
-  }, []);
-
-  const isDraggingRoot = dragId !== null && roots.some((p) => p.id === dragId);
+    setDropIndex(null);
+  }, [dropIndex, roots, uid, update]);
 
   return (
-    <div className="space-y-0">
-      {/* ドロップゾーン: 先頭 */}
-      <DropZone
-        active={dropZoneIndex === 0 && isDraggingRoot}
-        dragging={isDraggingRoot}
-        onDragOver={(e) => handleZoneDragOver(e, 0)}
-        onDrop={(e) => handleZoneDrop(e, 0)}
-        onDragLeave={handleZoneDragLeave}
-      />
+    <div
+      ref={containerRef}
+      onDragOver={handleContainerDragOver}
+      onDragLeave={handleContainerDragLeave}
+      onDrop={handleContainerDrop}
+      className="space-y-0"
+    >
+      {/* 先頭インジケーター */}
+      {isDragging && dropIndex === 0 && (
+        <div className="mx-1 my-0.5 h-0.5 rounded bg-brand-400" />
+      )}
       {roots.map((page, i) => (
         <div key={page.id}>
           <div
+            ref={(el) => { itemRefs.current[i] = el; }}
             draggable
             onDragStart={(e) => handleDragStart(e, page.id)}
             onDragEnd={handleDragEnd}
-            className={`rounded-md transition-opacity ${dragId === page.id ? 'opacity-40' : ''}`}
+            className={`rounded-md transition-opacity ${dragId === page.id ? 'opacity-30' : ''}`}
           >
             <PageTreeEntry page={page} pages={pages} currentId={currentId} onCtxMenu={onCtxMenu} />
           </div>
-          {/* ドロップゾーン: 各アイテムの後 */}
-          <DropZone
-            active={dropZoneIndex === i + 1 && isDraggingRoot}
-            dragging={isDraggingRoot}
-            onDragOver={(e) => handleZoneDragOver(e, i + 1)}
-            onDrop={(e) => handleZoneDrop(e, i + 1)}
-            onDragLeave={handleZoneDragLeave}
-          />
+          {/* アイテムの後ろにインジケーター */}
+          {isDragging && dropIndex === i + 1 && (
+            <div className="mx-1 my-0.5 h-0.5 rounded bg-brand-400" />
+          )}
         </div>
       ))}
-    </div>
-  );
-}
-
-function DropZone({
-  active, dragging, onDragOver, onDrop, onDragLeave,
-}: {
-  active: boolean;
-  dragging: boolean;
-  onDragOver: (e: React.DragEvent) => void;
-  onDrop: (e: React.DragEvent) => void;
-  onDragLeave: () => void;
-}) {
-  return (
-    <div
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      onDragLeave={onDragLeave}
-      // アクティブ時のみ拡大、非アクティブは控えめなヒットエリア
-      className={`relative mx-1 transition-all duration-100 ${active ? 'h-4' : dragging ? 'h-2' : 'h-0.5'}`}
-    >
-      {active && (
-        <div className="absolute inset-x-0 top-1/2 h-0.5 -translate-y-px rounded bg-brand-400" />
-      )}
     </div>
   );
 }

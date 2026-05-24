@@ -1190,7 +1190,7 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
   if (compact) {
     return (
       <div
-        className={`rounded-lg border transition-shadow cursor-pointer ${pageDeleted ? 'bg-gray-200 opacity-70 grayscale' : cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}
+        className={`rounded-lg border transition-shadow cursor-pointer ${pageDeleted ? 'bg-gray-300 opacity-60 grayscale' : cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}
         onClick={() => setExpanded((v) => !v)}
         title={pageDeleted ? 'リンク先のノートが削除されました' : undefined}
       >
@@ -1290,7 +1290,7 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
   // ── 通常レイアウト（他タブ、またはコンパクトカードを展開した状態）────
   return (
     <div
-      className={`rounded-lg border transition-shadow cursor-pointer ${pageDeleted ? 'bg-gray-200 opacity-70 grayscale' : cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}
+      className={`rounded-lg border transition-shadow cursor-pointer ${pageDeleted ? 'bg-gray-300 opacity-60 grayscale' : cardBg} ${expanded ? 'border-brand-200 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}
       onClick={() => setExpanded((v) => !v)}
       title={pageDeleted ? 'リンク先のノートが削除されました' : undefined}
     >
