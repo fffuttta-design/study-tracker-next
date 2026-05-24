@@ -15,6 +15,8 @@ import { format, addDays, subDays, isToday } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import { useSearchParams } from 'next/navigation';
 
 // ── 定数 ──────────────────────────────────────────────────────────────
@@ -1251,7 +1253,7 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
                 [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:rounded [&_code]:text-xs
                 [&_pre]:bg-gray-100 [&_pre]:p-2 [&_pre]:rounded [&_pre]:text-xs [&_pre]:overflow-x-auto
                 [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-3 [&_blockquote]:text-gray-500">
-                <ReactMarkdown rehypePlugins={[rehypeRaw]}>{item.content.replace(/\n(?!\n)/g, '  \n')}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} rehypePlugins={[rehypeRaw]}>{item.content}</ReactMarkdown>
               </div>
             )}
 
@@ -1365,7 +1367,7 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
               [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:rounded [&_code]:text-xs
               [&_pre]:bg-gray-100 [&_pre]:p-2 [&_pre]:rounded [&_pre]:text-xs [&_pre]:overflow-x-auto
               [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-3 [&_blockquote]:text-gray-500">
-              <ReactMarkdown rehypePlugins={[rehypeRaw]}>{item.content.replace(/\n(?!\n)/g, '  \n')}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} rehypePlugins={[rehypeRaw]}>{item.content}</ReactMarkdown>
             </div>
           )}
 
