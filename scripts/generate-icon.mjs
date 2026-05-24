@@ -17,30 +17,38 @@ const ROOT = resolve(__dirname, '..')
 
 // ── SVG デザイン（1024 × 1024）──────────────────────────────────
 // コンセプト:
-//   インディゴ→パープルのグラデーション背景
+//   ゴールド（深琥珀 → 明るい金）のグラデーション背景
 //   白い開いた本（左右ページ + 背表紙）
-//   右ページに緑のチェックマーク
-//   本の下に白い横線3本（学習記録のイメージ）
+//   右ページに白いチェックマーク
 const SIZE = 1024
 const R    = 200  // 角丸半径
 
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">
   <defs>
-    <!-- 背景グラデーション: インディゴ → バイオレット -->
+    <!-- 背景グラデーション: 深琥珀 → 明るいゴールド -->
     <linearGradient id="bg" x1="0" y1="0" x2="${SIZE}" y2="${SIZE}" gradientUnits="userSpaceOnUse">
-      <stop offset="0%"   stop-color="#3730A3"/>
-      <stop offset="100%" stop-color="#6D28D9"/>
+      <stop offset="0%"   stop-color="#78350F"/>
+      <stop offset="55%"  stop-color="#B45309"/>
+      <stop offset="100%" stop-color="#FCD34D"/>
+    </linearGradient>
+    <!-- 本の光沢グラデーション（左ページ） -->
+    <linearGradient id="pageL" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#FFFBEB"/>
+      <stop offset="100%" stop-color="#FEF3C7"/>
     </linearGradient>
     <!-- 本のシャドウ -->
     <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
-      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#1e1b4b" flood-opacity="0.45"/>
+      <feDropShadow dx="0" dy="20" stdDeviation="28" flood-color="#451a03" flood-opacity="0.5"/>
     </filter>
   </defs>
 
   <!-- 背景 -->
   <rect width="${SIZE}" height="${SIZE}" rx="${R}" ry="${R}" fill="url(#bg)"/>
 
-  <!-- ── 本体（開いた本）filter="url(#shadow)" ── -->
+  <!-- 背景に微細なテクスチャ（光の筋）-->
+  <ellipse cx="300" cy="200" rx="500" ry="200" fill="white" opacity="0.04" transform="rotate(-20 300 200)"/>
+
+  <!-- ── 本体（開いた本）── -->
   <g filter="url(#shadow)">
     <!-- 左ページ -->
     <path d="
@@ -51,7 +59,7 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${S
       L 192 716
       Q 160 714 160 684
       Z"
-      fill="#FFFFFF" opacity="1"/>
+      fill="url(#pageL)"/>
 
     <!-- 右ページ -->
     <path d="
@@ -62,38 +70,38 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${S
       L 832 716
       Q 864 714 864 684
       Z"
-      fill="#EDE9FE" opacity="1"/>
+      fill="#FEF9EE" opacity="0.92"/>
 
-    <!-- 背表紙（中央の綴じ目） -->
-    <rect x="483" y="256" width="58" height="476" rx="10" fill="#C4B5FD"/>
+    <!-- 背表紙（中央の綴じ目）-->
+    <rect x="483" y="256" width="58" height="476" rx="10" fill="#FDE68A"/>
   </g>
 
   <!-- 左ページ: テキスト行（学習記録のイメージ）-->
-  <g opacity="0.28">
-    <rect x="210" y="360" width="238" height="22" rx="11" fill="#312E81"/>
-    <rect x="210" y="410" width="198" height="22" rx="11" fill="#312E81"/>
-    <rect x="210" y="460" width="220" height="22" rx="11" fill="#312E81"/>
-    <rect x="210" y="510" width="170" height="22" rx="11" fill="#312E81"/>
-    <rect x="210" y="560" width="210" height="22" rx="11" fill="#312E81"/>
-    <rect x="210" y="610" width="150" height="22" rx="11" fill="#312E81"/>
+  <g opacity="0.22">
+    <rect x="210" y="360" width="238" height="22" rx="11" fill="#78350F"/>
+    <rect x="210" y="410" width="198" height="22" rx="11" fill="#78350F"/>
+    <rect x="210" y="460" width="220" height="22" rx="11" fill="#78350F"/>
+    <rect x="210" y="510" width="170" height="22" rx="11" fill="#78350F"/>
+    <rect x="210" y="560" width="210" height="22" rx="11" fill="#78350F"/>
+    <rect x="210" y="610" width="150" height="22" rx="11" fill="#78350F"/>
   </g>
 
-  <!-- 右ページ: 大きなチェックマーク（達成・完了のイメージ）-->
+  <!-- 右ページ: 大きなチェックマーク（白）-->
   <path d="M 590 490 L 680 600 L 820 400"
-    stroke="#10B981"
-    stroke-width="68"
+    stroke="#FFFFFF"
+    stroke-width="72"
     stroke-linecap="round"
     stroke-linejoin="round"
     fill="none"/>
 
-  <!-- 右ページ: チェックのハイライト（光沢感）-->
+  <!-- チェックマーク: 内側ハイライト（金色）-->
   <path d="M 590 490 L 680 600 L 820 400"
-    stroke="#6EE7B7"
-    stroke-width="28"
+    stroke="#FDE68A"
+    stroke-width="30"
     stroke-linecap="round"
     stroke-linejoin="round"
     fill="none"
-    opacity="0.5"/>
+    opacity="0.6"/>
 </svg>`
 
 // ── Sharp で各サイズの PNG を生成 ─────────────────────────────────
