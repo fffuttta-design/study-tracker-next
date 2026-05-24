@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, Tray, Menu, nativeImage } from 'electron'
+import { app, BrowserWindow, shell, Tray, Menu, nativeImage, dialog } from 'electron'
 import { readFile } from 'fs/promises'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
@@ -125,7 +125,7 @@ function createWindow() {
 // ── バージョンチェック（Driveの version.json と比較）─────────────────
 // Google Drive がバックグラウンドで新しい exe + version.json を同期する
 // 起動時に exe と同じフォルダの version.json を読んで buildNumber を比較
-// 新しければ app.relaunch() → 次回起動時に新バイナリが使われる
+// 新しければダイアログを出して「今すぐ更新 / 後で」を選択させる
 async function checkForUpdate() {
   try {
     const exeDir          = dirname(app.getPath('exe'))
@@ -133,15 +133,33 @@ async function checkForUpdate() {
     if (!existsSync(versionJsonPath)) return
 
     const [remote, local] = await Promise.all([
-      readFile(versionJsonPath,                   'utf-8').then(JSON.parse),
-      readFile(join(__dirname, 'build-info.json'), 'utf-8').then(JSON.parse),
+      readFile(versionJsonPath,                    'utf-8').then(JSON.parse),
+      readFile(join(__dirname, 'build-info.json'),  'utf-8').then(JSON.parse),
     ])
 
     const remoteNum = remote.buildNumber ?? 0
     const localNum  = local.buildNumber  ?? 0
 
-    if (remoteNum > localNum) {
-      console.log(`[update] 新バージョン検知: build ${localNum} → ${remoteNum}`)
+    if (remoteNum <= localNum) return  // 最新 or チェック不要
+
+    console.log(`[update] 新バージョン検知: build ${localNum} → ${remoteNum}`)
+
+    const { response } = await dialog.showMessageBox(mainWin, {
+      type: 'info',
+      title: '学習トラッカー - アップデート',
+      message: '新しいバージョンが利用可能です 🎉',
+      detail: [
+        `現在のバージョン : v${local.version  ?? '?'} (build ${localNum})`,
+        `最新バージョン   : v${remote.version ?? '?'} (build ${remoteNum})`,
+        '',
+        '今すぐ再起動して更新しますか？',
+      ].join('\n'),
+      buttons: ['今すぐ更新', '後で'],
+      defaultId: 0,
+      cancelId: 1,
+    })
+
+    if (response === 0) {
       app.relaunch()
       app.exit(0)
     }
@@ -161,10 +179,13 @@ if (!gotLock) {
     if (mainWin) { mainWin.show(); mainWin.focus() }
   })
 
-  app.whenReady().then(async () => {
+  app.whenReady().then(() => {
     createWindow()
     createTray()
-    await checkForUpdate()
+    // ウィンドウが表示されてからダイアログを出す（1.5秒後）
+    mainWin.once('ready-to-show', () => {
+      setTimeout(() => checkForUpdate(), 1500)
+    })
   })
 }
 
