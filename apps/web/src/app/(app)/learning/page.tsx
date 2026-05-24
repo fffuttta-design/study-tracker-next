@@ -1185,7 +1185,7 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
     return `/notion-plus/${item.notionPageId}?hl=${encodeURIComponent(hlText)}&from=${fromTab ?? 0}`;
   })();
 
-  const cardBg = showReviewAction && nextReview ? (STAGE_CARD_BG[nextReview.stageIndex] ?? 'bg-white') : 'bg-white';
+  const cardBg = 'bg-white';
 
   // ── コンパクトレイアウト（ダッシュボード専用）────────────────────────
   if (compact) {
