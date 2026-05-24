@@ -180,6 +180,8 @@ if (!gotLock) {
   })
 
   app.whenReady().then(() => {
+    // デフォルトメニューバーを非表示
+    Menu.setApplicationMenu(null)
     createWindow()
     createTray()
     // ウィンドウが表示されてからダイアログを出す（1.5秒後）

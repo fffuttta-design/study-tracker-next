@@ -25,11 +25,11 @@ const R    = 200  // 角丸半径
 
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">
   <defs>
-    <!-- 背景グラデーション: 深琥珀 → 明るいゴールド -->
+    <!-- 背景グラデーション: ビビッドゴールド -->
     <linearGradient id="bg" x1="0" y1="0" x2="${SIZE}" y2="${SIZE}" gradientUnits="userSpaceOnUse">
-      <stop offset="0%"   stop-color="#78350F"/>
-      <stop offset="55%"  stop-color="#B45309"/>
-      <stop offset="100%" stop-color="#FCD34D"/>
+      <stop offset="0%"   stop-color="#F59E0B"/>
+      <stop offset="60%"  stop-color="#FBBF24"/>
+      <stop offset="100%" stop-color="#FEF08A"/>
     </linearGradient>
     <!-- 本の光沢グラデーション（左ページ） -->
     <linearGradient id="pageL" x1="0" y1="0" x2="1" y2="0">
@@ -38,7 +38,7 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${S
     </linearGradient>
     <!-- 本のシャドウ -->
     <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
-      <feDropShadow dx="0" dy="20" stdDeviation="28" flood-color="#451a03" flood-opacity="0.5"/>
+      <feDropShadow dx="0" dy="20" stdDeviation="28" flood-color="#92400E" flood-opacity="0.4"/>
     </filter>
   </defs>
 
@@ -77,13 +77,13 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${S
   </g>
 
   <!-- 左ページ: テキスト行（学習記録のイメージ）-->
-  <g opacity="0.22">
-    <rect x="210" y="360" width="238" height="22" rx="11" fill="#78350F"/>
-    <rect x="210" y="410" width="198" height="22" rx="11" fill="#78350F"/>
-    <rect x="210" y="460" width="220" height="22" rx="11" fill="#78350F"/>
-    <rect x="210" y="510" width="170" height="22" rx="11" fill="#78350F"/>
-    <rect x="210" y="560" width="210" height="22" rx="11" fill="#78350F"/>
-    <rect x="210" y="610" width="150" height="22" rx="11" fill="#78350F"/>
+  <g opacity="0.2">
+    <rect x="210" y="360" width="238" height="22" rx="11" fill="#92400E"/>
+    <rect x="210" y="410" width="198" height="22" rx="11" fill="#92400E"/>
+    <rect x="210" y="460" width="220" height="22" rx="11" fill="#92400E"/>
+    <rect x="210" y="510" width="170" height="22" rx="11" fill="#92400E"/>
+    <rect x="210" y="560" width="210" height="22" rx="11" fill="#92400E"/>
+    <rect x="210" y="610" width="150" height="22" rx="11" fill="#92400E"/>
   </g>
 
   <!-- 右ページ: 大きなチェックマーク（白）-->

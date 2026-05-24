@@ -245,7 +245,6 @@ function UserFooter({ user }: { user: User }) {
         <img src={user.photoURL} alt="" className="h-6 w-6 rounded-full" />
       )}
       <p className="min-w-0 flex-1 truncate text-xs text-gray-600">{user.displayName}</p>
-      <button onClick={() => signOut()} className="shrink-0 text-xs text-gray-400 hover:text-gray-600" title="ログアウト">↩</button>
     </div>
   );
 }
@@ -567,13 +566,6 @@ export function Sidebar({ user }: SidebarProps) {
           <div className="min-w-0 flex-1">
             <p className="truncate text-xs font-medium text-gray-700">{user.displayName}</p>
           </div>
-          <button
-            onClick={() => signOut()}
-            className="shrink-0 text-xs text-gray-400 hover:text-gray-600"
-            title="ログアウト"
-          >
-            ↩
-          </button>
         </div>
       </div>
     </aside>
