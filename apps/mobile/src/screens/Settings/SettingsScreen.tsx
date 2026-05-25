@@ -13,13 +13,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import auth from '@react-native-firebase/auth';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useAuthStore } from '../../store/authStore';
-import { checkForUpdate, downloadAndInstall, CURRENT_BUILD_NUMBER, CURRENT_VERSION } from '../../services/updateService';
+import { checkForUpdate, CURRENT_BUILD_NUMBER, CURRENT_VERSION } from '../../services/updateService';
 
 export default function SettingsScreen() {
   const { user } = useAuthStore();
   const [checking, setChecking] = useState(false);
-  const [downloading, setDownloading] = useState(false);
-  const [dlProgress, setDlProgress] = useState(0);
 
   const handleCheckUpdate = async () => {
     if (Platform.OS !== 'android') return;
@@ -93,33 +91,6 @@ export default function SettingsScreen() {
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.driveBtn, downloading && styles.driveBtnDisabled]}
-              onPress={async () => {
-                if (downloading) return;
-                setDownloading(true);
-                setDlProgress(0);
-                try {
-                  await downloadAndInstall((pct) => setDlProgress(pct));
-                } finally {
-                  setDownloading(false);
-                  setDlProgress(0);
-                }
-              }}
-              disabled={downloading}
-            >
-              {downloading ? (
-                <>
-                  <ActivityIndicator size="small" color="#16a34a" style={{ marginBottom: 4 }} />
-                  <Text style={styles.driveBtnText}>ダウンロード中... {dlProgress}%</Text>
-                </>
-              ) : (
-                <>
-                  <Text style={styles.driveBtnText}>📲 APKをダウンロードしてインストール</Text>
-                  <Text style={styles.driveBtnSub}>Driveから最新APKをダウンロードしてインストールします</Text>
-                </>
-              )}
-            </TouchableOpacity>
           </>
         )}
 
@@ -150,10 +121,6 @@ const styles = StyleSheet.create({
   updateBtn: { backgroundColor: '#ffffff', borderRadius: 10, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: '#3b82f6', marginBottom: 10 },
   updateBtnDisabled: { opacity: 0.6 },
   updateBtnText: { color: '#3b82f6', fontWeight: '600', fontSize: 15 },
-  driveBtn: { backgroundColor: '#f0fdf4', borderRadius: 10, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#86efac', marginBottom: 12 },
-  driveBtnDisabled: { opacity: 0.7 },
-  driveBtnText: { color: '#16a34a', fontWeight: '600', fontSize: 14 },
-  driveBtnSub: { color: '#6b7280', fontSize: 11, marginTop: 3 },
   signOutBtn: { marginTop: 'auto', backgroundColor: '#ffffff', borderRadius: 10, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: '#ef4444' },
   signOutText: { color: '#ef4444', fontWeight: '600', fontSize: 15 },
 });
