@@ -78,10 +78,6 @@ export default function SettingsScreen() {
             <Text style={styles.infoLabel}>バージョン</Text>
             <Text style={styles.infoValue}>v{CURRENT_VERSION} (build {CURRENT_BUILD_NUMBER})</Text>
           </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>プラットフォーム</Text>
-            <Text style={styles.infoValue}>Android</Text>
-          </View>
         </View>
 
         {/* アップデート確認 */}
