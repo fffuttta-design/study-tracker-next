@@ -16,8 +16,8 @@ const GITHUB_VERSION_URL =
 export const DRIVE_APK_ID = '14x0svZmqUzGy8r9FztUUGylIz72CxKdM';
 
 // ── 現在のビルド番号（ビルド時に自動更新）─────────────────────────
-export const CURRENT_BUILD_NUMBER = 33;
-export const CURRENT_VERSION      = '1.0.13';
+export const CURRENT_BUILD_NUMBER = 34;
+export const CURRENT_VERSION      = '1.0.14';
 
 // ─────────────────────────────────────────────────────────────────
 
@@ -38,16 +38,18 @@ async function fetchVersionJson(): Promise<
   { ok: false; status: number; error?: string }
 > {
   try {
-    const res = await fetch(`${GITHUB_VERSION_URL}?_t=${Date.now()}`, {
-      headers: { 'Cache-Control': 'no-cache' },
-    });
+    const url = `${GITHUB_VERSION_URL}?_t=${Date.now()}`;
+    const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache' } });
     if (!res.ok) {
+      Alert.alert('DEBUG', `HTTP ${res.status}\n${url}`);
       return { ok: false, status: res.status };
     }
     const raw = await res.text();
     const data = typeof raw === 'object' ? raw : JSON.parse(raw);
+    Alert.alert('DEBUG', `取得成功\nbuildNumber: ${data.buildNumber}\n現在: ${CURRENT_BUILD_NUMBER}`);
     return { ok: true, data };
   } catch (e: any) {
+    Alert.alert('DEBUG', `例外エラー: ${e?.message}`);
     return { ok: false, status: 0, error: e?.message };
   }
 }
