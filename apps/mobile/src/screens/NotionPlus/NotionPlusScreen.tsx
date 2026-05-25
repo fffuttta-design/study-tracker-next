@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
+  Image,
   FlatList,
   TouchableOpacity,
   StyleSheet,
@@ -45,7 +46,7 @@ export default function NotionPlusScreen({ navigation }: any) {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
-        <Text style={styles.title}>📝 ノート</Text>
+        <Text style={styles.title}>📝 NotionPlus</Text>
         <TouchableOpacity style={styles.addBtn} onPress={() => setShowAdd(true)}>
           <Text style={styles.addBtnText}>＋ 新規</Text>
         </TouchableOpacity>
@@ -99,7 +100,11 @@ export default function NotionPlusScreen({ navigation }: any) {
 function PageItem({ page, onPress, onDelete }: { page: NotionPage; onPress: () => void; onDelete: () => void }) {
   return (
     <TouchableOpacity style={styles.pageItem} onPress={onPress}>
-      <Text style={styles.pageIcon}>{page.icon ?? '📄'}</Text>
+      {page.icon?.startsWith('http') ? (
+        <Image source={{ uri: page.icon }} style={styles.pageIconImg} />
+      ) : (
+        <Text style={styles.pageIcon}>{page.icon ?? '📄'}</Text>
+      )}
       <View style={styles.pageInfo}>
         <Text style={styles.pageTitle}>{page.title}</Text>
         {page.updatedAt && (
@@ -123,6 +128,7 @@ const styles = StyleSheet.create({
   empty: { color: '#9ca3af', textAlign: 'center', marginTop: 40, fontSize: 14, lineHeight: 22 },
   pageItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 10, padding: 14, gap: 12, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3 },
   pageIcon: { fontSize: 24 },
+  pageIconImg: { width: 28, height: 28, borderRadius: 4 },
   pageInfo: { flex: 1 },
   pageTitle: { fontSize: 15, fontWeight: '600', color: '#111827' },
   pageDate: { fontSize: 12, color: '#9ca3af', marginTop: 2 },

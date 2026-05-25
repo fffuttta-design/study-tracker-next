@@ -41,7 +41,7 @@ function MainTabs() {
       })}>
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'ホーム' }} />
       <Tab.Screen name="Learning" component={LearningScreen} options={{ title: '学習リスト' }} />
-      <Tab.Screen name="NotionPlus" component={NotionPlusScreen} options={{ title: 'ノート' }} />
+      <Tab.Screen name="NotionPlus" component={NotionPlusScreen} options={{ title: 'NotionPlus' }} />
       <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: '設定' }} />
     </Tab.Navigator>
   );
