@@ -5,7 +5,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import auth from '@react-native-firebase/auth';
 import AppNavigator from './src/navigation';
 import { useAuthStore } from './src/store/authStore';
-import { checkForUpdate, downloadAndInstall } from './src/services/updateService';
+import { checkForUpdate } from './src/services/updateService';
 
 function AuthListener() {
   const { setUser } = useAuthStore();
@@ -15,8 +15,8 @@ function AuthListener() {
       setUser(user);
       if (user) {
         setTimeout(() => {
-          checkForUpdate(false, async (onProgress) => {
-            await downloadAndInstall(onProgress);
+          checkForUpdate(false, (doDownload) => {
+            doDownload(() => {});
           });
         }, 2000);
       }
