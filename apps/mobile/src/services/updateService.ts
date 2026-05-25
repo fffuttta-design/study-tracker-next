@@ -16,8 +16,8 @@ const GITHUB_VERSION_URL =
 export const DRIVE_APK_ID = '14x0svZmqUzGy8r9FztUUGylIz72CxKdM';
 
 // ── 現在のビルド番号（ビルド時に自動更新）─────────────────────────
-export const CURRENT_BUILD_NUMBER = 36;
-export const CURRENT_VERSION      = '1.0.16';
+export const CURRENT_BUILD_NUMBER = 37;
+export const CURRENT_VERSION      = '1.0.17';
 
 // ─────────────────────────────────────────────────────────────────
 
@@ -48,7 +48,6 @@ async function fetchVersionJson(): Promise<
     const data = typeof raw === 'object' ? raw : JSON.parse(raw);
     return { ok: true, data };
   } catch (e: any) {
-    Alert.alert('DEBUG', `例外エラー: ${e?.message}`);
     return { ok: false, status: 0, error: e?.message };
   }
 }
@@ -86,13 +85,20 @@ function installApk(): void {
   });
 }
 
-export async function checkForUpdate(manual = false): Promise<void> {
+/**
+ * アップデート確認。更新ありでユーザーが「今すぐ更新」を押したら
+ * onConfirmed(progress callback) を呼ぶ。進捗表示は呼び出し元に委譲。
+ */
+export async function checkForUpdate(
+  manual = false,
+  onConfirmed?: (onProgress: (pct: number) => void) => void,
+): Promise<void> {
   const result = await fetchVersionJson();
 
   if (!result.ok) {
     if (manual) {
       const msg = result.status === 0
-        ? `ネットワークエラーです。\n通信状況を確認してください。`
+        ? 'ネットワークエラーです。\n通信状況を確認してください。'
         : `バージョン情報を取得できませんでした (HTTP ${result.status})`;
       Alert.alert('エラー', msg);
     }
@@ -113,21 +119,39 @@ export async function checkForUpdate(manual = false): Promise<void> {
       { text: '後で', style: 'cancel' },
       {
         text: '今すぐ更新',
-        onPress: async () => {
-          const accessToken = await getAccessToken();
-          if (!accessToken) {
-            Alert.alert('エラー', 'Googleログインが必要です');
-            return;
+        onPress: () => {
+          if (onConfirmed) {
+            // 呼び出し元（Settings画面）が進捗表示しながらダウンロード
+            onConfirmed(async (onProgress) => {
+              const accessToken = await getAccessToken();
+              if (!accessToken) {
+                Alert.alert('エラー', 'Googleログインが必要です');
+                return;
+              }
+              const apkPath = await downloadApk(accessToken, onProgress);
+              if (!apkPath) {
+                Alert.alert('エラー', 'ダウンロードに失敗しました。\nログアウトして再ログインすると解決する場合があります。');
+                return;
+              }
+              installApk();
+            });
           }
-          Alert.alert('ダウンロード中...', 'しばらくお待ちください');
-          const apkPath = await downloadApk(accessToken);
-          if (!apkPath) {
-            Alert.alert('エラー', 'ダウンロードに失敗しました。\nログアウトして再ログインすると解決する場合があります。');
-            return;
-          }
-          installApk();
         },
       },
     ],
   );
+}
+
+export async function downloadAndInstall(onProgress?: (pct: number) => void): Promise<void> {
+  const accessToken = await getAccessToken();
+  if (!accessToken) {
+    Alert.alert('エラー', 'Googleログインが必要です');
+    return;
+  }
+  const apkPath = await downloadApk(accessToken, onProgress);
+  if (!apkPath) {
+    Alert.alert('エラー', 'ダウンロードに失敗しました。\nログアウトして再ログインすると解決する場合があります。');
+    return;
+  }
+  installApk();
 }

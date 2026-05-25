@@ -18,12 +18,20 @@ import { checkForUpdate, CURRENT_BUILD_NUMBER, CURRENT_VERSION } from '../../ser
 export default function SettingsScreen() {
   const { user } = useAuthStore();
   const [checking, setChecking] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [dlProgress, setDlProgress] = useState(0);
 
   const handleCheckUpdate = async () => {
     if (Platform.OS !== 'android') return;
     setChecking(true);
     try {
-      await checkForUpdate(true);
+      await checkForUpdate(true, (doDownload) => {
+        setChecking(false);
+        setDownloading(true);
+        setDlProgress(0);
+        doDownload((pct) => setDlProgress(pct))
+          .finally(() => setDownloading(false));
+      });
     } finally {
       setChecking(false);
     }
@@ -80,17 +88,21 @@ export default function SettingsScreen() {
         {Platform.OS === 'android' && (
           <>
             <TouchableOpacity
-              style={[styles.updateBtn, checking && styles.updateBtnDisabled]}
+              style={[styles.updateBtn, (checking || downloading) && styles.updateBtnDisabled]}
               onPress={handleCheckUpdate}
-              disabled={checking}
+              disabled={checking || downloading}
             >
-              {checking ? (
+              {downloading ? (
+                <>
+                  <ActivityIndicator size="small" color="#3b82f6" style={{ marginBottom: 4 }} />
+                  <Text style={styles.updateBtnText}>ダウンロード中... {dlProgress}%</Text>
+                </>
+              ) : checking ? (
                 <ActivityIndicator size="small" color="#3b82f6" />
               ) : (
                 <Text style={styles.updateBtnText}>🔄 アップデートを確認</Text>
               )}
             </TouchableOpacity>
-
           </>
         )}
 
