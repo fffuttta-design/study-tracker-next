@@ -51,12 +51,18 @@ if (!destDir) {
   process.exit(1)
 }
 
-// ── Step 0: buildNumber をインクリメント ─────────────────────────
+// ── Step 0: buildNumber と version をインクリメント ──────────────
 const buildInfo = JSON.parse(readFileSync(buildInfoPath, 'utf-8'))
 const prevBuildNumber = buildInfo.buildNumber ?? 0
 const newBuildNumber  = prevBuildNumber + 1
-const newVersion      = buildInfo.version ?? '1.0.0'
-console.log(`\n[build-and-sync] buildNumber: ${prevBuildNumber} → ${newBuildNumber}  (v${newVersion})`)
+
+// patch を +1（例: 1.0.3 → 1.0.4）
+const prevVersion = buildInfo.version ?? '1.0.0'
+const [major, minor, patch] = prevVersion.split('.').map(Number)
+const newVersion = `${major}.${minor}.${patch + 1}`
+
+console.log(`\n[build-and-sync] buildNumber: ${prevBuildNumber} → ${newBuildNumber}`)
+console.log(`[build-and-sync] version:     ${prevVersion} → ${newVersion}`)
 
 // ── Step 1: builtAt を生成 ────────────────────────────────────────
 const builtAt = new Date().toISOString()
