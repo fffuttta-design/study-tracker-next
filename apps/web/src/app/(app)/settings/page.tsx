@@ -5,6 +5,12 @@ import { APP_VERSION } from '@/lib/version';
 import { useAuthStore } from '@/stores/authStore';
 import { useSettingsStore, REVIEW_STAGE_LABELS } from '@/stores/settingsStore';
 
+declare global {
+  interface Window {
+    electronAPI?: { platform: string; relaunch?: () => void };
+  }
+}
+
 export default function SettingsPage() {
   const { user, signOut } = useAuthStore();
   const { reviewStageDays, setReviewStageDays, resetReviewStageDays } = useSettingsStore();
@@ -61,6 +67,24 @@ export default function SettingsPage() {
             ログアウト
           </button>
         </Section>
+
+        {/* アプリ操作 */}
+        {typeof window !== 'undefined' && window.electronAPI && (
+          <Section title="アプリ操作">
+            <div className="flex items-center justify-between py-1">
+              <div>
+                <p className="text-sm text-gray-700">アプリを再起動</p>
+                <p className="text-xs text-gray-400">設定を反映させたいときに使用</p>
+              </div>
+              <button
+                onClick={() => window.electronAPI?.relaunch?.()}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-800"
+              >
+                再起動
+              </button>
+            </div>
+          </Section>
+        )}
 
         {/* アプリ情報 */}
         <Section title="アプリ情報">

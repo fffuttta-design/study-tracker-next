@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, Tray, Menu, nativeImage, dialog } from 'electron'
+import { app, BrowserWindow, shell, Tray, Menu, nativeImage, dialog, ipcMain } from 'electron'
 import { readFile } from 'fs/promises'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
@@ -167,6 +167,12 @@ async function checkForUpdate() {
     console.warn('[update] バージョンチェック失敗:', e.message)
   }
 }
+
+// ── IPC ──────────────────────────────────────────────────────────
+ipcMain.on('app-relaunch', () => {
+  app.relaunch()
+  app.exit(0)
+})
 
 // ── シングルインスタンス ──────────────────────────────────────────
 const gotLock = app.requestSingleInstanceLock()
