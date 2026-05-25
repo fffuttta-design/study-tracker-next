@@ -120,6 +120,7 @@ function LearningItemCard({
   onCompleteReview: (item: LearningItem, stageIndex: number) => void;
   onDelete: () => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const completed = isFullyCompleted(item);
   const due = hasDueReview(item);
 
@@ -127,16 +128,13 @@ function LearningItemCard({
   const nextReview = item.reviews.find(r => !r.completed);
 
   return (
-    <View style={[styles.card, completed && styles.cardCompleted]}>
+    <TouchableOpacity
+      style={[styles.card, completed && styles.cardCompleted]}
+      onPress={() => setExpanded(v => !v)}
+      activeOpacity={0.85}
+    >
       <View style={styles.cardHeader}>
         <View style={styles.cardMeta}>
-          {item.importance && (
-            <View style={[styles.importanceBadge, { backgroundColor: importanceColor(item.importance) + '33', borderColor: importanceColor(item.importance) }]}>
-              <Text style={[styles.importanceText, { color: importanceColor(item.importance) }]}>
-                {importanceLabel(item.importance)}
-              </Text>
-            </View>
-          )}
           {categoryName && (
             <Text style={styles.category}>{categoryName}</Text>
           )}
@@ -157,24 +155,28 @@ function LearningItemCard({
       </View>
 
       <Text style={[styles.cardTitle, completed && styles.cardTitleDone]}>{item.title}</Text>
-      {item.content ? <Text style={styles.cardContent} numberOfLines={2}>{item.content}</Text> : null}
 
-      {/* 復習ステージ */}
-      <View style={styles.reviewRow}>
-        {item.reviews.map((r, i) => (
-          <TouchableOpacity
-            key={i}
-            style={[
-              styles.reviewDot,
-              r.completed ? styles.reviewDotDone : (r.scheduledDate <= localDateKey() ? styles.reviewDotDue : styles.reviewDotFuture),
-            ]}
-            onPress={() => !r.completed && onCompleteReview(item, r.stageIndex)}
-            disabled={r.completed}>
-            <Text style={styles.reviewDotText}>{REVIEW_STAGE_LABELS[i]}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </View>
+      {expanded && (
+        <>
+          {item.content ? <Text style={styles.cardContent}>{item.content}</Text> : null}
+          {/* 復習ステージ */}
+          <View style={styles.reviewRow}>
+            {item.reviews.map((r, i) => (
+              <TouchableOpacity
+                key={i}
+                style={[
+                  styles.reviewDot,
+                  r.completed ? styles.reviewDotDone : (r.scheduledDate <= localDateKey() ? styles.reviewDotDue : styles.reviewDotFuture),
+                ]}
+                onPress={() => !r.completed && onCompleteReview(item, r.stageIndex)}
+                disabled={r.completed}>
+                <Text style={styles.reviewDotText}>{REVIEW_STAGE_LABELS[i]}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </>
+      )}
+    </TouchableOpacity>
   );
 }
 
