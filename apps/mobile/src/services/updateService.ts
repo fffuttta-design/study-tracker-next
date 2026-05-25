@@ -13,8 +13,8 @@ export const DRIVE_VERSION_JSON_ID = '1wp26QdeMtaQgTd-EemgyDDFTa_-t0ezP';
 export const DRIVE_APK_ID          = '14x0svZmqUzGy8r9FztUUGylIz72CxKdM';
 
 // ── 現在のビルド番号（ビルド時に自動更新）─────────────────────────
-export const CURRENT_BUILD_NUMBER = 27;
-export const CURRENT_VERSION      = '1.0.7';
+export const CURRENT_BUILD_NUMBER = 28;
+export const CURRENT_VERSION      = '1.0.8';
 
 // ─────────────────────────────────────────────────────────────────
 
@@ -36,8 +36,8 @@ async function fetchVersionJson(accessToken: string): Promise<
 > {
   try {
     const res = await fetch(
-      `${DRIVE_API_BASE}/${DRIVE_VERSION_JSON_ID}?alt=media`,
-      { headers: { Authorization: `Bearer ${accessToken}` } },
+      `${DRIVE_API_BASE}/${DRIVE_VERSION_JSON_ID}?alt=media&_t=${Date.now()}`,
+      { headers: { Authorization: `Bearer ${accessToken}`, 'Cache-Control': 'no-cache' } },
     );
     if (!res.ok) {
       console.warn(`[update] version.json fetch failed: HTTP ${res.status}`);
