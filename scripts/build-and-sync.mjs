@@ -250,7 +250,7 @@ try {
 
 // ── Step 9: GitHub 反映確認（テスト可能チェック）────────────────
 if (pushed) {
-  const GITHUB_VERSION_URL = 'https://raw.githubusercontent.com/fffuttta-design/study-tracker-next/master/apps/mobile/version.json'
+  const GITHUB_VERSION_URL = 'https://api.github.com/repos/fffuttta-design/study-tracker-next/contents/apps/mobile/version.json'
   console.log('\n[build-and-sync] GitHub 反映確認中...')
   const maxWait = 60000  // 最大60秒
   const interval = 3000  // 3秒ごとにチェック
@@ -260,7 +260,9 @@ if (pushed) {
   while (Date.now() - startTime < maxWait) {
     await new Promise(r => setTimeout(r, interval))
     try {
-      const res = await fetch(`${GITHUB_VERSION_URL}?_t=${Date.now()}`)
+      const res = await fetch(GITHUB_VERSION_URL, {
+        headers: { Accept: 'application/vnd.github.raw+json' },
+      })
       if (res.ok) {
         const data = await res.json()
         if (data.buildNumber === newBuildNumber) {

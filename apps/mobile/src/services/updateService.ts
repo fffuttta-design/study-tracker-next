@@ -8,16 +8,16 @@ import { Alert, Platform, Linking } from 'react-native';
 import RNFS from 'react-native-fs';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
-// ── version.json: GitHub raw（push 後即時反映）───────────────────
+// ── version.json: GitHub API（CDN なし・常に最新）───────────────
 const GITHUB_VERSION_URL =
-  'https://raw.githubusercontent.com/fffuttta-design/study-tracker-next/master/apps/mobile/version.json';
+  'https://api.github.com/repos/fffuttta-design/study-tracker-next/contents/apps/mobile/version.json';
 
 // ── APK: Drive ファイル ID ────────────────────────────────────────
 export const DRIVE_APK_ID = '14x0svZmqUzGy8r9FztUUGylIz72CxKdM';
 
 // ── 現在のビルド番号（ビルド時に自動更新）─────────────────────────
-export const CURRENT_BUILD_NUMBER = 34;
-export const CURRENT_VERSION      = '1.0.14';
+export const CURRENT_BUILD_NUMBER = 36;
+export const CURRENT_VERSION      = '1.0.16';
 
 // ─────────────────────────────────────────────────────────────────
 
@@ -38,15 +38,14 @@ async function fetchVersionJson(): Promise<
   { ok: false; status: number; error?: string }
 > {
   try {
-    const url = `${GITHUB_VERSION_URL}?_t=${Date.now()}`;
-    const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache' } });
+    const res = await fetch(GITHUB_VERSION_URL, {
+      headers: { 'Accept': 'application/vnd.github.raw+json' },
+    });
     if (!res.ok) {
-      Alert.alert('DEBUG', `HTTP ${res.status}\n${url}`);
       return { ok: false, status: res.status };
     }
     const raw = await res.text();
     const data = typeof raw === 'object' ? raw : JSON.parse(raw);
-    Alert.alert('DEBUG', `取得成功\nbuildNumber: ${data.buildNumber}\n現在: ${CURRENT_BUILD_NUMBER}`);
     return { ok: true, data };
   } catch (e: any) {
     Alert.alert('DEBUG', `例外エラー: ${e?.message}`);
