@@ -8,16 +8,13 @@ import { Alert, Platform, Linking } from 'react-native';
 import RNFS from 'react-native-fs';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
-// ── GitHub raw URL（version.json）────────────────────────────────
-const GITHUB_VERSION_URL =
-  'https://raw.githubusercontent.com/fffuttta-design/study-tracker-next/master/apps/mobile/version.json';
-
-// ── Drive APK ファイル ID ─────────────────────────────────────────
-export const DRIVE_APK_ID = '14x0svZmqUzGy8r9FztUUGylIz72CxKdM';
+// ── Drive ファイル ID ─────────────────────────────────────────────
+export const DRIVE_VERSION_JSON_ID = '1wp26QdeMtaQgTd-EemgyDDFTa_-t0ezP';
+export const DRIVE_APK_ID          = '14x0svZmqUzGy8r9FztUUGylIz72CxKdM';
 
 // ── 現在のビルド番号（ビルド時に自動更新）─────────────────────────
-export const CURRENT_BUILD_NUMBER = 24;
-export const CURRENT_VERSION      = '1.0.4';
+export const CURRENT_BUILD_NUMBER = 25;
+export const CURRENT_VERSION      = '1.0.5';
 
 // ─────────────────────────────────────────────────────────────────
 
@@ -33,19 +30,23 @@ async function getAccessToken(): Promise<string | null> {
   }
 }
 
-async function fetchVersionJson(): Promise<
+async function fetchVersionJson(accessToken: string): Promise<
   { ok: true; data: { version: string; buildNumber: number; builtAt: string } } |
   { ok: false; status: number; error?: string }
 > {
   try {
-    const res = await fetch(GITHUB_VERSION_URL, {
-      headers: { 'Cache-Control': 'no-cache' },
-    });
+    const res = await fetch(
+      `${DRIVE_API_BASE}/${DRIVE_VERSION_JSON_ID}?alt=media`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
     if (!res.ok) {
       console.warn(`[update] version.json fetch failed: HTTP ${res.status}`);
       return { ok: false, status: res.status };
     }
-    return { ok: true, data: await res.json() };
+    // レスポンスを dynamic で受けて手動パース（型ミスマッチ対策）
+    const raw = await res.text();
+    const data = typeof raw === 'object' ? raw : JSON.parse(raw);
+    return { ok: true, data };
   } catch (e: any) {
     console.warn('[update] fetchVersionJson error:', e);
     return { ok: false, status: 0, error: e?.message };
@@ -92,12 +93,20 @@ function installApk(): void {
  * @param manual true の場合、最新版でも「最新です」と表示する
  */
 export async function checkForUpdate(manual = false): Promise<void> {
-  const result = await fetchVersionJson();
+  const accessToken = await getAccessToken();
+  if (!accessToken) {
+    if (manual) Alert.alert('エラー', 'Googleログインが必要です');
+    return;
+  }
+
+  const result = await fetchVersionJson(accessToken);
 
   if (!result.ok) {
     if (manual) {
-      const msg = result.status === 0
-        ? `ネットワークエラーです。\n通信状況を確認してください。\n(${result.error ?? 'unknown'})`
+      const msg = result.status === 403 || result.status === 401
+        ? 'Drive へのアクセス権限がありません。\n一度ログアウトして再ログインしてください。'
+        : result.status === 0
+        ? `ネットワークエラーです。\n(${result.error ?? 'unknown'})`
         : `バージョン情報を取得できませんでした (HTTP ${result.status})`;
       Alert.alert('エラー', msg);
     }
