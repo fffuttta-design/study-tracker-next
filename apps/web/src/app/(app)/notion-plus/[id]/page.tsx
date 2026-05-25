@@ -110,7 +110,7 @@ const ICON_PRESETS = [
 export default function NotionPageDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { user } = useAuthStore();
-  const { pages, update, add, remove, saveHistory, loadPageHistory } = useNotionPageStore();
+  const { pages, loading, update, add, remove, saveHistory, loadPageHistory } = useNotionPageStore();
   const router = useRouter();
   const searchParams = useSearchParams();
   const highlightText = searchParams.get('hl') ?? undefined;
@@ -134,8 +134,8 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
   const breadcrumbs = buildBreadcrumbs(pages, id);
 
   useEffect(() => {
-    if (pages.length > 0 && !page && id !== WORKSPACE_ID) router.replace('/notion-plus');
-  }, [page, pages.length, router, id]);
+    if (!loading && !page) router.replace('/notion-plus');
+  }, [page, loading, router]);
 
   // アイコンピッカー / 設定パネルの外クリックで閉じる
   useEffect(() => {
