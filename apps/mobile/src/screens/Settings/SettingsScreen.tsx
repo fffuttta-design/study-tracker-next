@@ -8,12 +8,16 @@ import {
   Image,
   ActivityIndicator,
   Platform,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import auth from '@react-native-firebase/auth';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useAuthStore } from '../../store/authStore';
-import { checkForUpdate, CURRENT_BUILD_NUMBER, CURRENT_VERSION } from '../../services/updateService';
+import { checkForUpdate, CURRENT_BUILD_NUMBER, CURRENT_VERSION, DRIVE_APK_ID } from '../../services/updateService';
+
+// APKファイルのDrive直リンク（Driveアプリ or ブラウザで開く）
+const DRIVE_APK_URL = `https://drive.google.com/file/d/${DRIVE_APK_ID}/view`;
 
 export default function SettingsScreen() {
   const { user } = useAuthStore();
@@ -78,17 +82,27 @@ export default function SettingsScreen() {
 
         {/* アップデート確認 */}
         {Platform.OS === 'android' && (
-          <TouchableOpacity
-            style={[styles.updateBtn, checking && styles.updateBtnDisabled]}
-            onPress={handleCheckUpdate}
-            disabled={checking}
-          >
-            {checking ? (
-              <ActivityIndicator size="small" color="#60a5fa" />
-            ) : (
-              <Text style={styles.updateBtnText}>🔄 アップデートを確認</Text>
-            )}
-          </TouchableOpacity>
+          <>
+            <TouchableOpacity
+              style={[styles.updateBtn, checking && styles.updateBtnDisabled]}
+              onPress={handleCheckUpdate}
+              disabled={checking}
+            >
+              {checking ? (
+                <ActivityIndicator size="small" color="#3b82f6" />
+              ) : (
+                <Text style={styles.updateBtnText}>🔄 アップデートを確認</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.driveBtn}
+              onPress={() => Linking.openURL(DRIVE_APK_URL)}
+            >
+              <Text style={styles.driveBtnText}>📂 Driveを開いて手動インストール</Text>
+              <Text style={styles.driveBtnSub}>Driveアプリまたはブラウザで最新APKを開きます</Text>
+            </TouchableOpacity>
+          </>
         )}
 
         {/* ログアウト */}
@@ -115,9 +129,12 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
   infoLabel: { color: '#374151', fontSize: 14 },
   infoValue: { color: '#6b7280', fontSize: 14 },
-  updateBtn: { backgroundColor: '#ffffff', borderRadius: 10, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: '#3b82f6', marginBottom: 12 },
+  updateBtn: { backgroundColor: '#ffffff', borderRadius: 10, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: '#3b82f6', marginBottom: 10 },
   updateBtnDisabled: { opacity: 0.6 },
   updateBtnText: { color: '#3b82f6', fontWeight: '600', fontSize: 15 },
+  driveBtn: { backgroundColor: '#f0fdf4', borderRadius: 10, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#86efac', marginBottom: 12 },
+  driveBtnText: { color: '#16a34a', fontWeight: '600', fontSize: 14 },
+  driveBtnSub: { color: '#6b7280', fontSize: 11, marginTop: 3 },
   signOutBtn: { marginTop: 'auto', backgroundColor: '#ffffff', borderRadius: 10, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: '#ef4444' },
   signOutText: { color: '#ef4444', fontWeight: '600', fontSize: 15 },
 });
