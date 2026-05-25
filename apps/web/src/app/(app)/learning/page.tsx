@@ -1241,9 +1241,9 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
               <span>📖</span><span>ノートを開く</span>
             </Link>
           )}
-          <button onClick={(e) => { e.stopPropagation(); copyContent(); }} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="コピー">⎘</button>
-          <button onClick={(e) => { e.stopPropagation(); setEditing(true); }} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="編集">✎</button>
-          <button onClick={(e) => { e.stopPropagation(); handleDelete(); }} className="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-400" title="削除">✕</button>
+          <button onClick={(e) => { e.stopPropagation(); copyContent(); }} className={`rounded p-1 hover:bg-gray-100 hover:text-gray-500 ${pageDeleted ? 'text-gray-500' : 'text-gray-300'}`} title="コピー">⎘</button>
+          <button onClick={(e) => { e.stopPropagation(); setEditing(true); }} className={`rounded p-1 hover:bg-gray-100 hover:text-gray-500 ${pageDeleted ? 'text-gray-500' : 'text-gray-300'}`} title="編集">✎</button>
+          <button onClick={(e) => { e.stopPropagation(); handleDelete(); }} className={`rounded p-1 hover:bg-red-50 hover:text-red-400 ${pageDeleted ? 'text-gray-500' : 'text-gray-300'}`} title="削除">✕</button>
         </div>
         {/* 行3: ノートパス（空白クリックでも開閉） */}
         {item.notionPagePath && (
@@ -1354,9 +1354,9 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
                 <span>📖</span><span>ノートを開く</span>
               </Link>
             )}
-            <button onClick={(e) => { e.stopPropagation(); copyContent(); }} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="コピー">⎘</button>
-            <button onClick={(e) => { e.stopPropagation(); setEditing(true); }} className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-500" title="編集">✎</button>
-            <button onClick={(e) => { e.stopPropagation(); handleDelete(); }} className="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-400" title="削除">✕</button>
+            <button onClick={(e) => { e.stopPropagation(); copyContent(); }} className={`rounded p-1 hover:bg-gray-100 hover:text-gray-500 ${pageDeleted ? 'text-gray-500' : 'text-gray-300'}`} title="コピー">⎘</button>
+            <button onClick={(e) => { e.stopPropagation(); setEditing(true); }} className={`rounded p-1 hover:bg-gray-100 hover:text-gray-500 ${pageDeleted ? 'text-gray-500' : 'text-gray-300'}`} title="編集">✎</button>
+            <button onClick={(e) => { e.stopPropagation(); handleDelete(); }} className={`rounded p-1 hover:bg-red-50 hover:text-red-400 ${pageDeleted ? 'text-gray-500' : 'text-gray-300'}`} title="削除">✕</button>
           </div>
           {item.notionPagePath && (
             <div className="flex min-w-0 items-center gap-1 text-xs text-gray-400">
