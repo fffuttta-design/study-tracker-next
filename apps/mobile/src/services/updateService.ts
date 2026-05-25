@@ -1,20 +1,23 @@
 /**
  * updateService.ts
- * バージョン確認: GitHub (認証不要・確実)
- * APK ダウンロード: Google Drive API (OAuth トークン使用)
+ * バージョン確認: GitHub raw（認証不要・即時反映）
+ * APK ダウンロード: Google Drive API（OAuth トークン使用）
  */
 
 import { Alert, Platform, Linking } from 'react-native';
 import RNFS from 'react-native-fs';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
-// ── Drive ファイル ID ─────────────────────────────────────────────
-export const DRIVE_VERSION_JSON_ID = '1wp26QdeMtaQgTd-EemgyDDFTa_-t0ezP';
-export const DRIVE_APK_ID          = '14x0svZmqUzGy8r9FztUUGylIz72CxKdM';
+// ── version.json: GitHub raw（push 後即時反映）───────────────────
+const GITHUB_VERSION_URL =
+  'https://raw.githubusercontent.com/fffuttta-design/study-tracker-next/master/apps/mobile/version.json';
+
+// ── APK: Drive ファイル ID ────────────────────────────────────────
+export const DRIVE_APK_ID = '14x0svZmqUzGy8r9FztUUGylIz72CxKdM';
 
 // ── 現在のビルド番号（ビルド時に自動更新）─────────────────────────
-export const CURRENT_BUILD_NUMBER = 31;
-export const CURRENT_VERSION      = '1.0.11';
+export const CURRENT_BUILD_NUMBER = 32;
+export const CURRENT_VERSION      = '1.0.12';
 
 // ─────────────────────────────────────────────────────────────────
 
@@ -30,25 +33,21 @@ async function getAccessToken(): Promise<string | null> {
   }
 }
 
-async function fetchVersionJson(accessToken: string): Promise<
+async function fetchVersionJson(): Promise<
   { ok: true; data: { version: string; buildNumber: number; builtAt: string } } |
   { ok: false; status: number; error?: string }
 > {
   try {
-    const res = await fetch(
-      `${DRIVE_API_BASE}/${DRIVE_VERSION_JSON_ID}?alt=media&_t=${Date.now()}`,
-      { headers: { Authorization: `Bearer ${accessToken}`, 'Cache-Control': 'no-cache' } },
-    );
+    const res = await fetch(`${GITHUB_VERSION_URL}?_t=${Date.now()}`, {
+      headers: { 'Cache-Control': 'no-cache' },
+    });
     if (!res.ok) {
-      console.warn(`[update] version.json fetch failed: HTTP ${res.status}`);
       return { ok: false, status: res.status };
     }
-    // レスポンスを dynamic で受けて手動パース（型ミスマッチ対策）
     const raw = await res.text();
     const data = typeof raw === 'object' ? raw : JSON.parse(raw);
     return { ok: true, data };
   } catch (e: any) {
-    console.warn('[update] fetchVersionJson error:', e);
     return { ok: false, status: 0, error: e?.message };
   }
 }
@@ -70,7 +69,6 @@ async function downloadApk(
         : undefined,
     });
     const result = await promise;
-    console.log('[update] download statusCode:', result.statusCode);
     if (result.statusCode === 200) return destPath;
     return null;
   } catch (e) {
@@ -83,30 +81,17 @@ function installApk(): void {
   if (Platform.OS !== 'android') return;
   const contentUri = 'content://com.studytracker.fileprovider/apk_cache/study-tracker.apk';
   Linking.openURL(contentUri).catch(e => {
-    console.warn('[update] installApk failed:', e);
     Alert.alert('インストールエラー', `APKを開けませんでした: ${e.message}`);
   });
 }
 
-/**
- * アップデート確認メイン関数
- * @param manual true の場合、最新版でも「最新です」と表示する
- */
 export async function checkForUpdate(manual = false): Promise<void> {
-  const accessToken = await getAccessToken();
-  if (!accessToken) {
-    if (manual) Alert.alert('エラー', 'Googleログインが必要です');
-    return;
-  }
-
-  const result = await fetchVersionJson(accessToken);
+  const result = await fetchVersionJson();
 
   if (!result.ok) {
     if (manual) {
-      const msg = result.status === 403 || result.status === 401
-        ? 'Drive へのアクセス権限がありません。\n一度ログアウトして再ログインしてください。'
-        : result.status === 0
-        ? `ネットワークエラーです。\n(${result.error ?? 'unknown'})`
+      const msg = result.status === 0
+        ? `ネットワークエラーです。\n通信状況を確認してください。`
         : `バージョン情報を取得できませんでした (HTTP ${result.status})`;
       Alert.alert('エラー', msg);
     }
@@ -119,8 +104,6 @@ export async function checkForUpdate(manual = false): Promise<void> {
     if (manual) Alert.alert('✅ 最新版です', `v${CURRENT_VERSION} (build ${CURRENT_BUILD_NUMBER})\nすでに最新バージョンです`);
     return;
   }
-
-  console.log(`[update] 新バージョン検知: build ${CURRENT_BUILD_NUMBER} → ${remote.buildNumber}`);
 
   Alert.alert(
     'アップデートがあります 🎉',
