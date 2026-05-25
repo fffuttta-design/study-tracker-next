@@ -9,7 +9,12 @@ import { useSettingsStore, REVIEW_STAGE_LABELS } from '@/stores/settingsStore';
 
 export default function SettingsPage() {
   const { user, signOut } = useAuthStore();
-  const { reviewStageDays, setReviewStageDays, resetReviewStageDays } = useSettingsStore();
+  const {
+    reviewStageDays, setReviewStageDays, resetReviewStageDays,
+    reviewNotificationTime, setReviewNotificationTime,
+  } = useSettingsStore();
+
+  const isElectron = typeof window !== 'undefined' && !!window.electronAPI;
 
   return (
     <div className="px-6 py-6">
@@ -64,8 +69,26 @@ export default function SettingsPage() {
           </button>
         </Section>
 
+        {/* 復習通知（Electronのみ） */}
+        {isElectron && (
+          <Section title="復習通知">
+            <div className="flex items-center justify-between py-1">
+              <div>
+                <p className="text-sm text-gray-700">通知時刻</p>
+                <p className="text-xs text-gray-400">毎日この時刻に復習待ちを通知</p>
+              </div>
+              <input
+                type="time"
+                value={reviewNotificationTime}
+                onChange={(e) => setReviewNotificationTime(e.target.value)}
+                className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+              />
+            </div>
+          </Section>
+        )}
+
         {/* アプリ操作 */}
-        {typeof window !== 'undefined' && window.electronAPI && (
+        {isElectron && (
           <Section title="アプリ操作">
             <div className="flex items-center justify-between py-1">
               <div>

@@ -18,7 +18,10 @@ const APP_URL = isDev ? DEV_URL : VERCEL_URL
 let mainWin    = null
 let tray       = null
 let isQuitting = false
-let latestReviewCount = 0
+let latestReviewCount    = 0
+let notifHour            = 8
+let notifMinute          = 0
+let notifTimerId         = null
 
 const preloadPath = join(__dirname, 'preload.cjs')
 
@@ -171,13 +174,16 @@ async function checkForUpdate() {
 
 // ── 復習通知スケジューラー ────────────────────────────────────────
 function scheduleReviewNotification() {
+  if (notifTimerId) { clearTimeout(notifTimerId); notifTimerId = null }
+
   const now  = new Date()
   const next = new Date(now)
-  next.setHours(8, 0, 0, 0)
+  next.setHours(notifHour, notifMinute, 0, 0)
   if (next <= now) next.setDate(next.getDate() + 1)
 
   const delay = next.getTime() - now.getTime()
-  setTimeout(() => {
+  notifTimerId = setTimeout(() => {
+    notifTimerId = null
     if (latestReviewCount > 0 && Notification.isSupported()) {
       const notif = new Notification({
         title: '学習トラッカー 📚',
@@ -193,7 +199,7 @@ function scheduleReviewNotification() {
       })
       notif.show()
     }
-    scheduleReviewNotification() // 翌日08:00に再スケジュール
+    scheduleReviewNotification() // 翌日同時刻に再スケジュール
   }, delay)
 }
 
@@ -205,6 +211,17 @@ ipcMain.on('app-relaunch', () => {
 
 ipcMain.on('review-count-update', (_, count) => {
   latestReviewCount = typeof count === 'number' ? count : 0
+})
+
+ipcMain.on('notification-time-update', (_, time) => {
+  const parts = String(time).split(':').map(Number)
+  const h = parts[0] ?? NaN
+  const m = parts[1] ?? 0
+  if (!isNaN(h) && h >= 0 && h <= 23 && !isNaN(m) && m >= 0 && m <= 59) {
+    notifHour   = h
+    notifMinute = m
+    scheduleReviewNotification() // 新しい時刻で即再スケジュール
+  }
 })
 
 // ── シングルインスタンス ──────────────────────────────────────────

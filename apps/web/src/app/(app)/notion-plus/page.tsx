@@ -7,15 +7,18 @@ import { useNotionPageStore, WORKSPACE_ID } from '@/stores/notionPageStore';
 
 export default function NotionPlusPage() {
   const { user } = useAuthStore();
-  const { loading, ensureWorkspace } = useNotionPageStore();
+  const { ensureWorkspace } = useNotionPageStore();
   const router = useRouter();
 
+  // loading を待たない（ensureWorkspace は getState() で直接チェックするため不要）
   useEffect(() => {
-    if (loading || !user) return;
-    ensureWorkspace(user.uid).then(() => {
-      router.replace(`/notion-plus/${WORKSPACE_ID}`);
-    });
-  }, [loading, user, ensureWorkspace, router]);
+    if (!user) return;
+    ensureWorkspace(user.uid)
+      .catch(() => {})
+      .finally(() => {
+        router.replace(`/notion-plus/${WORKSPACE_ID}`);
+      });
+  }, [user, ensureWorkspace, router]);
 
   return (
     <div className="flex h-full items-center justify-center">

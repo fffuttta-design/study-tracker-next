@@ -18,7 +18,7 @@ interface SidebarProps {
 const NAV = [
   { href: '/learning', label: '学習リスト', icon: '📚' },
   { href: '/notion-plus', label: 'NotionPlus', icon: '📝' },
-  { href: '/goals', label: '身につけたいことリスト', icon: '🎯' },
+  { href: '/goals', label: '絶対覚える', icon: '🎯' },
 ];
 
 function PageIcon({ icon }: { icon: string }) {

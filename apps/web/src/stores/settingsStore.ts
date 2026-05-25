@@ -13,6 +13,9 @@ interface SettingsState {
   setNotionPlusParaLineHeight: (v: number) => void;
   notionPlusSoftLineHeight: number;   // Shift+Enter（ソフト改行）
   setNotionPlusSoftLineHeight: (v: number) => void;
+  // 復習通知時刻 "HH:MM" 形式
+  reviewNotificationTime: string;
+  setReviewNotificationTime: (time: string) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -27,6 +30,8 @@ export const useSettingsStore = create<SettingsState>()(
       setNotionPlusParaLineHeight: (v) => set({ notionPlusParaLineHeight: v }),
       notionPlusSoftLineHeight: 1.15,
       setNotionPlusSoftLineHeight: (v) => set({ notionPlusSoftLineHeight: v }),
+      reviewNotificationTime: '08:00',
+      setReviewNotificationTime: (time) => set({ reviewNotificationTime: time }),
     }),
     { name: 'study-tracker-settings' }
   )
