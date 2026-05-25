@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  View,
   Text,
   TextInput,
   TouchableOpacity,
@@ -12,13 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../store/authStore';
 import { useLearningStore } from '../../store/learningStore';
-import { Importance, localDateKey } from '../../types';
-
-const IMPORTANCE_OPTIONS: { value: Importance; label: string; color: string }[] = [
-  { value: 'high',   label: '高', color: '#ef4444' },
-  { value: 'medium', label: '中', color: '#f59e0b' },
-  { value: 'low',    label: '低', color: '#6b7280' },
-];
+import { localDateKey } from '../../types';
 
 export default function AddLearningScreen({ navigation }: any) {
   const { user } = useAuthStore();
@@ -26,8 +19,6 @@ export default function AddLearningScreen({ navigation }: any) {
 
   const [title, setTitle]           = useState('');
   const [content, setContent]       = useState('');
-  const [url, setUrl]               = useState('');
-  const [importance, setImportance] = useState<Importance>('medium');
   const [categoryId, setCategoryId] = useState<string | undefined>();
   const [saving, setSaving]         = useState(false);
 
@@ -42,8 +33,6 @@ export default function AddLearningScreen({ navigation }: any) {
       await addItem(user.uid, {
         title: title.trim(),
         content: content.trim(),
-        url: url.trim() || undefined,
-        importance,
         categoryId,
         dateKey: localDateKey(),
       });
@@ -81,36 +70,6 @@ export default function AddLearningScreen({ navigation }: any) {
           numberOfLines={4}
           textAlignVertical="top"
         />
-
-        {/* URL */}
-        <Text style={styles.label}>参考URL</Text>
-        <TextInput
-          style={styles.input}
-          value={url}
-          onChangeText={setUrl}
-          placeholder="https://..."
-          placeholderTextColor="#9ca3af"
-          keyboardType="url"
-          autoCapitalize="none"
-        />
-
-        {/* 重要度 */}
-        <Text style={styles.label}>重要度</Text>
-        <View style={styles.row}>
-          {IMPORTANCE_OPTIONS.map(opt => (
-            <TouchableOpacity
-              key={opt.value}
-              style={[
-                styles.importanceBtn,
-                importance === opt.value && { backgroundColor: opt.color + '33', borderColor: opt.color },
-              ]}
-              onPress={() => setImportance(opt.value)}>
-              <Text style={[styles.importanceBtnText, importance === opt.value && { color: opt.color }]}>
-                {opt.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
 
         {/* カテゴリ */}
         {categories.length > 0 && (
@@ -165,17 +124,6 @@ const styles = StyleSheet.create({
     borderColor: '#e5e7eb',
   },
   textarea: { minHeight: 100 },
-  row: { flexDirection: 'row', gap: 8 },
-  importanceBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    backgroundColor: '#ffffff',
-  },
-  importanceBtnText: { color: '#6b7280', fontWeight: '600' },
   catScroll: { marginBottom: 4 },
   catChip: {
     paddingHorizontal: 14,
