@@ -228,7 +228,13 @@ try {
         `gh release create "${tagName}" "${apkPath}#study-tracker.apk" --title "v${newVersion} (build ${newBuildNumber})" --notes "Build ${newBuildNumber}"`,
         { cwd: ROOT, stdio: 'pipe' }
       )
-      const apkUrl = `https://github.com/fffuttta-design/study-tracker-next/releases/download/${tagName}/study-tracker.apk`
+      // GitHub API アセットIDを取得してAPIエンドポイントURLを生成（リダイレクトなし）
+      const assetId = execSync(
+        `gh api repos/fffuttta-design/study-tracker-next/releases/tags/${tagName} --jq ".assets[0].id"`,
+        { cwd: ROOT, encoding: 'utf-8', stdio: 'pipe' }
+      ).trim()
+      const apkUrl = `https://api.github.com/repos/fffuttta-design/study-tracker-next/releases/assets/${assetId}`
+      console.log(`[build-and-sync] APK asset ID: ${assetId}`)
       // version.json に apkUrl を追記して上書き
       const versionJsonWithUrl = JSON.stringify({ ...newBuildInfo, apkUrl }, null, 2) + '\n'
       writeFileSync(path.join(ROOT, 'apps', 'mobile', 'version.json'), versionJsonWithUrl, 'utf-8')
