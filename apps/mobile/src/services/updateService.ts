@@ -10,8 +10,8 @@ import RNBlobUtil from 'react-native-blob-util';
 const GITHUB_VERSION_URL =
   'https://api.github.com/repos/fffuttta-design/study-tracker-next/contents/apps/mobile/version.json';
 
-export const CURRENT_BUILD_NUMBER = 48;
-export const CURRENT_VERSION      = '1.0.28';
+export const CURRENT_BUILD_NUMBER = 49;
+export const CURRENT_VERSION      = '1.0.29';
 
 async function fetchVersionJson(): Promise<
   { ok: true; data: { version: string; buildNumber: number; builtAt: string; apkUrl: string } } |
@@ -49,12 +49,24 @@ async function downloadApk(
 
   try {
     await RNBlobUtil.config({ path: destPath })
-      .fetch('GET', apkUrl)
+      .fetch('GET', apkUrl, {
+        'Accept': 'application/octet-stream',
+        'User-Agent': 'StudyTracker-Android/1.0',
+      })
       .progress((received, total) => {
         if (total > 0) {
           onProgress?.(Math.round((Number(received) / Number(total)) * 100));
         }
       });
+
+    // ファイルサイズ確認（HTMLが返ってきた場合を検出）
+    const stat = await RNBlobUtil.fs.stat(destPath);
+    if (stat.size < 1024 * 1024) {
+      console.warn('[update] downloaded file too small, likely not an APK:', stat.size);
+      await RNBlobUtil.fs.unlink(destPath).catch(() => {});
+      return null;
+    }
+
     return destPath;
   } catch (e) {
     console.warn('[update] downloadApk error:', e);
