@@ -23,11 +23,11 @@ import { NativeModules, Linking } from 'react-native';
 
 // ── Drive ファイル ID ─────────────────────────────────────────
 // TODO: Drive で共有して取得した ID を設定してください
-export const DRIVE_VERSION_JSON_ID = '';
-export const DRIVE_APK_ID          = '';
+export const DRIVE_VERSION_JSON_ID = '10TbL_TbkPuEylDWNhysdJI-1VRVjW19d';
+export const DRIVE_APK_ID          = '1WLLiCOsxMPr6J1QFidYREGPNHkwJHAcb';
 
 // ── 現在のビルド番号（ビルド時に自動更新）─────────────────────
-export const CURRENT_BUILD_NUMBER = 9;
+export const CURRENT_BUILD_NUMBER = 10;
 export const CURRENT_VERSION      = '1.0.0';
 
 // ─────────────────────────────────────────────────────────────
