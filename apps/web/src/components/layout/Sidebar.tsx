@@ -264,7 +264,7 @@ function BackToLearningLink() {
 const SIDEBAR_WIDTH_KEY = 'notionplus-sidebar-width';
 const SIDEBAR_MIN = 160;
 const SIDEBAR_MAX = 480;
-const SIDEBAR_DEFAULT = 224;
+const SIDEBAR_DEFAULT = 480;
 
 function NotionPageSidebar({ user }: { user: User }) {
   const pathname = usePathname();
@@ -512,7 +512,7 @@ export function Sidebar({ user }: SidebarProps) {
   }
 
   return (
-    <aside className="flex h-full w-40 flex-col border-r border-gray-100 bg-gray-50">
+    <aside className="flex h-full w-56 flex-col border-r border-gray-100 bg-gray-50">
       {/* アプリ名 */}
       <div className="flex items-center gap-2 px-4 py-5">
         <Image src={appIcon} alt="" className="h-7 w-7 rounded-lg" />
