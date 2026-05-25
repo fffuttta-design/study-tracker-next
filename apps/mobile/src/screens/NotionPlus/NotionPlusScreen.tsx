@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
   Image,
-  FlatList,
   TouchableOpacity,
   StyleSheet,
   Alert,
@@ -11,13 +10,17 @@ import {
   Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import DraggableFlatList, {
+  RenderItemParams,
+  ScaleDecorator,
+} from 'react-native-draggable-flatlist';
 import { useAuthStore } from '../../store/authStore';
 import { useNotionStore } from '../../store/notionStore';
 import { NotionPage } from '../../types';
 
 export default function NotionPlusScreen({ navigation }: any) {
   const { user } = useAuthStore();
-  const { pages, subscribePages, addPage, deletePage } = useNotionStore();
+  const { pages, subscribePages, addPage, deletePage, reorderPages } = useNotionStore();
   const [showAdd, setShowAdd] = useState(false);
   const [newTitle, setNewTitle] = useState('');
 
@@ -43,6 +46,38 @@ export default function NotionPlusScreen({ navigation }: any) {
     ]);
   };
 
+  const handleDragEnd = useCallback(({ data }: { data: NotionPage[] }) => {
+    if (!user) return;
+    reorderPages(user.uid, data.map(p => p.id));
+  }, [user, reorderPages]);
+
+  const renderItem = useCallback(({ item, drag, isActive }: RenderItemParams<NotionPage>) => (
+    <ScaleDecorator>
+      <TouchableOpacity
+        style={[styles.pageItem, isActive && styles.pageItemActive]}
+        onPress={() => navigation.navigate('NotionPage', { pageId: item.id, title: item.title })}
+        onLongPress={drag}
+        delayLongPress={200}
+      >
+        <Text style={styles.dragHandle}>≡</Text>
+        {item.icon?.startsWith('http') ? (
+          <Image source={{ uri: item.icon }} style={styles.pageIconImg} />
+        ) : (
+          <Text style={styles.pageIcon}>{item.icon ?? '📄'}</Text>
+        )}
+        <View style={styles.pageInfo}>
+          <Text style={styles.pageTitle}>{item.title}</Text>
+          {item.updatedAt && (
+            <Text style={styles.pageDate}>更新: {item.updatedAt.slice(0, 10)}</Text>
+          )}
+        </View>
+        <TouchableOpacity onPress={() => handleDelete(item)} style={styles.deleteBtn}>
+          <Text>🗑</Text>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </ScaleDecorator>
+  ), [navigation, handleDelete]);
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
@@ -52,23 +87,17 @@ export default function NotionPlusScreen({ navigation }: any) {
         </TouchableOpacity>
       </View>
 
-      <FlatList
+      <DraggableFlatList
         data={rootPages}
         keyExtractor={p => p.id}
         contentContainerStyle={styles.list}
-        renderItem={({ item }) => (
-          <PageItem
-            page={item}
-            onPress={() => navigation.navigate('NotionPage', { pageId: item.id, title: item.title })}
-            onDelete={() => handleDelete(item)}
-          />
-        )}
+        onDragEnd={handleDragEnd}
+        renderItem={renderItem}
         ListEmptyComponent={
           <Text style={styles.empty}>ノートがありません。「＋ 新規」から作成してください。</Text>
         }
       />
 
-      {/* 新規ページモーダル */}
       <Modal visible={showAdd} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modal}>
@@ -97,27 +126,6 @@ export default function NotionPlusScreen({ navigation }: any) {
   );
 }
 
-function PageItem({ page, onPress, onDelete }: { page: NotionPage; onPress: () => void; onDelete: () => void }) {
-  return (
-    <TouchableOpacity style={styles.pageItem} onPress={onPress}>
-      {page.icon?.startsWith('http') ? (
-        <Image source={{ uri: page.icon }} style={styles.pageIconImg} />
-      ) : (
-        <Text style={styles.pageIcon}>{page.icon ?? '📄'}</Text>
-      )}
-      <View style={styles.pageInfo}>
-        <Text style={styles.pageTitle}>{page.title}</Text>
-        {page.updatedAt && (
-          <Text style={styles.pageDate}>更新: {page.updatedAt.slice(0, 10)}</Text>
-        )}
-      </View>
-      <TouchableOpacity onPress={onDelete} style={styles.deleteBtn}>
-        <Text>🗑</Text>
-      </TouchableOpacity>
-    </TouchableOpacity>
-  );
-}
-
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f9fafb' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
@@ -127,6 +135,8 @@ const styles = StyleSheet.create({
   list: { padding: 16, gap: 8 },
   empty: { color: '#9ca3af', textAlign: 'center', marginTop: 40, fontSize: 14, lineHeight: 22 },
   pageItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 10, padding: 14, gap: 12, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3 },
+  pageItemActive: { elevation: 8, shadowOpacity: 0.15, opacity: 0.95 },
+  dragHandle: { fontSize: 18, color: '#d1d5db', paddingHorizontal: 2 },
   pageIcon: { fontSize: 24 },
   pageIconImg: { width: 28, height: 28, borderRadius: 4 },
   pageInfo: { flex: 1 },

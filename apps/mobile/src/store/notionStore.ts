@@ -10,6 +10,7 @@ interface NotionState {
   addPage: (uid: string, title: string, parentId?: string) => Promise<string>;
   updatePage: (uid: string, pageId: string, data: Partial<NotionPage>) => Promise<void>;
   deletePage: (uid: string, pageId: string) => Promise<void>;
+  reorderPages: (uid: string, orderedIds: string[]) => Promise<void>;
 }
 
 export const useNotionStore = create<NotionState>(set => ({
@@ -75,5 +76,14 @@ export const useNotionStore = create<NotionState>(set => ({
       .collection(COLLECTIONS.notionPages(uid))
       .doc(pageId)
       .delete();
+  },
+
+  reorderPages: async (uid, orderedIds) => {
+    const batch = firestore().batch();
+    orderedIds.forEach((id, index) => {
+      const ref = firestore().collection(COLLECTIONS.notionPages(uid)).doc(id);
+      batch.update(ref, { order: index });
+    });
+    await batch.commit();
   },
 }));

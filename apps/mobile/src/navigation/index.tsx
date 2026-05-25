@@ -1,9 +1,8 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Platform, Text } from 'react-native';
-import { checkForUpdate, downloadAndInstall } from '../services/updateService';
+import { Text } from 'react-native';
 
 import HomeScreen from '../screens/Home/HomeScreen';
 import LearningScreen from '../screens/Learning/LearningScreen';
@@ -50,16 +49,6 @@ function MainTabs() {
 
 export default function AppNavigator() {
   const { user, loading } = useAuthStore();
-
-  useEffect(() => {
-    if (!user || Platform.OS !== 'android') return;
-    const timer = setTimeout(() => {
-      checkForUpdate(false, async (onProgress) => {
-        await downloadAndInstall(onProgress);
-      });
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, [user]);
 
   if (loading) return null;
 
