@@ -16,8 +16,8 @@ const GITHUB_VERSION_URL =
 export const DRIVE_APK_ID = '14x0svZmqUzGy8r9FztUUGylIz72CxKdM';
 
 // ── 現在のビルド番号（ビルド時に自動更新）─────────────────────────
-export const CURRENT_BUILD_NUMBER = 32;
-export const CURRENT_VERSION      = '1.0.12';
+export const CURRENT_BUILD_NUMBER = 33;
+export const CURRENT_VERSION      = '1.0.13';
 
 // ─────────────────────────────────────────────────────────────────
 
