@@ -1,49 +1,27 @@
 /**
  * updateService.ts
- * バージョン確認: GitHub raw（認証不要・即時反映）
- * APK ダウンロード: Google Drive API（OAuth トークン使用）
+ * バージョン確認: GitHub API（CDN なし・常に最新）
+ * APK ダウンロード: GitHub Releases（認証不要・URL固定）
  */
 
 import { Alert, Platform } from 'react-native';
 import RNBlobUtil from 'react-native-blob-util';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
-// ── version.json: GitHub API（CDN なし・常に最新）───────────────
 const GITHUB_VERSION_URL =
   'https://api.github.com/repos/fffuttta-design/study-tracker-next/contents/apps/mobile/version.json';
 
-// ── APK: Drive ファイル ID ────────────────────────────────────────
-export const DRIVE_APK_ID = '1OwRhqhc7zCNQV1ebYeYpfyqX6t-U06rA';
-
-// ── 現在のビルド番号（ビルド時に自動更新）─────────────────────────
-export const CURRENT_BUILD_NUMBER = 46;
-export const CURRENT_VERSION      = '1.0.26';
-
-// ─────────────────────────────────────────────────────────────────
-
-const DRIVE_API_BASE = 'https://www.googleapis.com/drive/v3/files';
-
-async function getAccessToken(): Promise<string | null> {
-  try {
-    const tokens = await GoogleSignin.getTokens();
-    return tokens.accessToken;
-  } catch (e) {
-    console.warn('[update] getAccessToken failed:', e);
-    return null;
-  }
-}
+export const CURRENT_BUILD_NUMBER = 47;
+export const CURRENT_VERSION      = '1.0.27';
 
 async function fetchVersionJson(): Promise<
-  { ok: true; data: { version: string; buildNumber: number; builtAt: string } } |
+  { ok: true; data: { version: string; buildNumber: number; builtAt: string; apkUrl: string } } |
   { ok: false; status: number; error?: string }
 > {
   try {
     const res = await fetch(GITHUB_VERSION_URL, {
       headers: { 'Accept': 'application/vnd.github.raw+json' },
     });
-    if (!res.ok) {
-      return { ok: false, status: res.status };
-    }
+    if (!res.ok) return { ok: false, status: res.status };
     const raw = await res.text();
     const data = typeof raw === 'object' ? raw : JSON.parse(raw);
     return { ok: true, data };
@@ -53,12 +31,11 @@ async function fetchVersionJson(): Promise<
 }
 
 async function downloadApk(
-  accessToken: string,
+  apkUrl: string,
   onProgress?: (pct: number) => void,
 ): Promise<string | null> {
   const cacheDir = RNBlobUtil.fs.dirs.CacheDir;
 
-  // 古いAPKを全削除してキャッシュ汚染を防ぐ
   try {
     const files = await RNBlobUtil.fs.ls(cacheDir);
     await Promise.all(
@@ -68,14 +45,11 @@ async function downloadApk(
     );
   } catch {}
 
-  // タイムスタンプ付きパスで毎回新規ファイルにDL
   const destPath = `${cacheDir}/study-tracker-${Date.now()}.apk`;
 
   try {
     await RNBlobUtil.config({ path: destPath })
-      .fetch('GET', `${DRIVE_API_BASE}/${DRIVE_APK_ID}?alt=media`, {
-        Authorization: `Bearer ${accessToken}`,
-      })
+      .fetch('GET', apkUrl)
       .progress((received, total) => {
         if (total > 0) {
           onProgress?.(Math.round((Number(received) / Number(total)) * 100));
@@ -96,10 +70,6 @@ async function installApk(apkPath: string): Promise<void> {
   );
 }
 
-/**
- * アップデート確認。更新ありでユーザーが「今すぐ更新」を押したら
- * onConfirmed(progress callback) を呼ぶ。進捗表示は呼び出し元に委譲。
- */
 export async function checkForUpdate(
   manual = false,
   onConfirmed?: (onProgress: (pct: number) => void) => void,
@@ -123,6 +93,11 @@ export async function checkForUpdate(
     return;
   }
 
+  if (!remote.apkUrl) {
+    if (manual) Alert.alert('エラー', 'ダウンロードURLが取得できませんでした');
+    return;
+  }
+
   Alert.alert(
     'アップデートがあります 🎉',
     `現在: v${CURRENT_VERSION} (build ${CURRENT_BUILD_NUMBER})\n最新: v${remote.version} (build ${remote.buildNumber})\n\n今すぐ更新しますか？`,
@@ -133,14 +108,9 @@ export async function checkForUpdate(
         onPress: () => {
           if (onConfirmed) {
             onConfirmed(async (onProgress) => {
-              const accessToken = await getAccessToken();
-              if (!accessToken) {
-                Alert.alert('エラー', 'Googleログインが必要です');
-                return;
-              }
-              const apkPath = await downloadApk(accessToken, onProgress);
+              const apkPath = await downloadApk(remote.apkUrl, onProgress);
               if (!apkPath) {
-                Alert.alert('エラー', 'ダウンロードに失敗しました。\nログアウトして再ログインすると解決する場合があります。');
+                Alert.alert('エラー', 'ダウンロードに失敗しました。');
                 return;
               }
               await installApk(apkPath);
@@ -153,14 +123,14 @@ export async function checkForUpdate(
 }
 
 export async function downloadAndInstall(onProgress?: (pct: number) => void): Promise<void> {
-  const accessToken = await getAccessToken();
-  if (!accessToken) {
-    Alert.alert('エラー', 'Googleログインが必要です');
+  const result = await fetchVersionJson();
+  if (!result.ok || !result.data.apkUrl) {
+    Alert.alert('エラー', 'ダウンロードURLが取得できませんでした');
     return;
   }
-  const apkPath = await downloadApk(accessToken, onProgress);
+  const apkPath = await downloadApk(result.data.apkUrl, onProgress);
   if (!apkPath) {
-    Alert.alert('エラー', 'ダウンロードに失敗しました。\nログアウトして再ログインすると解決する場合があります。');
+    Alert.alert('エラー', 'ダウンロードに失敗しました。');
     return;
   }
   await installApk(apkPath);

@@ -211,18 +211,31 @@ try {
     console.log('[build-and-sync] Android Debug ビルド完了 ✓')
   }
 
-  // APK を Drive に同期
+  // APK を Drive にもコピー（手動インストール用）
   const apkPath = existsSync(apkSrcPath) ? apkSrcPath : apkDebugPath
   if (existsSync(apkPath)) {
-    // android/ サブフォルダを作成
     execSync(`if not exist "${androidDestDir}" mkdir "${androidDestDir}"`, { shell: true, stdio: 'pipe' })
-    // APK をコピー
     execSync(`copy /Y "${apkPath}" "${path.join(androidDestDir, 'study-tracker.apk')}"`, { shell: true, stdio: 'pipe' })
-    // version.json をコピー
-    const versionJsonContent = JSON.stringify(newBuildInfo, null, 2) + '\n'
-    writeFileSync(path.join(androidDestDir, 'version.json'), versionJsonContent, 'utf-8')
-    console.log(`[build-and-sync] Android APK → Drive 同期完了 ✓`)
-    console.log(`  APK: ${androidDestDir}\\study-tracker.apk`)
+    console.log(`[build-and-sync] Android APK → Drive コピー完了 ✓`)
+
+    // GitHub Release に APK をアップロード
+    const tagName = `build-${newBuildNumber}`
+    try {
+      try {
+        execSync(`gh release delete "${tagName}" --yes --cleanup-tag`, { cwd: ROOT, stdio: 'pipe' })
+      } catch {}
+      execSync(
+        `gh release create "${tagName}" "${apkPath}#study-tracker.apk" --title "v${newVersion} (build ${newBuildNumber})" --notes "Build ${newBuildNumber}"`,
+        { cwd: ROOT, stdio: 'pipe' }
+      )
+      const apkUrl = `https://github.com/fffuttta-design/study-tracker-next/releases/download/${tagName}/study-tracker.apk`
+      // version.json に apkUrl を追記して上書き
+      const versionJsonWithUrl = JSON.stringify({ ...newBuildInfo, apkUrl }, null, 2) + '\n'
+      writeFileSync(path.join(ROOT, 'apps', 'mobile', 'version.json'), versionJsonWithUrl, 'utf-8')
+      console.log(`[build-and-sync] GitHub Release アップロード完了 ✓ (${tagName})`)
+    } catch (e) {
+      console.warn('[build-and-sync] GitHub Release 失敗:', e.message)
+    }
   } else {
     console.warn('[build-and-sync] APK ファイルが見つかりません（スキップ）')
   }
