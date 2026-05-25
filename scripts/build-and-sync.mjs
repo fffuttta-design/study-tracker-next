@@ -73,6 +73,14 @@ const newBuildInfo = { version: newVersion, buildNumber: newBuildNumber, builtAt
 writeFileSync(buildInfoPath, JSON.stringify(newBuildInfo, null, 2) + '\n', 'utf-8')
 console.log(`[build-and-sync] build-info.json 書き込み完了`)
 
+// apps/mobile/version.json を更新（GitHub raw URL で参照される）
+writeFileSync(
+  path.join(ROOT, 'apps', 'mobile', 'version.json'),
+  JSON.stringify(newBuildInfo, null, 2) + '\n',
+  'utf-8'
+)
+console.log(`[build-and-sync] apps/mobile/version.json 書き込み完了`)
+
 // Android の updateService.ts のビルド番号も更新
 try {
   execSync(`node scripts/update-mobile-build-number.mjs ${newBuildNumber} ${newVersion}`, {

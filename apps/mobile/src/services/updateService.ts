@@ -1,40 +1,30 @@
 /**
  * updateService.ts
- * Google Drive から version.json を取得してアプリの自動更新を行う
- *
- * Drive フォルダ構成:
- *   StudyTracker/android/
- *     ├── version.json  { version, buildNumber, builtAt }
- *     └── study-tracker.apk
- *
- * 設定方法:
- *   1. Drive の android フォルダを開く
- *   2. version.json と study-tracker.apk それぞれの「共有」→「リンクをコピー」
- *   3. URL の /d/ 以降 /view まで の文字列が FILE_ID
- *      例: https://drive.google.com/file/d/XXXXXXXX/view
- *                                             ^^^^^^^^ ← これ
- *   4. 下の DRIVE_VERSION_JSON_ID と DRIVE_APK_ID に設定
+ * バージョン確認: GitHub (認証不要・確実)
+ * APK ダウンロード: Google Drive API (OAuth トークン使用)
  */
 
 import { Alert, Platform, Linking } from 'react-native';
 import RNFS from 'react-native-fs';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
-// ── Drive ファイル ID ─────────────────────────────────────────
-export const DRIVE_VERSION_JSON_ID = '1wp26QdeMtaQgTd-EemgyDDFTa_-t0ezP';
-export const DRIVE_APK_ID          = '14x0svZmqUzGy8r9FztUUGylIz72CxKdM';
+// ── GitHub raw URL（version.json）────────────────────────────────
+const GITHUB_VERSION_URL =
+  'https://raw.githubusercontent.com/fffuttta-design/study-tracker-next/master/apps/mobile/version.json';
 
-// ── 現在のビルド番号（ビルド時に自動更新）─────────────────────
-export const CURRENT_BUILD_NUMBER = 23;
-export const CURRENT_VERSION      = '1.0.3';
+// ── Drive APK ファイル ID ─────────────────────────────────────────
+export const DRIVE_APK_ID = '14x0svZmqUzGy8r9FztUUGylIz72CxKdM';
 
-// ─────────────────────────────────────────────────────────────
+// ── 現在のビルド番号（ビルド時に自動更新）─────────────────────────
+export const CURRENT_BUILD_NUMBER = 24;
+export const CURRENT_VERSION      = '1.0.4';
+
+// ─────────────────────────────────────────────────────────────────
 
 const DRIVE_API_BASE = 'https://www.googleapis.com/drive/v3/files';
 
 async function getAccessToken(): Promise<string | null> {
   try {
-    // getTokens() はトークンを自動リフレッシュする
     const tokens = await GoogleSignin.getTokens();
     return tokens.accessToken;
   } catch (e) {
@@ -43,23 +33,22 @@ async function getAccessToken(): Promise<string | null> {
   }
 }
 
-async function fetchVersionJson(accessToken: string): Promise<
+async function fetchVersionJson(): Promise<
   { ok: true; data: { version: string; buildNumber: number; builtAt: string } } |
-  { ok: false; status: number }
+  { ok: false; status: number; error?: string }
 > {
   try {
-    const res = await fetch(
-      `${DRIVE_API_BASE}/${DRIVE_VERSION_JSON_ID}?alt=media`,
-      { headers: { Authorization: `Bearer ${accessToken}` } },
-    );
+    const res = await fetch(GITHUB_VERSION_URL, {
+      headers: { 'Cache-Control': 'no-cache' },
+    });
     if (!res.ok) {
       console.warn(`[update] version.json fetch failed: HTTP ${res.status}`);
       return { ok: false, status: res.status };
     }
     return { ok: true, data: await res.json() };
-  } catch (e) {
+  } catch (e: any) {
     console.warn('[update] fetchVersionJson error:', e);
-    return { ok: false, status: 0 };
+    return { ok: false, status: 0, error: e?.message };
   }
 }
 
@@ -67,8 +56,6 @@ async function downloadApk(
   accessToken: string,
   onProgress?: (pct: number) => void,
 ): Promise<string | null> {
-  if (!DRIVE_APK_ID) return null;
-
   const destPath = `${RNFS.CachesDirectoryPath}/updates/study-tracker.apk`;
   await RNFS.mkdir(`${RNFS.CachesDirectoryPath}/updates`).catch(() => {});
 
@@ -93,7 +80,6 @@ async function downloadApk(
 
 function installApk(): void {
   if (Platform.OS !== 'android') return;
-  // FileProvider content URI → Android インストール Intent
   const contentUri = 'content://com.studytracker.fileprovider/apk_cache/study-tracker.apk';
   Linking.openURL(contentUri).catch(e => {
     console.warn('[update] installApk failed:', e);
@@ -102,46 +88,17 @@ function installApk(): void {
 }
 
 /**
- * 手動ダウンロード＆インストール（設定画面から呼ぶ）
- * onProgress: 0-100 のダウンロード進捗コールバック
- */
-export async function downloadAndInstall(
-  onProgress?: (pct: number) => void,
-): Promise<void> {
-  const accessToken = await getAccessToken();
-  if (!accessToken) {
-    Alert.alert('エラー', 'Googleログインが必要です');
-    return;
-  }
-  const apkPath = await downloadApk(accessToken, onProgress);
-  if (!apkPath) {
-    Alert.alert('エラー', 'ダウンロードに失敗しました。\nログアウトして再ログインすると解決する場合があります。');
-    return;
-  }
-  installApk();
-}
-
-/**
  * アップデート確認メイン関数
  * @param manual true の場合、最新版でも「最新です」と表示する
  */
 export async function checkForUpdate(manual = false): Promise<void> {
-  if (!DRIVE_VERSION_JSON_ID || !DRIVE_APK_ID) return;
+  const result = await fetchVersionJson();
 
-  const accessToken = await getAccessToken();
-  if (!accessToken) {
-    if (manual) Alert.alert('エラー', 'Googleログインが必要です');
-    return;
-  }
-
-  const result = await fetchVersionJson(accessToken);
   if (!result.ok) {
     if (manual) {
-      const msg = result.status === 403
-        ? 'Driveへのアクセス権限がありません。\n一度ログアウトして再ログインしてください。'
-        : result.status === 401
-        ? 'トークンが無効です。再ログインしてください。'
-        : `バージョン情報を取得できませんでした (HTTP ${result.status || 'network error'})`;
+      const msg = result.status === 0
+        ? `ネットワークエラーです。\n通信状況を確認してください。\n(${result.error ?? 'unknown'})`
+        : `バージョン情報を取得できませんでした (HTTP ${result.status})`;
       Alert.alert('エラー', msg);
     }
     return;
@@ -164,6 +121,11 @@ export async function checkForUpdate(manual = false): Promise<void> {
       {
         text: '今すぐ更新',
         onPress: async () => {
+          const accessToken = await getAccessToken();
+          if (!accessToken) {
+            Alert.alert('エラー', 'Googleログインが必要です');
+            return;
+          }
           Alert.alert('ダウンロード中...', 'しばらくお待ちください');
           const apkPath = await downloadApk(accessToken);
           if (!apkPath) {
