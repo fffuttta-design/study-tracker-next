@@ -13,6 +13,7 @@ import {
 import Markdown from 'react-native-markdown-display';
 import { useAuthStore } from '../../store/authStore';
 import { useNotionStore } from '../../store/notionStore';
+import { isTipTapContent, extractTextFromTipTap } from '../../types';
 
 export default function NotionPageScreen({ route, navigation }: any) {
   const { pageId } = route.params as { pageId: string };
@@ -88,20 +89,39 @@ export default function NotionPageScreen({ route, navigation }: any) {
       </View>
 
       {editing ? (
-        <TextInput
-          style={styles.editor}
-          value={content}
-          onChangeText={t => { setContent(t); setDirty(true); }}
-          multiline
-          textAlignVertical="top"
-          placeholder={'# 見出し\n\nMarkdown で書けます...\n\n- リスト\n- **太字**\n- *イタリック*'}
-          placeholderTextColor="#9ca3af"
-          autoFocus
-        />
+        isTipTapContent(content) ? (
+          // TipTap JSON はモバイルで直接編集不可 → 読み取り専用案内
+          <ScrollView style={styles.preview} contentContainerStyle={styles.previewContent}>
+            <View style={styles.webOnlyBanner}>
+              <Text style={styles.webOnlyText}>⚠️ このページはWebアプリで作成されました。編集はWebから行ってください。</Text>
+            </View>
+            <Text style={styles.plainText}>{extractTextFromTipTap(content)}</Text>
+          </ScrollView>
+        ) : (
+          <TextInput
+            style={styles.editor}
+            value={content}
+            onChangeText={t => { setContent(t); setDirty(true); }}
+            multiline
+            textAlignVertical="top"
+            placeholder={'# 見出し\n\nMarkdown で書けます...\n\n- リスト\n- **太字**\n- *イタリック*'}
+            placeholderTextColor="#9ca3af"
+            autoFocus
+          />
+        )
       ) : (
         <ScrollView style={styles.preview} contentContainerStyle={styles.previewContent}>
           {content ? (
-            <Markdown style={markdownStyles}>{content}</Markdown>
+            isTipTapContent(content) ? (
+              <>
+                <View style={styles.webOnlyBanner}>
+                  <Text style={styles.webOnlyText}>⚠️ Webアプリで作成されたページです（読み取り専用）</Text>
+                </View>
+                <Text style={styles.plainText}>{extractTextFromTipTap(content)}</Text>
+              </>
+            ) : (
+              <Markdown style={markdownStyles}>{content}</Markdown>
+            )
           ) : (
             <Text style={styles.emptyText}>編集タブをタップして書き始めましょう</Text>
           )}
@@ -133,6 +153,9 @@ const styles = StyleSheet.create({
   preview: { flex: 1 },
   previewContent: { padding: 16 },
   emptyText: { color: '#9ca3af', fontSize: 14, fontStyle: 'italic', marginTop: 20 },
+  webOnlyBanner: { backgroundColor: '#fffbeb', borderRadius: 8, padding: 10, marginBottom: 16, borderWidth: 1, borderColor: '#fcd34d' },
+  webOnlyText: { color: '#92400e', fontSize: 13 },
+  plainText: { color: '#374151', fontSize: 15, lineHeight: 24 },
 });
 
 const markdownStyles = {

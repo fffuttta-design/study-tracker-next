@@ -38,12 +38,40 @@ export interface LearningCategory {
 export interface NotionPage {
   id: string;
   title: string;
-  content: string; // Markdown
+  content: string; // TipTap JSON（Web作成）or Markdown（モバイル作成）
   parentId?: string;
-  sortOrder: number;
-  createdAt?: string;
+  order: number;       // Webと共通フィールド名
   updatedAt?: string;
   icon?: string;
+  isFavorite?: boolean;
+  type?: 'page' | 'database';
+}
+
+/** TipTap JSON からプレーンテキストを抽出 */
+export function extractTextFromTipTap(content: string): string {
+  if (!content) return '';
+  try {
+    const json = JSON.parse(content);
+    if (json?.type !== 'doc') return content; // JSONでなければそのまま
+    const lines: string[] = [];
+    const walk = (node: any) => {
+      if (node.type === 'text') { lines.push(node.text ?? ''); return; }
+      if (node.type === 'hardBreak') { lines.push('\n'); return; }
+      if (node.content) node.content.forEach(walk);
+      if (['paragraph','heading','listItem','taskItem','blockquote'].includes(node.type)) lines.push('\n');
+    };
+    if (json.content) json.content.forEach(walk);
+    return lines.join('').trim();
+  } catch {
+    return content; // パース失敗はそのまま返す
+  }
+
+}
+
+/** TipTap JSON かどうか判定 */
+export function isTipTapContent(content: string): boolean {
+  if (!content || !content.startsWith('{')) return false;
+  try { const j = JSON.parse(content); return j?.type === 'doc'; } catch { return false; }
 }
 
 // ─── ユーティリティ ───────────────────────────────────────

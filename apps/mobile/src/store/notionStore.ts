@@ -20,13 +20,24 @@ export const useNotionStore = create<NotionState>(set => ({
     set({ loading: true });
     const unsub = firestore()
       .collection(COLLECTIONS.notionPages(uid))
-      .orderBy('sortOrder')
+      .orderBy('order')   // Webと共通フィールド名
       .onSnapshot(snap => {
         const pages: NotionPage[] = snap.docs.map(d => ({
           id: d.id,
           ...(d.data() as Omit<NotionPage, 'id'>),
         }));
         set({ pages, loading: false });
+      }, err => {
+        // orderBy に必要なインデックスがない場合はフォールバック
+        console.warn('[notion] orderBy failed, fallback:', err.message);
+        firestore()
+          .collection(COLLECTIONS.notionPages(uid))
+          .onSnapshot(snap => {
+            const pages: NotionPage[] = snap.docs
+              .map(d => ({ id: d.id, ...(d.data() as Omit<NotionPage, 'id'>) }))
+              .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+            set({ pages, loading: false });
+          });
       });
     return unsub;
   },
@@ -34,19 +45,20 @@ export const useNotionStore = create<NotionState>(set => ({
   addPage: async (uid, title, parentId) => {
     const snap = await firestore()
       .collection(COLLECTIONS.notionPages(uid))
-      .orderBy('sortOrder', 'desc')
+      .orderBy('order', 'desc')
       .limit(1)
       .get();
-    const maxOrder = snap.empty ? 0 : (snap.docs[0].data().sortOrder ?? 0);
+    const maxOrder = snap.empty ? 0 : (snap.docs[0].data().order ?? 0);
     const ref = await firestore()
       .collection(COLLECTIONS.notionPages(uid))
       .add({
         title,
         content: '',
+        icon: '📄',
         parentId: parentId ?? null,
-        sortOrder: maxOrder + 1,
-        createdAt: new Date().toISOString(),
+        order: maxOrder + 1,
         updatedAt: new Date().toISOString(),
+        isFavorite: false,
       });
     return ref.id;
   },
