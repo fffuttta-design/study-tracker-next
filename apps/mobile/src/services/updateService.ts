@@ -25,8 +25,8 @@ export const DRIVE_VERSION_JSON_ID = '1wp26QdeMtaQgTd-EemgyDDFTa_-t0ezP';
 export const DRIVE_APK_ID          = '14x0svZmqUzGy8r9FztUUGylIz72CxKdM';
 
 // ── 現在のビルド番号（ビルド時に自動更新）─────────────────────
-export const CURRENT_BUILD_NUMBER = 22;
-export const CURRENT_VERSION      = '1.0.2';
+export const CURRENT_BUILD_NUMBER = 23;
+export const CURRENT_VERSION      = '1.0.3';
 
 // ─────────────────────────────────────────────────────────────
 
