@@ -78,11 +78,7 @@ export default function SettingsScreen() {
             <Text style={styles.infoLabel}>バージョン</Text>
             <Text style={styles.infoValue}>v{CURRENT_VERSION} (build {CURRENT_BUILD_NUMBER})</Text>
           </View>
-        </View>
-
-        {/* アップデート確認 */}
-        {Platform.OS === 'android' && (
-          <>
+          {Platform.OS === 'android' && (
             <TouchableOpacity
               style={[styles.updateBtn, (checking || downloading) && styles.updateBtnDisabled]}
               onPress={handleCheckUpdate}
@@ -99,8 +95,8 @@ export default function SettingsScreen() {
                 <Text style={styles.updateBtnText}>🔄 アップデートを確認</Text>
               )}
             </TouchableOpacity>
-          </>
-        )}
+          )}
+        </View>
 
         {/* ログアウト */}
         <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
@@ -126,7 +122,7 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
   infoLabel: { color: '#374151', fontSize: 14 },
   infoValue: { color: '#6b7280', fontSize: 14 },
-  updateBtn: { backgroundColor: '#ffffff', borderRadius: 10, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: '#3b82f6', marginBottom: 10 },
+  updateBtn: { backgroundColor: '#eff6ff', borderRadius: 8, padding: 12, alignItems: 'center', marginTop: 12 },
   updateBtnDisabled: { opacity: 0.6 },
   updateBtnText: { color: '#3b82f6', fontWeight: '600', fontSize: 15 },
   signOutBtn: { marginTop: 'auto', backgroundColor: '#ffffff', borderRadius: 10, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: '#ef4444' },
