@@ -16,10 +16,9 @@
  *   4. 下の DRIVE_VERSION_JSON_ID と DRIVE_APK_ID に設定
  */
 
-import { Alert, Platform } from 'react-native';
+import { Alert, Platform, Linking } from 'react-native';
 import RNFS from 'react-native-fs';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
-import { NativeModules, Linking } from 'react-native';
 
 // ── Drive ファイル ID ─────────────────────────────────────────
 // TODO: Drive で共有して取得した ID を設定してください
@@ -27,7 +26,7 @@ export const DRIVE_VERSION_JSON_ID = '10TbL_TbkPuEylDWNhysdJI-1VRVjW19d';
 export const DRIVE_APK_ID          = '1WLLiCOsxMPr6J1QFidYREGPNHkwJHAcb';
 
 // ── 現在のビルド番号（ビルド時に自動更新）─────────────────────
-export const CURRENT_BUILD_NUMBER = 10;
+export const CURRENT_BUILD_NUMBER = 11;
 export const CURRENT_VERSION      = '1.0.0';
 
 // ─────────────────────────────────────────────────────────────
@@ -79,21 +78,18 @@ async function downloadApk(accessToken: string): Promise<string | null> {
   }
 }
 
-async function installApk(apkPath: string): Promise<void> {
-  // Android の IntentSender 経由でインストール
-  // react-native-fs の getReadableUri を利用
+async function installApk(_apkPath: string): Promise<void> {
   if (Platform.OS !== 'android') return;
 
   try {
-    const { RNFSManager } = NativeModules;
-
-    // FileProvider URI を使ってインストール Intent を発行
-    // package名は AndroidManifest の applicationId と一致させる
-    const contentUri = await RNFS.readFile(apkPath, 'base64'); // 型チェック回避用に一旦読む
-    // Intent: ACTION_VIEW で APK を開く（FileProvider 経由）
-    await Linking.openURL(`content://com.studytracker.fileprovider/apk_cache/study-tracker.apk`);
+    // FileProvider の content URI でインストール Intent を発行
+    // AndroidManifest の authority: com.studytracker.fileprovider
+    // file_provider_paths.xml の cache-path name="apk_cache" path="updates/"
+    const contentUri = 'content://com.studytracker.fileprovider/apk_cache/study-tracker.apk';
+    await Linking.openURL(contentUri);
   } catch (e) {
     console.warn('[update] APK install failed:', e);
+    Alert.alert('インストールエラー', 'APKを開けませんでした。Driveから手動でインストールしてください。');
   }
 }
 
