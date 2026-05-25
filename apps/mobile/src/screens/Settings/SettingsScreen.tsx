@@ -92,7 +92,7 @@ export default function SettingsScreen() {
               ) : checking ? (
                 <ActivityIndicator size="small" color="#3b82f6" />
               ) : (
-                <Text style={styles.updateBtnText}>🔄 アップデートを確認</Text>
+                <Text style={styles.updateBtnText}>🔄 アップデートを確認する</Text>
               )}
             </TouchableOpacity>
           )}
