@@ -16,8 +16,8 @@ const GITHUB_VERSION_URL =
 export const DRIVE_APK_ID = '1OwRhqhc7zCNQV1ebYeYpfyqX6t-U06rA';
 
 // ── 現在のビルド番号（ビルド時に自動更新）─────────────────────────
-export const CURRENT_BUILD_NUMBER = 43;
-export const CURRENT_VERSION      = '1.0.23';
+export const CURRENT_BUILD_NUMBER = 44;
+export const CURRENT_VERSION      = '1.0.24';
 
 // ─────────────────────────────────────────────────────────────────
 
@@ -56,14 +56,23 @@ async function downloadApk(
   accessToken: string,
   onProgress?: (pct: number) => void,
 ): Promise<string | null> {
-  const destPath = `${RNBlobUtil.fs.dirs.CacheDir}/study-tracker.apk`;
+  const cacheDir = RNBlobUtil.fs.dirs.CacheDir;
+
+  // 古いAPKを全削除してキャッシュ汚染を防ぐ
+  try {
+    const files = await RNBlobUtil.fs.ls(cacheDir);
+    await Promise.all(
+      files
+        .filter((f: string) => f.startsWith('study-tracker'))
+        .map((f: string) => RNBlobUtil.fs.unlink(`${cacheDir}/${f}`).catch(() => {}))
+    );
+  } catch {}
+
+  // タイムスタンプ付きパスで毎回新規ファイルにDL
+  const destPath = `${cacheDir}/study-tracker-${Date.now()}.apk`;
 
   try {
-    await RNBlobUtil.fs.unlink(destPath).catch(() => {});
-    await RNBlobUtil.config({
-      fileCache: false,
-      path: destPath,
-    })
+    await RNBlobUtil.config({ path: destPath })
       .fetch('GET', `${DRIVE_API_BASE}/${DRIVE_APK_ID}?alt=media`, {
         Authorization: `Bearer ${accessToken}`,
       })
