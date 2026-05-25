@@ -66,15 +66,15 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111827',
+    backgroundColor: '#f9fafb',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 32,
   },
   iconArea: { alignItems: 'center', marginBottom: 64 },
   icon: { fontSize: 72, marginBottom: 16 },
-  appName: { fontSize: 28, fontWeight: 'bold', color: '#f9fafb', marginBottom: 8 },
-  subtitle: { fontSize: 14, color: '#9ca3af', textAlign: 'center' },
+  appName: { fontSize: 28, fontWeight: 'bold', color: '#111827', marginBottom: 8 },
+  subtitle: { fontSize: 14, color: '#6b7280', textAlign: 'center' },
   googleBtn: {
     flexDirection: 'row',
     alignItems: 'center',

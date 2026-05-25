@@ -65,7 +65,7 @@ export default function AddLearningScreen({ navigation }: any) {
           value={title}
           onChangeText={setTitle}
           placeholder="学習した内容（例：React Hooks の基礎）"
-          placeholderTextColor="#4b5563"
+          placeholderTextColor="#9ca3af"
           autoFocus
         />
 
@@ -76,7 +76,7 @@ export default function AddLearningScreen({ navigation }: any) {
           value={content}
           onChangeText={setContent}
           placeholder="気づいたこと、感想、要点など..."
-          placeholderTextColor="#4b5563"
+          placeholderTextColor="#9ca3af"
           multiline
           numberOfLines={4}
           textAlignVertical="top"
@@ -89,7 +89,7 @@ export default function AddLearningScreen({ navigation }: any) {
           value={url}
           onChangeText={setUrl}
           placeholder="https://..."
-          placeholderTextColor="#4b5563"
+          placeholderTextColor="#9ca3af"
           keyboardType="url"
           autoCapitalize="none"
         />
@@ -152,17 +152,17 @@ export default function AddLearningScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#111827' },
+  safe: { flex: 1, backgroundColor: '#f9fafb' },
   content: { padding: 16, gap: 4, paddingBottom: 40 },
-  label: { fontSize: 13, fontWeight: '600', color: '#9ca3af', marginTop: 16, marginBottom: 6 },
+  label: { fontSize: 13, fontWeight: '600', color: '#6b7280', marginTop: 16, marginBottom: 6 },
   input: {
-    backgroundColor: '#1f2937',
+    backgroundColor: '#ffffff',
     borderRadius: 8,
     padding: 12,
-    color: '#f9fafb',
+    color: '#111827',
     fontSize: 15,
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: '#e5e7eb',
   },
   textarea: { minHeight: 100 },
   row: { flexDirection: 'row', gap: 8 },
@@ -172,22 +172,22 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#374151',
-    backgroundColor: '#1f2937',
+    borderColor: '#e5e7eb',
+    backgroundColor: '#ffffff',
   },
-  importanceBtnText: { color: '#9ca3af', fontWeight: '600' },
+  importanceBtnText: { color: '#6b7280', fontWeight: '600' },
   catScroll: { marginBottom: 4 },
   catChip: {
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 20,
-    backgroundColor: '#1f2937',
+    backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: '#e5e7eb',
     marginRight: 8,
   },
   catChipActive: { backgroundColor: '#F59E0B33', borderColor: '#F59E0B' },
-  catChipText: { color: '#9ca3af', fontSize: 13 },
+  catChipText: { color: '#6b7280', fontSize: 13 },
   catChipTextActive: { color: '#F59E0B', fontWeight: '600' },
   saveBtn: {
     marginTop: 24,

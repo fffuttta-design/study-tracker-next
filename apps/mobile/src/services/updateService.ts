@@ -26,7 +26,7 @@ export const DRIVE_VERSION_JSON_ID = '10TbL_TbkPuEylDWNhysdJI-1VRVjW19d';
 export const DRIVE_APK_ID          = '1WLLiCOsxMPr6J1QFidYREGPNHkwJHAcb';
 
 // ── 現在のビルド番号（ビルド時に自動更新）─────────────────────
-export const CURRENT_BUILD_NUMBER = 13;
+export const CURRENT_BUILD_NUMBER = 14;
 export const CURRENT_VERSION      = '1.0.0';
 
 // ─────────────────────────────────────────────────────────────
@@ -35,24 +35,32 @@ const DRIVE_API_BASE = 'https://www.googleapis.com/drive/v3/files';
 
 async function getAccessToken(): Promise<string | null> {
   try {
+    // getTokens() はトークンを自動リフレッシュする
     const tokens = await GoogleSignin.getTokens();
     return tokens.accessToken;
-  } catch {
+  } catch (e) {
+    console.warn('[update] getAccessToken failed:', e);
     return null;
   }
 }
 
-async function fetchVersionJson(accessToken: string): Promise<{ version: string; buildNumber: number; builtAt: string } | null> {
-  if (!DRIVE_VERSION_JSON_ID) return null;
+async function fetchVersionJson(accessToken: string): Promise<
+  { ok: true; data: { version: string; buildNumber: number; builtAt: string } } |
+  { ok: false; status: number }
+> {
   try {
     const res = await fetch(
       `${DRIVE_API_BASE}/${DRIVE_VERSION_JSON_ID}?alt=media`,
       { headers: { Authorization: `Bearer ${accessToken}` } },
     );
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
+    if (!res.ok) {
+      console.warn(`[update] version.json fetch failed: HTTP ${res.status}`);
+      return { ok: false, status: res.status };
+    }
+    return { ok: true, data: await res.json() };
+  } catch (e) {
+    console.warn('[update] fetchVersionJson error:', e);
+    return { ok: false, status: 0 };
   }
 }
 
@@ -106,11 +114,20 @@ export async function checkForUpdate(manual = false): Promise<void> {
     return;
   }
 
-  const remote = await fetchVersionJson(accessToken);
-  if (!remote) {
-    if (manual) Alert.alert('エラー', 'バージョン情報を取得できませんでした');
+  const result = await fetchVersionJson(accessToken);
+  if (!result.ok) {
+    if (manual) {
+      const msg = result.status === 403
+        ? 'Driveへのアクセス権限がありません。\n一度ログアウトして再ログインしてください。'
+        : result.status === 401
+        ? 'トークンが無効です。再ログインしてください。'
+        : `バージョン情報を取得できませんでした (HTTP ${result.status || 'network error'})`;
+      Alert.alert('エラー', msg);
+    }
     return;
   }
+
+  const remote = result.data;
 
   if (remote.buildNumber <= CURRENT_BUILD_NUMBER) {
     if (manual) Alert.alert('✅ 最新版です', `v${CURRENT_VERSION} (build ${CURRENT_BUILD_NUMBER})\nすでに最新バージョンです`);

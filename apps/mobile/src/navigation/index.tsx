@@ -36,7 +36,7 @@ function MainTabs() {
         ),
         tabBarActiveTintColor: '#F59E0B',
         tabBarInactiveTintColor: '#9ca3af',
-        tabBarStyle: { backgroundColor: '#1f2937', borderTopColor: '#374151' },
+        tabBarStyle: { backgroundColor: '#ffffff', borderTopColor: '#e5e7eb' },
         tabBarLabelStyle: { fontSize: 11 },
       })}>
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'ホーム' }} />
@@ -63,12 +63,12 @@ export default function AppNavigator() {
             <Stack.Screen
               name="AddLearning"
               component={AddLearningScreen}
-              options={{ headerShown: true, title: '学習アイテムを追加', headerStyle: { backgroundColor: '#1f2937' }, headerTintColor: '#f9fafb' }}
+              options={{ headerShown: true, title: '学習アイテムを追加', headerStyle: { backgroundColor: '#f9fafb' }, headerTintColor: '#111827' }}
             />
             <Stack.Screen
               name="NotionPage"
               component={NotionPageScreen}
-              options={{ headerShown: true, title: 'ページ', headerStyle: { backgroundColor: '#1f2937' }, headerTintColor: '#f9fafb' }}
+              options={{ headerShown: true, title: 'ページ', headerStyle: { backgroundColor: '#f9fafb' }, headerTintColor: '#111827' }}
             />
           </>
         )}

@@ -77,7 +77,7 @@ export default function NotionPlusScreen({ navigation }: any) {
               value={newTitle}
               onChangeText={setNewTitle}
               placeholder="ページタイトル"
-              placeholderTextColor="#4b5563"
+              placeholderTextColor="#9ca3af"
               autoFocus
               onSubmitEditing={handleAdd}
             />
@@ -114,26 +114,26 @@ function PageItem({ page, onPress, onDelete }: { page: NotionPage; onPress: () =
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#111827' },
+  safe: { flex: 1, backgroundColor: '#f9fafb' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
-  title: { fontSize: 20, fontWeight: 'bold', color: '#f9fafb' },
+  title: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
   addBtn: { backgroundColor: '#F59E0B', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 },
   addBtnText: { color: '#111827', fontWeight: '600', fontSize: 14 },
   list: { padding: 16, gap: 8 },
-  empty: { color: '#6b7280', textAlign: 'center', marginTop: 40, fontSize: 14, lineHeight: 22 },
-  pageItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1f2937', borderRadius: 10, padding: 14, gap: 12 },
+  empty: { color: '#9ca3af', textAlign: 'center', marginTop: 40, fontSize: 14, lineHeight: 22 },
+  pageItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 10, padding: 14, gap: 12, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3 },
   pageIcon: { fontSize: 24 },
   pageInfo: { flex: 1 },
-  pageTitle: { fontSize: 15, fontWeight: '600', color: '#f9fafb' },
-  pageDate: { fontSize: 12, color: '#6b7280', marginTop: 2 },
+  pageTitle: { fontSize: 15, fontWeight: '600', color: '#111827' },
+  pageDate: { fontSize: 12, color: '#9ca3af', marginTop: 2 },
   deleteBtn: { padding: 4 },
-  modalOverlay: { flex: 1, backgroundColor: '#00000088', alignItems: 'center', justifyContent: 'center' },
-  modal: { backgroundColor: '#1f2937', borderRadius: 14, padding: 24, width: '85%', gap: 16 },
-  modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#f9fafb' },
-  modalInput: { backgroundColor: '#111827', borderRadius: 8, padding: 12, color: '#f9fafb', fontSize: 15, borderWidth: 1, borderColor: '#374151' },
+  modalOverlay: { flex: 1, backgroundColor: '#00000055', alignItems: 'center', justifyContent: 'center' },
+  modal: { backgroundColor: '#ffffff', borderRadius: 14, padding: 24, width: '85%', gap: 16 },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#111827' },
+  modalInput: { backgroundColor: '#f9fafb', borderRadius: 8, padding: 12, color: '#111827', fontSize: 15, borderWidth: 1, borderColor: '#e5e7eb' },
   modalBtns: { flexDirection: 'row', gap: 10 },
-  modalCancel: { flex: 1, padding: 12, borderRadius: 8, backgroundColor: '#374151', alignItems: 'center' },
-  modalCancelText: { color: '#d1d5db', fontWeight: '600' },
+  modalCancel: { flex: 1, padding: 12, borderRadius: 8, backgroundColor: '#f3f4f6', alignItems: 'center' },
+  modalCancelText: { color: '#374151', fontWeight: '600' },
   modalOk: { flex: 1, padding: 12, borderRadius: 8, backgroundColor: '#F59E0B', alignItems: 'center' },
   modalOkText: { color: '#111827', fontWeight: 'bold' },
 });

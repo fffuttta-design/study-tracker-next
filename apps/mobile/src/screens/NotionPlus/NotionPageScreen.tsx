@@ -64,7 +64,7 @@ export default function NotionPageScreen({ route, navigation }: any) {
         value={title}
         onChangeText={t => { setTitle(t); setDirty(true); }}
         placeholder="ページタイトル"
-        placeholderTextColor="#4b5563"
+        placeholderTextColor="#9ca3af"
         onFocus={() => setEditing(true)}
       />
 
@@ -95,7 +95,7 @@ export default function NotionPageScreen({ route, navigation }: any) {
           multiline
           textAlignVertical="top"
           placeholder={'# 見出し\n\nMarkdown で書けます...\n\n- リスト\n- **太字**\n- *イタリック*'}
-          placeholderTextColor="#4b5563"
+          placeholderTextColor="#9ca3af"
           autoFocus
         />
       ) : (
@@ -112,42 +112,42 @@ export default function NotionPageScreen({ route, navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#111827' },
+  container: { flex: 1, backgroundColor: '#ffffff' },
   titleInput: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#f9fafb',
+    color: '#111827',
     padding: 16,
     paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#1f2937',
+    borderBottomColor: '#f3f4f6',
   },
-  toolbar: { flexDirection: 'row', padding: 12, gap: 8, borderBottomWidth: 1, borderBottomColor: '#1f2937', alignItems: 'center' },
-  toolBtn: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 6, backgroundColor: '#1f2937' },
+  toolbar: { flexDirection: 'row', padding: 12, gap: 8, borderBottomWidth: 1, borderBottomColor: '#f3f4f6', alignItems: 'center' },
+  toolBtn: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 6, backgroundColor: '#f3f4f6' },
   toolBtnActive: { backgroundColor: '#F59E0B' },
-  toolBtnText: { color: '#9ca3af', fontSize: 13 },
+  toolBtnText: { color: '#6b7280', fontSize: 13 },
   toolBtnTextActive: { color: '#111827', fontWeight: '600' },
   saveBtn: { marginLeft: 'auto', paddingHorizontal: 14, paddingVertical: 6, backgroundColor: '#10b981', borderRadius: 6 },
   saveBtnText: { color: '#fff', fontWeight: '600', fontSize: 13 },
-  editor: { flex: 1, padding: 16, color: '#e5e7eb', fontSize: 15, lineHeight: 24, fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo' },
+  editor: { flex: 1, padding: 16, color: '#111827', fontSize: 15, lineHeight: 24, fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo', backgroundColor: '#ffffff' },
   preview: { flex: 1 },
   previewContent: { padding: 16 },
-  emptyText: { color: '#4b5563', fontSize: 14, fontStyle: 'italic', marginTop: 20 },
+  emptyText: { color: '#9ca3af', fontSize: 14, fontStyle: 'italic', marginTop: 20 },
 });
 
 const markdownStyles = {
-  body: { color: '#e5e7eb', fontSize: 15, lineHeight: 24 },
-  heading1: { color: '#f9fafb', fontSize: 24, fontWeight: 'bold', marginBottom: 12, marginTop: 8 },
-  heading2: { color: '#f9fafb', fontSize: 20, fontWeight: 'bold', marginBottom: 10, marginTop: 6 },
-  heading3: { color: '#f9fafb', fontSize: 17, fontWeight: '600', marginBottom: 8 },
-  paragraph: { color: '#e5e7eb', marginBottom: 10 },
-  list_item: { color: '#e5e7eb' },
+  body: { color: '#374151', fontSize: 15, lineHeight: 24 },
+  heading1: { color: '#111827', fontSize: 24, fontWeight: 'bold', marginBottom: 12, marginTop: 8 },
+  heading2: { color: '#111827', fontSize: 20, fontWeight: 'bold', marginBottom: 10, marginTop: 6 },
+  heading3: { color: '#111827', fontSize: 17, fontWeight: '600', marginBottom: 8 },
+  paragraph: { color: '#374151', marginBottom: 10 },
+  list_item: { color: '#374151' },
   bullet_list: { marginBottom: 10 },
-  code_inline: { backgroundColor: '#1f2937', color: '#F59E0B', paddingHorizontal: 4, borderRadius: 4 },
-  fence: { backgroundColor: '#1f2937', padding: 12, borderRadius: 8, marginBottom: 10 },
-  blockquote: { backgroundColor: '#1f2937', borderLeftWidth: 3, borderLeftColor: '#F59E0B', paddingLeft: 12, marginBottom: 10 },
-  strong: { color: '#fff', fontWeight: 'bold' },
-  em: { fontStyle: 'italic', color: '#d1d5db' },
-  link: { color: '#60a5fa' },
-  hr: { backgroundColor: '#374151', height: 1, marginVertical: 16 },
+  code_inline: { backgroundColor: '#f3f4f6', color: '#d97706', paddingHorizontal: 4, borderRadius: 4 },
+  fence: { backgroundColor: '#f3f4f6', padding: 12, borderRadius: 8, marginBottom: 10 },
+  blockquote: { backgroundColor: '#fffbeb', borderLeftWidth: 3, borderLeftColor: '#F59E0B', paddingLeft: 12, marginBottom: 10 },
+  strong: { color: '#111827', fontWeight: 'bold' },
+  em: { fontStyle: 'italic', color: '#6b7280' },
+  link: { color: '#3b82f6' },
+  hr: { backgroundColor: '#e5e7eb', height: 1, marginVertical: 16 },
 };

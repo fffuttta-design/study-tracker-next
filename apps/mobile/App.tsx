@@ -26,7 +26,7 @@ function AuthListener() {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <StatusBar barStyle="light-content" backgroundColor="#111827" />
+      <StatusBar barStyle="dark-content" backgroundColor="#f9fafb" />
       <AuthListener />
       <AppNavigator />
     </SafeAreaProvider>
