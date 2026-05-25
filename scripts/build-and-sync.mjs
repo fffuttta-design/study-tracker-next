@@ -232,16 +232,53 @@ try {
 
 // ── Step 8: GitHub へ自動プッシュ ────────────────────────────────
 console.log('[build-and-sync] GitHub へプッシュ中...')
+let pushed = false
 try {
   execSync('git add -A', { cwd: ROOT, stdio: 'pipe' })
   const diffOut = execSync('git status --porcelain', { cwd: ROOT, encoding: 'utf-8' })
   if (diffOut.trim()) {
-    execSync(`git commit -m "electron: build ${newBuildNumber} (v${newVersion})"`, { cwd: ROOT, stdio: 'pipe' })
+    execSync(`git commit -m "build: ${newBuildNumber} (v${newVersion})"`, { cwd: ROOT, stdio: 'pipe' })
     execSync('git push origin master', { cwd: ROOT, stdio: 'pipe' })
     console.log(`[build-and-sync] GitHub プッシュ完了 ✓ (build ${newBuildNumber})`)
+    pushed = true
   } else {
     console.log('[build-and-sync] 変更なし、プッシュスキップ')
   }
 } catch (e) {
   console.warn('[build-and-sync] GitHub プッシュ失敗（ビルド自体は成功）:', e.message)
+}
+
+// ── Step 9: GitHub 反映確認（テスト可能チェック）────────────────
+if (pushed) {
+  const GITHUB_VERSION_URL = 'https://raw.githubusercontent.com/fffuttta-design/study-tracker-next/master/apps/mobile/version.json'
+  console.log('\n[build-and-sync] GitHub 反映確認中...')
+  const maxWait = 60000  // 最大60秒
+  const interval = 3000  // 3秒ごとにチェック
+  const startTime = Date.now()
+  let confirmed = false
+
+  while (Date.now() - startTime < maxWait) {
+    await new Promise(r => setTimeout(r, interval))
+    try {
+      const res = await fetch(`${GITHUB_VERSION_URL}?_t=${Date.now()}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data.buildNumber === newBuildNumber) {
+          confirmed = true
+          break
+        }
+        process.stdout.write(`\r[build-and-sync] 待機中... (GitHub: build ${data.buildNumber}, 目標: build ${newBuildNumber})`)
+      }
+    } catch {
+      // ネットワークエラーは無視してリトライ
+    }
+  }
+
+  if (confirmed) {
+    console.log(`\n[build-and-sync] ✅ build ${newBuildNumber} (v${newVersion}) GitHub 反映確認済み`)
+    console.log('[build-and-sync] 📱 今すぐアップデートをテストできます！')
+  } else {
+    console.warn(`\n[build-and-sync] ⚠️  60秒以内に GitHub 反映を確認できませんでした`)
+    console.warn('[build-and-sync]    しばらく待ってからテストしてください')
+  }
 }
