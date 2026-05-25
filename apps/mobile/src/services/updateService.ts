@@ -21,12 +21,11 @@ import RNFS from 'react-native-fs';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
 // ── Drive ファイル ID ─────────────────────────────────────────
-// TODO: Drive で共有して取得した ID を設定してください
-export const DRIVE_VERSION_JSON_ID = '10TbL_TbkPuEylDWNhysdJI-1VRVjW19d';
-export const DRIVE_APK_ID          = '1WLLiCOsxMPr6J1QFidYREGPNHkwJHAcb';
+export const DRIVE_VERSION_JSON_ID = '1wp26QdeMtaQgTd-EemgyDDFTa_-t0ezP';
+export const DRIVE_APK_ID          = '14x0svZmqUzGy8r9FztUUGylIz72CxKdM';
 
 // ── 現在のビルド番号（ビルド時に自動更新）─────────────────────
-export const CURRENT_BUILD_NUMBER = 18;
+export const CURRENT_BUILD_NUMBER = 19;
 export const CURRENT_VERSION      = '1.0.0';
 
 // ─────────────────────────────────────────────────────────────
