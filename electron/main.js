@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, Tray, Menu, nativeImage, dialog, ipcMain } from 'electron'
+import { app, BrowserWindow, shell, Tray, Menu, nativeImage, dialog, ipcMain, Notification } from 'electron'
 import { readFile } from 'fs/promises'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
@@ -18,6 +18,7 @@ const APP_URL = isDev ? DEV_URL : VERCEL_URL
 let mainWin    = null
 let tray       = null
 let isQuitting = false
+let latestReviewCount = 0
 
 const preloadPath = join(__dirname, 'preload.cjs')
 
@@ -168,10 +169,42 @@ async function checkForUpdate() {
   }
 }
 
+// ── 復習通知スケジューラー ────────────────────────────────────────
+function scheduleReviewNotification() {
+  const now  = new Date()
+  const next = new Date(now)
+  next.setHours(8, 0, 0, 0)
+  if (next <= now) next.setDate(next.getDate() + 1)
+
+  const delay = next.getTime() - now.getTime()
+  setTimeout(() => {
+    if (latestReviewCount > 0 && Notification.isSupported()) {
+      const notif = new Notification({
+        title: '学習トラッカー 📚',
+        body:  `復習待ちが ${latestReviewCount} 件あります`,
+        silent: false,
+      })
+      notif.on('click', () => {
+        mainWin?.show()
+        mainWin?.focus()
+        mainWin?.webContents.executeJavaScript(
+          `window.location.href = '/learning?tab=2'`
+        )
+      })
+      notif.show()
+    }
+    scheduleReviewNotification() // 翌日08:00に再スケジュール
+  }, delay)
+}
+
 // ── IPC ──────────────────────────────────────────────────────────
 ipcMain.on('app-relaunch', () => {
   app.relaunch()
   app.exit(0)
+})
+
+ipcMain.on('review-count-update', (_, count) => {
+  latestReviewCount = typeof count === 'number' ? count : 0
 })
 
 // ── シングルインスタンス ──────────────────────────────────────────
@@ -194,6 +227,8 @@ if (!gotLock) {
     mainWin.once('ready-to-show', () => {
       setTimeout(() => checkForUpdate(), 1500)
     })
+    // 復習通知を毎朝08:00にスケジュール
+    scheduleReviewNotification()
   })
 }
 

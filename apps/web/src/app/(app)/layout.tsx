@@ -10,6 +10,17 @@ import { useImprovementTaskStore } from '@/stores/improvementTaskStore';
 import { useGoalStore } from '@/stores/goalStore';
 import { useMemoStore } from '@/stores/memoStore';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { hasDueReview } from '@study-tracker/core';
+
+declare global {
+  interface Window {
+    electronAPI?: {
+      platform: string;
+      relaunch?: () => void;
+      setReviewCount?: (count: number) => void;
+    };
+  }
+}
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuthStore();
@@ -20,6 +31,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const subscribeTasks = useImprovementTaskStore((s) => s.subscribe);
   const subscribeGoals = useGoalStore((s) => s.subscribe);
   const subscribeMemos = useMemoStore((s) => s.subscribe);
+  const items = useLearningStore((s) => s.items);
 
   useEffect(() => {
     if (!loading && !user) router.replace('/login');
@@ -35,6 +47,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const unsub6 = subscribeMemos(user.uid);
     return () => { unsub1(); unsub2(); unsub3(); unsub4(); unsub5(); unsub6(); };
   }, [user, subscribeCategories, subscribeItems, subscribePages, subscribeTasks, subscribeGoals, subscribeMemos]);
+
+  // Electron に復習件数を送信（08:00通知用）
+  useEffect(() => {
+    if (!user || typeof window === 'undefined') return;
+    window.electronAPI?.setReviewCount?.(items.filter(hasDueReview).length);
+  }, [items, user]);
 
   if (loading || !user) {
     return (

@@ -5,11 +5,7 @@ import { APP_VERSION } from '@/lib/version';
 import { useAuthStore } from '@/stores/authStore';
 import { useSettingsStore, REVIEW_STAGE_LABELS } from '@/stores/settingsStore';
 
-declare global {
-  interface Window {
-    electronAPI?: { platform: string; relaunch?: () => void };
-  }
-}
+// window.electronAPI の型は layout.tsx で一元定義済み
 
 export default function SettingsPage() {
   const { user, signOut } = useAuthStore();
