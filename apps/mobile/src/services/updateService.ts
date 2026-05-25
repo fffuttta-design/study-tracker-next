@@ -13,11 +13,11 @@ const GITHUB_VERSION_URL =
   'https://api.github.com/repos/fffuttta-design/study-tracker-next/contents/apps/mobile/version.json';
 
 // ── APK: Drive ファイル ID ────────────────────────────────────────
-export const DRIVE_APK_ID = '14x0svZmqUzGy8r9FztUUGylIz72CxKdM';
+export const DRIVE_APK_ID = '1OwRhqhc7zCNQV1ebYeYpfyqX6t-U06rA';
 
 // ── 現在のビルド番号（ビルド時に自動更新）─────────────────────────
-export const CURRENT_BUILD_NUMBER = 41;
-export const CURRENT_VERSION      = '1.0.21';
+export const CURRENT_BUILD_NUMBER = 42;
+export const CURRENT_VERSION      = '1.0.22';
 
 // ─────────────────────────────────────────────────────────────────
 
