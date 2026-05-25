@@ -10,8 +10,8 @@ import RNBlobUtil from 'react-native-blob-util';
 const GITHUB_VERSION_URL =
   'https://api.github.com/repos/fffuttta-design/study-tracker-next/contents/apps/mobile/version.json';
 
-export const CURRENT_BUILD_NUMBER = 59;
-export const CURRENT_VERSION      = '1.0.39';
+export const CURRENT_BUILD_NUMBER = 60;
+export const CURRENT_VERSION      = '1.0.40';
 
 async function fetchVersionJson(): Promise<
   { ok: true; data: { version: string; buildNumber: number; builtAt: string; apkUrl: string } } |
@@ -110,25 +110,23 @@ export async function checkForUpdate(
     return;
   }
 
+  const doDownload = async (onProgress?: (pct: number) => void) => {
+    const apkPath = await downloadApk(remote.apkUrl, onProgress);
+    if (!apkPath) {
+      Alert.alert('エラー', 'ダウンロードに失敗しました。');
+      return;
+    }
+    await installApk(apkPath);
+  };
+
   Alert.alert(
     'アップデートがあります 🎉',
-    `現在: v${CURRENT_VERSION} (build ${CURRENT_BUILD_NUMBER})\n最新: v${remote.version} (build ${remote.buildNumber})\n\n今すぐ更新しますか？`,
+    `現在: v${CURRENT_VERSION}\n最新: v${remote.version}\n\n${manual ? '今すぐ更新しますか？' : '設定画面からアップデートできます'}`,
     [
       { text: '後で', style: 'cancel' },
       {
-        text: '今すぐ更新',
-        onPress: () => {
-          if (onConfirmed) {
-            onConfirmed(async (onProgress) => {
-              const apkPath = await downloadApk(remote.apkUrl, onProgress);
-              if (!apkPath) {
-                Alert.alert('エラー', 'ダウンロードに失敗しました。');
-                return;
-              }
-              await installApk(apkPath);
-            });
-          }
-        },
+        text: manual ? '今すぐ更新' : '設定画面へ',
+        onPress: () => onConfirmed?.(doDownload),
       },
     ],
   );

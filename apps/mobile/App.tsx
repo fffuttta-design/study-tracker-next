@@ -6,6 +6,7 @@ import auth from '@react-native-firebase/auth';
 import AppNavigator from './src/navigation';
 import { useAuthStore } from './src/store/authStore';
 import { checkForUpdate } from './src/services/updateService';
+import { navigationRef } from './src/navigation';
 
 function AuthListener() {
   const { setUser } = useAuthStore();
@@ -15,8 +16,8 @@ function AuthListener() {
       setUser(user);
       if (user) {
         setTimeout(() => {
-          checkForUpdate(false, (doDownload) => {
-            doDownload(() => {});
+          checkForUpdate(false, () => {
+            navigationRef.current?.navigate('Main', { screen: 'Settings' });
           });
         }, 2000);
       }
