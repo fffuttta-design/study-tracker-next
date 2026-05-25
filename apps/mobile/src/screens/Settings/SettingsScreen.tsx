@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,14 +6,28 @@ import {
   StyleSheet,
   Alert,
   Image,
+  ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import auth from '@react-native-firebase/auth';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useAuthStore } from '../../store/authStore';
+import { checkForUpdate, CURRENT_BUILD_NUMBER, CURRENT_VERSION } from '../../services/updateService';
 
 export default function SettingsScreen() {
   const { user } = useAuthStore();
+  const [checking, setChecking] = useState(false);
+
+  const handleCheckUpdate = async () => {
+    if (Platform.OS !== 'android') return;
+    setChecking(true);
+    try {
+      await checkForUpdate(true);
+    } finally {
+      setChecking(false);
+    }
+  };
 
   const handleSignOut = () => {
     Alert.alert('ログアウト', 'ログアウトしますか？', [
@@ -54,13 +68,28 @@ export default function SettingsScreen() {
           <Text style={styles.sectionTitle}>アプリ情報</Text>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>バージョン</Text>
-            <Text style={styles.infoValue}>1.0.0</Text>
+            <Text style={styles.infoValue}>v{CURRENT_VERSION} (build {CURRENT_BUILD_NUMBER})</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>プラットフォーム</Text>
             <Text style={styles.infoValue}>Android</Text>
           </View>
         </View>
+
+        {/* アップデート確認 */}
+        {Platform.OS === 'android' && (
+          <TouchableOpacity
+            style={[styles.updateBtn, checking && styles.updateBtnDisabled]}
+            onPress={handleCheckUpdate}
+            disabled={checking}
+          >
+            {checking ? (
+              <ActivityIndicator size="small" color="#60a5fa" />
+            ) : (
+              <Text style={styles.updateBtnText}>🔄 アップデートを確認</Text>
+            )}
+          </TouchableOpacity>
+        )}
 
         {/* ログアウト */}
         <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
@@ -86,6 +115,9 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#374151' },
   infoLabel: { color: '#d1d5db', fontSize: 14 },
   infoValue: { color: '#9ca3af', fontSize: 14 },
+  updateBtn: { backgroundColor: '#1f2937', borderRadius: 10, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: '#60a5fa', marginBottom: 12 },
+  updateBtnDisabled: { opacity: 0.6 },
+  updateBtnText: { color: '#60a5fa', fontWeight: '600', fontSize: 15 },
   signOutBtn: { marginTop: 'auto', backgroundColor: '#1f2937', borderRadius: 10, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: '#ef4444' },
   signOutText: { color: '#ef4444', fontWeight: '600', fontSize: 15 },
 });

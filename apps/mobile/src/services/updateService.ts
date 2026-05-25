@@ -26,7 +26,7 @@ export const DRIVE_VERSION_JSON_ID = '10TbL_TbkPuEylDWNhysdJI-1VRVjW19d';
 export const DRIVE_APK_ID          = '1WLLiCOsxMPr6J1QFidYREGPNHkwJHAcb';
 
 // ── 現在のビルド番号（ビルド時に自動更新）─────────────────────
-export const CURRENT_BUILD_NUMBER = 12;
+export const CURRENT_BUILD_NUMBER = 13;
 export const CURRENT_VERSION      = '1.0.0';
 
 // ─────────────────────────────────────────────────────────────
@@ -94,19 +94,28 @@ async function installApk(_apkPath: string): Promise<void> {
 }
 
 /**
- * 起動時に呼ぶメイン関数
+ * アップデート確認メイン関数
+ * @param manual true の場合、最新版でも「最新です」と表示する
  */
-export async function checkForUpdate(): Promise<void> {
-  // Drive ID が未設定なら何もしない
+export async function checkForUpdate(manual = false): Promise<void> {
   if (!DRIVE_VERSION_JSON_ID || !DRIVE_APK_ID) return;
 
   const accessToken = await getAccessToken();
-  if (!accessToken) return;
+  if (!accessToken) {
+    if (manual) Alert.alert('エラー', 'Googleログインが必要です');
+    return;
+  }
 
   const remote = await fetchVersionJson(accessToken);
-  if (!remote) return;
+  if (!remote) {
+    if (manual) Alert.alert('エラー', 'バージョン情報を取得できませんでした');
+    return;
+  }
 
-  if (remote.buildNumber <= CURRENT_BUILD_NUMBER) return;
+  if (remote.buildNumber <= CURRENT_BUILD_NUMBER) {
+    if (manual) Alert.alert('✅ 最新版です', `v${CURRENT_VERSION} (build ${CURRENT_BUILD_NUMBER})\nすでに最新バージョンです`);
+    return;
+  }
 
   console.log(`[update] 新バージョン検知: build ${CURRENT_BUILD_NUMBER} → ${remote.buildNumber}`);
 
