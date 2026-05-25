@@ -4,8 +4,8 @@
  * APK ダウンロード: Google Drive API（OAuth トークン使用）
  */
 
-import { Alert, Platform, Linking } from 'react-native';
-import RNFS from 'react-native-fs';
+import { Alert, Platform } from 'react-native';
+import RNBlobUtil from 'react-native-blob-util';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
 // ── version.json: GitHub API（CDN なし・常に最新）───────────────
@@ -16,8 +16,8 @@ const GITHUB_VERSION_URL =
 export const DRIVE_APK_ID = '14x0svZmqUzGy8r9FztUUGylIz72CxKdM';
 
 // ── 現在のビルド番号（ビルド時に自動更新）─────────────────────────
-export const CURRENT_BUILD_NUMBER = 38;
-export const CURRENT_VERSION      = '1.0.18';
+export const CURRENT_BUILD_NUMBER = 39;
+export const CURRENT_VERSION      = '1.0.19';
 
 // ─────────────────────────────────────────────────────────────────
 
@@ -56,33 +56,34 @@ async function downloadApk(
   accessToken: string,
   onProgress?: (pct: number) => void,
 ): Promise<string | null> {
-  const destPath = `${RNFS.CachesDirectoryPath}/updates/study-tracker.apk`;
-  await RNFS.mkdir(`${RNFS.CachesDirectoryPath}/updates`).catch(() => {});
+  const destPath = `${RNBlobUtil.fs.dirs.CacheDir}/study-tracker.apk`;
 
   try {
-    const { promise } = RNFS.downloadFile({
-      fromUrl: `${DRIVE_API_BASE}/${DRIVE_APK_ID}?alt=media`,
-      toFile: destPath,
-      headers: { Authorization: `Bearer ${accessToken}` },
-      progress: onProgress
-        ? (res) => onProgress(Math.round((res.bytesWritten / res.contentLength) * 100))
-        : undefined,
-    });
-    const result = await promise;
-    if (result.statusCode === 200) return destPath;
-    return null;
+    await RNBlobUtil.config({
+      fileCache: true,
+      path: destPath,
+    })
+      .fetch('GET', `${DRIVE_API_BASE}/${DRIVE_APK_ID}?alt=media`, {
+        Authorization: `Bearer ${accessToken}`,
+      })
+      .progress((received, total) => {
+        if (total > 0) {
+          onProgress?.(Math.round((Number(received) / Number(total)) * 100));
+        }
+      });
+    return destPath;
   } catch (e) {
     console.warn('[update] downloadApk error:', e);
     return null;
   }
 }
 
-function installApk(): void {
+async function installApk(apkPath: string): Promise<void> {
   if (Platform.OS !== 'android') return;
-  const contentUri = 'content://com.studytracker.fileprovider/apk_cache/study-tracker.apk';
-  Linking.openURL(contentUri).catch(e => {
-    Alert.alert('インストールエラー', `APKを開けませんでした: ${e.message}`);
-  });
+  await RNBlobUtil.android.actionViewIntent(
+    apkPath,
+    'application/vnd.android.package-archive',
+  );
 }
 
 /**
@@ -121,7 +122,6 @@ export async function checkForUpdate(
         text: '今すぐ更新',
         onPress: () => {
           if (onConfirmed) {
-            // 呼び出し元（Settings画面）が進捗表示しながらダウンロード
             onConfirmed(async (onProgress) => {
               const accessToken = await getAccessToken();
               if (!accessToken) {
@@ -133,7 +133,7 @@ export async function checkForUpdate(
                 Alert.alert('エラー', 'ダウンロードに失敗しました。\nログアウトして再ログインすると解決する場合があります。');
                 return;
               }
-              installApk();
+              await installApk(apkPath);
             });
           }
         },
@@ -153,5 +153,5 @@ export async function downloadAndInstall(onProgress?: (pct: number) => void): Pr
     Alert.alert('エラー', 'ダウンロードに失敗しました。\nログアウトして再ログインすると解決する場合があります。');
     return;
   }
-  installApk();
+  await installApk(apkPath);
 }
