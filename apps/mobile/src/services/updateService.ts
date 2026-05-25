@@ -26,7 +26,7 @@ export const DRIVE_VERSION_JSON_ID = '10TbL_TbkPuEylDWNhysdJI-1VRVjW19d';
 export const DRIVE_APK_ID          = '1WLLiCOsxMPr6J1QFidYREGPNHkwJHAcb';
 
 // ── 現在のビルド番号（ビルド時に自動更新）─────────────────────
-export const CURRENT_BUILD_NUMBER = 16;
+export const CURRENT_BUILD_NUMBER = 18;
 export const CURRENT_VERSION      = '1.0.0';
 
 // ─────────────────────────────────────────────────────────────
@@ -64,12 +64,13 @@ async function fetchVersionJson(accessToken: string): Promise<
   }
 }
 
-async function downloadApk(accessToken: string): Promise<string | null> {
+async function downloadApk(
+  accessToken: string,
+  onProgress?: (pct: number) => void,
+): Promise<string | null> {
   if (!DRIVE_APK_ID) return null;
 
   const destPath = `${RNFS.CachesDirectoryPath}/updates/study-tracker.apk`;
-
-  // キャッシュディレクトリ作成
   await RNFS.mkdir(`${RNFS.CachesDirectoryPath}/updates`).catch(() => {});
 
   try {
@@ -77,28 +78,48 @@ async function downloadApk(accessToken: string): Promise<string | null> {
       fromUrl: `${DRIVE_API_BASE}/${DRIVE_APK_ID}?alt=media`,
       toFile: destPath,
       headers: { Authorization: `Bearer ${accessToken}` },
+      progress: onProgress
+        ? (res) => onProgress(Math.round((res.bytesWritten / res.contentLength) * 100))
+        : undefined,
     });
     const result = await promise;
+    console.log('[update] download statusCode:', result.statusCode);
     if (result.statusCode === 200) return destPath;
     return null;
-  } catch {
+  } catch (e) {
+    console.warn('[update] downloadApk error:', e);
     return null;
   }
 }
 
-async function installApk(_apkPath: string): Promise<void> {
+function installApk(): void {
   if (Platform.OS !== 'android') return;
+  // FileProvider content URI → Android インストール Intent
+  const contentUri = 'content://com.studytracker.fileprovider/apk_cache/study-tracker.apk';
+  Linking.openURL(contentUri).catch(e => {
+    console.warn('[update] installApk failed:', e);
+    Alert.alert('インストールエラー', `APKを開けませんでした: ${e.message}`);
+  });
+}
 
-  try {
-    // FileProvider の content URI でインストール Intent を発行
-    // AndroidManifest の authority: com.studytracker.fileprovider
-    // file_provider_paths.xml の cache-path name="apk_cache" path="updates/"
-    const contentUri = 'content://com.studytracker.fileprovider/apk_cache/study-tracker.apk';
-    await Linking.openURL(contentUri);
-  } catch (e) {
-    console.warn('[update] APK install failed:', e);
-    Alert.alert('インストールエラー', 'APKを開けませんでした。Driveから手動でインストールしてください。');
+/**
+ * 手動ダウンロード＆インストール（設定画面から呼ぶ）
+ * onProgress: 0-100 のダウンロード進捗コールバック
+ */
+export async function downloadAndInstall(
+  onProgress?: (pct: number) => void,
+): Promise<void> {
+  const accessToken = await getAccessToken();
+  if (!accessToken) {
+    Alert.alert('エラー', 'Googleログインが必要です');
+    return;
   }
+  const apkPath = await downloadApk(accessToken, onProgress);
+  if (!apkPath) {
+    Alert.alert('エラー', 'ダウンロードに失敗しました。\nログアウトして再ログインすると解決する場合があります。');
+    return;
+  }
+  installApk();
 }
 
 /**
@@ -147,10 +168,10 @@ export async function checkForUpdate(manual = false): Promise<void> {
           Alert.alert('ダウンロード中...', 'しばらくお待ちください');
           const apkPath = await downloadApk(accessToken);
           if (!apkPath) {
-            Alert.alert('エラー', 'ダウンロードに失敗しました');
+            Alert.alert('エラー', 'ダウンロードに失敗しました。\nログアウトして再ログインすると解決する場合があります。');
             return;
           }
-          await installApk(apkPath);
+          installApk();
         },
       },
     ],
