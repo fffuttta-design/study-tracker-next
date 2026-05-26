@@ -10,7 +10,12 @@ import {
   type LearningItem,
   hasDueReview,
   isFullyCompleted,
+  localDateKey,
+  recalcNextReview,
+  getNextStageIndex,
 } from '@study-tracker/core';
+import { useCategoryStore } from '@/stores/categoryStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { format, addDays, subDays, isToday } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import ReactMarkdown from 'react-markdown';
@@ -145,7 +150,7 @@ function LearningPageContent() {
   const searchParams = useSearchParams();
   const [tab, setTab] = useState(() => {
     const t = Number(searchParams.get('tab') ?? '0');
-    return isNaN(t) ? 0 : Math.min(Math.max(t, 0), 4);
+    return isNaN(t) ? 0 : Math.min(Math.max(t, 0), 5);
   });
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -182,7 +187,7 @@ function LearningPageContent() {
 
       {/* タブ */}
       <div className="flex border-b border-gray-100 px-6">
-        {['ダッシュボード', '本日の学習', '今日の復習', '全学習リスト', '通知ログ'].map((label, i) => (
+        {['ダッシュボード', '本日の学習', '今日の復習', '全学習リスト', '達成リスト', '通知ログ'].map((label, i) => (
           <button
             key={i}
             onClick={() => setTab(i)}
@@ -202,7 +207,8 @@ function LearningPageContent() {
         {tab === 1 && <TodayTab items={todayItems} uid={user?.uid ?? ''} onAdd={() => setAddDialogOpen(true)} />}
         {tab === 2 && <ReviewTab dueItems={dueItems} uid={user?.uid ?? ''} />}
         {tab === 3 && <AllItemsTab items={items} uid={user?.uid ?? ''} />}
-        {tab === 4 && <LogTab />}
+        {tab === 4 && <AchievementTab items={items} uid={user?.uid ?? ''} />}
+        {tab === 5 && <LogTab />}
       </div>
 
       {/* AddItemDialog */}
@@ -1122,6 +1128,181 @@ function AllItemsCalendar({
   );
 }
 
+// ── 達成リストタブ ────────────────────────────────────────────────────
+
+const ACHIEVEMENT_STAGE_COLORS = [
+  'bg-red-400',
+  'bg-yellow-400',
+  'bg-green-500',
+  'bg-blue-500',
+  'bg-purple-500',
+];
+
+function AchievementTab({ items }: { items: LearningItem[]; uid: string }) {
+  const { categories } = useCategoryStore();
+  const [filterCategoryId, setFilterCategoryId] = useState<string>('all');
+
+  // カテゴリでフィルター
+  const filtered = useMemo(
+    () => filterCategoryId === 'all' ? items : items.filter((i) => i.categoryId === filterCategoryId),
+    [items, filterCategoryId]
+  );
+
+  // 完了ステージ数でソート（多い順）
+  const sorted = useMemo(
+    () => [...filtered].sort((a, b) => {
+      const aStages = a.reviews.filter((r) => r.completed).length;
+      const bStages = b.reviews.filter((r) => r.completed).length;
+      if (bStages !== aStages) return bStages - aStages;
+      return b.dateKey.localeCompare(a.dateKey);
+    }),
+    [filtered]
+  );
+
+  const totalCount      = items.length;
+  const masteredCount   = items.filter(isFullyCompleted).length;
+  const inProgressCount = items.filter((i) => !isFullyCompleted(i) && i.reviews.some((r) => r.completed)).length;
+  const notStartedCount = items.filter((i) => i.reviews.every((r) => !r.completed)).length;
+
+  // ステージ別件数（フィルター前・全体）
+  const stageCounts = [0, 1, 2, 3, 4].map(
+    (s) => items.filter((i) => {
+      const next = getNextStageIndex(i);
+      return next === s || (next === -1 && s === 4);
+    }).length
+  );
+
+  return (
+    <div className="px-6 py-5">
+      {/* サマリーカード */}
+      <div className="mb-5 grid grid-cols-4 gap-3">
+        <div className="rounded-xl border border-purple-100 bg-purple-50 p-4 text-center">
+          <p className="text-2xl font-bold text-purple-600">{masteredCount}</p>
+          <p className="mt-0.5 text-xs text-purple-400">🏆 全制覇</p>
+        </div>
+        <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-center">
+          <p className="text-2xl font-bold text-blue-600">{inProgressCount}</p>
+          <p className="mt-0.5 text-xs text-blue-400">📈 進行中</p>
+        </div>
+        <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-center">
+          <p className="text-2xl font-bold text-gray-500">{notStartedCount}</p>
+          <p className="mt-0.5 text-xs text-gray-400">📋 未着手</p>
+        </div>
+        <div className="rounded-xl border border-green-100 bg-green-50 p-4 text-center">
+          <p className="text-2xl font-bold text-green-600">{totalCount}</p>
+          <p className="mt-0.5 text-xs text-green-400">📚 総アイテム</p>
+        </div>
+      </div>
+
+      {/* ステージ分布バー */}
+      <div className="mb-5 rounded-xl border border-gray-100 bg-white p-4">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">ステージ分布（次回の復習ステージ）</p>
+        <div className="space-y-2">
+          {STAGE_LABELS.map((label, i) => {
+            const count = stageCounts[i];
+            const pct = totalCount > 0 ? Math.round((count / totalCount) * 100) : 0;
+            return (
+              <div key={i} className="flex items-center gap-3">
+                <span className={`w-16 shrink-0 rounded px-1.5 py-0.5 text-center text-xs font-medium text-white ${ACHIEVEMENT_STAGE_COLORS[i]}`}>
+                  {label}
+                </span>
+                <div className="flex-1 rounded-full bg-gray-100 h-2">
+                  <div
+                    className={`h-2 rounded-full transition-all ${ACHIEVEMENT_STAGE_COLORS[i]}`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <span className="w-8 shrink-0 text-right text-xs text-gray-400">{count}件</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* カテゴリフィルター */}
+      <div className="mb-4 flex flex-wrap gap-2">
+        <button
+          onClick={() => setFilterCategoryId('all')}
+          className={`rounded-full border px-3 py-1 text-xs transition ${filterCategoryId === 'all' ? 'border-brand-400 bg-brand-50 font-medium text-brand-600' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+        >
+          すべて（{items.length}件）
+        </button>
+        {categories.map((cat) => {
+          const cnt = items.filter((i) => i.categoryId === cat.id).length;
+          if (cnt === 0) return null;
+          return (
+            <button
+              key={cat.id}
+              onClick={() => setFilterCategoryId(cat.id)}
+              className={`rounded-full border px-3 py-1 text-xs transition ${filterCategoryId === cat.id ? 'border-brand-400 bg-brand-50 font-medium text-brand-600' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+            >
+              {cat.name}（{cnt}件）
+            </button>
+          );
+        })}
+      </div>
+
+      {/* アイテムリスト */}
+      <div className="space-y-2">
+        {sorted.length === 0 && (
+          <p className="py-8 text-center text-sm text-gray-400">アイテムがありません</p>
+        )}
+        {sorted.map((item) => {
+          const completedCount = item.reviews.filter((r) => r.completed).length;
+          const totalStages = item.reviews.length;
+          const fully = isFullyCompleted(item);
+          const nextIdx = getNextStageIndex(item);
+          const catName = categories.find((c) => c.id === item.categoryId)?.name;
+
+          return (
+            <div
+              key={item.id}
+              className={`rounded-xl border px-4 py-3 ${fully ? 'border-purple-200 bg-purple-50' : 'border-gray-100 bg-white'}`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {fully && <span className="text-sm">🏆</span>}
+                    <p className={`font-medium leading-snug ${fully ? 'text-purple-700' : 'text-gray-800'} text-sm`}>
+                      {item.title || item.content.split('\n')[0].slice(0, 60)}
+                    </p>
+                  </div>
+                  <div className="mt-1 flex items-center gap-2">
+                    {catName && (
+                      <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">{catName}</span>
+                    )}
+                    <span className="text-xs text-gray-400">{item.dateKey} 登録</span>
+                  </div>
+                </div>
+
+                {/* ステージ進捗 */}
+                <div className="shrink-0 text-right">
+                  <div className="flex items-center gap-1">
+                    {item.reviews.map((r) => (
+                      <div
+                        key={r.stageIndex}
+                        title={`${STAGE_LABELS[r.stageIndex]}${r.completed ? '（完了）' : ''}`}
+                        className={`h-3 w-3 rounded-full ${r.completed ? ACHIEVEMENT_STAGE_COLORS[r.stageIndex] : 'bg-gray-200'}`}
+                      />
+                    ))}
+                  </div>
+                  <p className={`mt-1 text-xs font-medium ${fully ? 'text-purple-500' : 'text-gray-500'}`}>
+                    {fully
+                      ? '全制覇！'
+                      : nextIdx >= 0
+                      ? `${completedCount}/${totalStages} クリア`
+                      : ''}
+                  </p>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── 通知ログタブ ─────────────────────────────────────────────────────
 
 function LogTab() {
@@ -1163,6 +1344,7 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
   const [editing, setEditing] = useState(false);
   const { update, remove } = useLearningStore();
   const { pages } = useNotionPageStore();
+  const reviewStageDays = useSettingsStore((s) => s.reviewStageDays);
   const linkedPage = item.notionPageId ? pages.find((p) => p.id === item.notionPageId) : null;
   // リンク先ページが削除済み（IDはあるがページが見つからない）
   const pageDeleted = !!item.notionPageId && pages.length > 0 && !linkedPage;
@@ -1170,9 +1352,14 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
   const fullyDone = isFullyCompleted(item);
 
   const completeReview = async () => {
-    const updated = item.reviews.map((r) =>
-      !r.completed && r.stageIndex === nextReview?.stageIndex ? { ...r, completed: true } : r
+    const today = localDateKey();
+    const stageIdx = nextReview?.stageIndex ?? 0;
+    // 1. 今のステージを完了にする
+    let updated = item.reviews.map((r) =>
+      !r.completed && r.stageIndex === stageIdx ? { ...r, completed: true } : r
     );
+    // 2. 次ステージの予定日を「今日 + stageDays[nextStage]」で再計算
+    updated = recalcNextReview(updated, stageIdx, today, reviewStageDays);
     await update(uid, item.id, { reviews: updated });
   };
 

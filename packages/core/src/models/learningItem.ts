@@ -73,3 +73,27 @@ export function createReviews(
     };
   });
 }
+
+/**
+ * 復習完了時に次ステージの scheduledDate を「復習した日 + stageDays[nextStage]」で再計算する。
+ * 例: stage0 を 3日後に完了した場合、stage1 は学習日基準ではなく「完了日 + stageDays[1]」になる。
+ */
+export function recalcNextReview(
+  reviews: ReviewRecord[],
+  completedStageIndex: number,
+  reviewedDateKey: string, // YYYY-MM-DD（ローカル）
+  stageDays: readonly number[] = DEFAULT_REVIEW_STAGE_DAYS
+): ReviewRecord[] {
+  const nextStage = completedStageIndex + 1;
+  if (nextStage >= reviews.length) return reviews; // 最終ステージ完了なら何もしない
+
+  const [y, mo, d] = reviewedDateKey.split('-').map(Number);
+  const nextDate = new Date(y, mo - 1, d);
+  nextDate.setDate(nextDate.getDate() + stageDays[nextStage]);
+
+  return reviews.map((r) =>
+    r.stageIndex === nextStage
+      ? { ...r, scheduledDate: localDateKey(nextDate) }
+      : r
+  );
+}

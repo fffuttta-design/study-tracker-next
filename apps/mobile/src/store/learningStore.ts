@@ -6,6 +6,7 @@ import {
   LearningCategory,
   localDateKey,
   createReviews,
+  recalcNextReview,
 } from '../types';
 
 interface LearningState {
@@ -86,9 +87,12 @@ export const useLearningStore = create<LearningState>(set => ({
     const snap = await ref.get();
     if (!snap.exists) return;
     const item = snap.data() as Omit<LearningItem, 'id'>;
-    const reviews = item.reviews.map(r =>
+    // 1. 今のステージを完了にする
+    let reviews = item.reviews.map(r =>
       r.stageIndex === stageIndex ? { ...r, completed: true } : r,
     );
+    // 2. 次ステージの日程を「今日 + stageDays[nextStage]」で再計算
+    reviews = recalcNextReview(reviews, stageIndex, localDateKey());
     await ref.update({ reviews });
   },
 

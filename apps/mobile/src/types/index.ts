@@ -107,6 +107,23 @@ export function createReviews(
   });
 }
 
+/** 復習完了時に次ステージの日程を「復習日 + stageDays[nextStage]」で再計算 */
+export function recalcNextReview(
+  reviews: ReviewRecord[],
+  completedStageIndex: number,
+  reviewedDateKey: string,
+  stageDays: readonly number[] = DEFAULT_REVIEW_STAGE_DAYS,
+): ReviewRecord[] {
+  const nextStage = completedStageIndex + 1;
+  if (nextStage >= reviews.length) return reviews;
+  const [y, mo, d] = reviewedDateKey.split('-').map(Number);
+  const nextDate = new Date(y, mo - 1, d);
+  nextDate.setDate(nextDate.getDate() + stageDays[nextStage]);
+  return reviews.map((r) =>
+    r.stageIndex === nextStage ? { ...r, scheduledDate: localDateKey(nextDate) } : r,
+  );
+}
+
 export function colorValueToHex(colorValue: number): string {
   const r = (colorValue >> 16) & 0xff;
   const g = (colorValue >> 8) & 0xff;
