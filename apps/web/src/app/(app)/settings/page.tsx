@@ -95,12 +95,75 @@ export default function SettingsPage() {
         {isElectron && <AppOperationSection />}
 
         {/* アプリ情報 */}
-        <Section title="アプリ情報">
-          <InfoRow label="バージョン" value={APP_VERSION} />
-          <InfoRow label="Firebase プロジェクト" value="time-tracker-app-72eba" />
-        </Section>
+        {isElectron ? <AppInfoSection /> : (
+          <Section title="アプリ情報">
+            <InfoRow label="バージョン" value={APP_VERSION} />
+            <InfoRow label="Firebase プロジェクト" value="time-tracker-app-72eba" />
+          </Section>
+        )}
       </div>
     </div>
+  );
+}
+
+// ── アプリ情報セクション（Electronのみ）──────────────────────────
+
+function AppInfoSection() {
+  const [checking, setChecking] = useState(false);
+  const [updateResult, setUpdateResult] = useState<{
+    hasUpdate: boolean;
+    current?: { version: string; buildNumber: number };
+    latest?: { version: string; buildNumber: number };
+    reason?: string;
+  } | null>(null);
+
+  const handleCheck = async () => {
+    setChecking(true);
+    setUpdateResult(null);
+    try {
+      const result = await window.electronAPI?.checkForUpdate?.();
+      setUpdateResult(result ?? null);
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  return (
+    <Section title="アプリ情報">
+      <InfoRow label="バージョン" value={APP_VERSION} />
+      <InfoRow label="Firebase プロジェクト" value="time-tracker-app-72eba" />
+      <div className="mt-3 flex items-center justify-between py-1">
+        <div>
+          <p className="text-sm text-gray-700">アップデートを確認</p>
+          {updateResult && (
+            <p className={`mt-0.5 text-xs ${updateResult.hasUpdate ? 'text-brand-600' : 'text-gray-400'}`}>
+              {updateResult.hasUpdate
+                ? `🎉 v${updateResult.latest?.version} (build ${updateResult.latest?.buildNumber}) が利用可能`
+                : updateResult.reason === 'no-version-file'
+                ? 'バージョン情報が見つかりません'
+                : `最新版です (build ${updateResult.current?.buildNumber})`}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {updateResult?.hasUpdate && (
+            <button
+              onClick={() => window.electronAPI?.applyUpdate?.()}
+              className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600"
+            >
+              今すぐ更新
+            </button>
+          )}
+          <button
+            onClick={handleCheck}
+            disabled={checking}
+            className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+          >
+            {checking ? '確認中...' : '確認'}
+          </button>
+        </div>
+      </div>
+    </Section>
   );
 }
 

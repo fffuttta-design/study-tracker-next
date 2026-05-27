@@ -414,6 +414,40 @@ ipcMain.on('backup-time-update', (_, time) => {
   }
 })
 
+// 手動アップデートチェック（設定画面から）
+ipcMain.handle('check-for-update', async () => {
+  try {
+    const exeDir          = dirname(app.getPath('exe'))
+    const versionJsonPath = join(exeDir, 'version.json')
+    if (!existsSync(versionJsonPath)) return { hasUpdate: false, reason: 'no-version-file' }
+
+    const [remote, local] = await Promise.all([
+      readFile(versionJsonPath,                    'utf-8').then(JSON.parse),
+      readFile(join(__dirname, 'build-info.json'), 'utf-8').then(JSON.parse),
+    ])
+
+    const remoteNum = remote.buildNumber ?? 0
+    const localNum  = local.buildNumber  ?? 0
+
+    if (remoteNum <= localNum) {
+      return { hasUpdate: false, current: { version: local.version, buildNumber: localNum } }
+    }
+
+    return {
+      hasUpdate:  true,
+      current:    { version: local.version,  buildNumber: localNum  },
+      latest:     { version: remote.version, buildNumber: remoteNum },
+    }
+  } catch (e) {
+    return { hasUpdate: false, reason: String(e.message) }
+  }
+})
+
+ipcMain.on('apply-update', () => {
+  app.relaunch()
+  app.exit(0)
+})
+
 // Google Drive バックアップパス取得
 ipcMain.handle('get-drive-backup-path', () => driveBackupPath)
 

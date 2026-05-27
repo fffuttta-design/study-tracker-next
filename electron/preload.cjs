@@ -22,4 +22,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 自動起動
   getAutoLaunch:       () => ipcRenderer.invoke('get-auto-launch'),
   setAutoLaunch:       (enable) => ipcRenderer.send('set-auto-launch', enable),
+  // アップデート
+  checkForUpdate:      () => ipcRenderer.invoke('check-for-update'),
+  applyUpdate:         () => ipcRenderer.send('apply-update'),
 })

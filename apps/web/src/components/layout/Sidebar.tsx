@@ -335,11 +335,6 @@ function NotionPageSidebar({ user }: { user: User }) {
     router.push(`/notion-plus/${page.id}`);
   };
 
-  const addBook = async () => {
-    setAddMenuOpen(false);
-    const page = await add(user.uid, { type: 'book' });
-    router.push(`/notion-plus/${page.id}`);
-  };
 
   const handleCtxMenu = (e: React.MouseEvent, page: NotionPage) => {
     setCtxMenu({ x: e.clientX, y: e.clientY, page });
@@ -401,13 +396,6 @@ function NotionPageSidebar({ user }: { user: User }) {
               >
                 <span>📊</span>
                 <span>データベースを作成</span>
-              </button>
-              <button
-                onClick={addBook}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
-              >
-                <span>📖</span>
-                <span>ブックを作成</span>
               </button>
             </div>
           )}

@@ -35,6 +35,9 @@ declare global {
       // 自動起動
       getAutoLaunch?:      () => Promise<boolean>;
       setAutoLaunch?:      (enable: boolean) => void;
+      // アップデート
+      checkForUpdate?:     () => Promise<{ hasUpdate: boolean; current?: { version: string; buildNumber: number }; latest?: { version: string; buildNumber: number }; reason?: string }>;
+      applyUpdate?:        () => void;
     };
   }
 }

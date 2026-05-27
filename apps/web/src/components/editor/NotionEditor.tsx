@@ -1538,14 +1538,29 @@ export function NotionEditor({
       attrs: { href: `/notion-plus/${newPage.id}`, title: newPage.title || 'Untitled', icon: '📄' },
     }).run();
     await onSave(titleValue.current, JSON.stringify(editor.getJSON()));
-    // onPageNavigate がある（モーダル内など）場合は onCreateSubPage 内で遷移済み
-    // → router.push すると画面全体が遷移してモーダルが閉じてしまうのでスキップ
     if (onPageNavigate) {
       onPageNavigate(`/notion-plus/${newPage.id}`);
     } else {
       router.push(`/notion-plus/${newPage.id}`);
     }
   }, [editor, onCreateSubPage, onSave, router, onPageNavigate]);
+
+  const handleCtxCreateBook = useCallback(async () => {
+    setCtxMenu(null);
+    if (!editor || !user) return;
+    // ブックページを作成してリンクブロックを挿入
+    const newBook = await addPage(user.uid, { type: 'book' });
+    editor.chain().focus().insertContent({
+      type: 'pageLink',
+      attrs: { href: `/notion-plus/${newBook.id}`, title: newBook.title || 'ブック', icon: '📖' },
+    }).run();
+    await onSave(titleValue.current, JSON.stringify(editor.getJSON()));
+    if (onPageNavigate) {
+      onPageNavigate(`/notion-plus/${newBook.id}`);
+    } else {
+      router.push(`/notion-plus/${newBook.id}`);
+    }
+  }, [editor, user, addPage, onSave, router, onPageNavigate]);
 
   const handleCtxCallout = useCallback(() => {
     setCtxMenu(null);
@@ -1788,6 +1803,11 @@ export function NotionEditor({
               {onCreateSubPage && (
                 <button onClick={handleCtxCreatePage} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
                   <span className="text-base">📄</span>新規ページを作成
+                </button>
+              )}
+              {onCreateSubPage && (
+                <button onClick={handleCtxCreateBook} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
+                  <span className="text-base">📖</span>ブックを作成
                 </button>
               )}
               <button onClick={handleCtxCallout} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
