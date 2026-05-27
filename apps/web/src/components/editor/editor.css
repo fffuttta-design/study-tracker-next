@@ -1,3 +1,12 @@
+/* ── Annotation (Tip) マーク ──────────────────────────────────── */
+.annotation-mark {
+  background-color: #fef08a;
+  border-bottom: 2px solid #eab308;
+  cursor: help;
+  border-radius: 2px;
+}
+
+/* ── ノーションエディタ本体 ────────────────────────────────────── */
 .notion-editor {
   min-height: 400px;
   outline: none;

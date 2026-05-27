@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotionPageStore, WORKSPACE_ID, type PageHistorySnapshot } from '@/stores/notionPageStore';
 import { useSettingsStore, type NotionBlockOffsets, DEFAULT_BLOCK_OFFSETS } from '@/stores/settingsStore';
-import { type NotionPage } from '@study-tracker/core';
+import { type NotionPage, type BookChapter, parseBookChapters, serializeBookChapters, createBookChapter } from '@study-tracker/core';
 import { DatabaseView } from '@/components/database/DatabaseView';
 
 const NotionEditor = dynamic(
@@ -132,12 +132,31 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
   const recordTriggerRef = useRef<(() => void) | null>(null);
   const lastHistorySavedAtRef = useRef(0);
 
+  // ── ブック用 state ────────────────────────────────────────────
+  const [bookChapters, setBookChapters] = useState<BookChapter[]>([]);
+  const [activeChapterId, setActiveChapterId] = useState<string>('');
+  const [renamingChapterId, setRenamingChapterId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
+
   const page = pages.find((p) => p.id === id);
   const breadcrumbs = buildBreadcrumbs(pages, id);
 
   useEffect(() => {
     if (!loading && !page) router.replace('/notion-plus');
   }, [page, loading, router]);
+
+  // ブック: page.content から chapters を初期化（pageId が変わった時 or 初回）
+  useEffect(() => {
+    if (!page || page.type !== 'book') return;
+    const chapters = parseBookChapters(page.content);
+    setBookChapters(chapters);
+    setActiveChapterId((prev) => {
+      const stillExists = chapters.find((c) => c.id === prev);
+      return stillExists ? prev : (chapters[0]?.id ?? '');
+    });
+  // page.id が変わったときだけ再初期化（content変化での上書きは不要）
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page?.id, page?.type]);
 
   // アイコンピッカー / 設定パネルの外クリックで閉じる
   useEffect(() => {
@@ -168,6 +187,73 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
     },
     [user, page, update, saveHistory]
   );
+
+  // ── ブック用ハンドラ ──────────────────────────────────────────
+  const saveBookChapters = useCallback(
+    async (chapters: BookChapter[]) => {
+      if (!user || !page) return;
+      setSaving(true);
+      try {
+        await update(user.uid, page.id, { content: serializeBookChapters(chapters) });
+      } finally { setSaving(false); }
+    },
+    [user, page, update]
+  );
+
+  const handleBookChapterSave = useCallback(
+    async (_title: string, content: string) => {
+      if (!activeChapterId) return;
+      const updated = bookChapters.map((c) =>
+        c.id === activeChapterId ? { ...c, content } : c
+      );
+      setBookChapters(updated);
+      await saveBookChapters(updated);
+    },
+    [activeChapterId, bookChapters, saveBookChapters]
+  );
+
+  const handleAddChapter = useCallback(async () => {
+    const newChapter = createBookChapter(bookChapters.length);
+    const updated = [...bookChapters, newChapter];
+    setBookChapters(updated);
+    setActiveChapterId(newChapter.id);
+    await saveBookChapters(updated);
+  }, [bookChapters, saveBookChapters]);
+
+  const handleDeleteChapter = useCallback(async (chapterId: string) => {
+    if (bookChapters.length <= 1) return; // 最後の1章は削除不可
+    if (!confirm('このチャプターを削除しますか？')) return;
+    const updated = bookChapters
+      .filter((c) => c.id !== chapterId)
+      .map((c, i) => ({ ...c, order: i }));
+    setBookChapters(updated);
+    if (activeChapterId === chapterId) {
+      setActiveChapterId(updated[0]?.id ?? '');
+    }
+    await saveBookChapters(updated);
+  }, [bookChapters, activeChapterId, saveBookChapters]);
+
+  const handleRenameChapter = useCallback(async (chapterId: string, newTitle: string) => {
+    if (!newTitle.trim()) return;
+    const updated = bookChapters.map((c) =>
+      c.id === chapterId ? { ...c, title: newTitle.trim() } : c
+    );
+    setBookChapters(updated);
+    setRenamingChapterId(null);
+    await saveBookChapters(updated);
+  }, [bookChapters, saveBookChapters]);
+
+  const handleMoveChapter = useCallback(async (chapterId: string, direction: 'left' | 'right') => {
+    const idx = bookChapters.findIndex((c) => c.id === chapterId);
+    if (idx === -1) return;
+    const newIdx = direction === 'left' ? idx - 1 : idx + 1;
+    if (newIdx < 0 || newIdx >= bookChapters.length) return;
+    const updated = [...bookChapters];
+    [updated[idx], updated[newIdx]] = [updated[newIdx], updated[idx]];
+    const reordered = updated.map((c, i) => ({ ...c, order: i }));
+    setBookChapters(reordered);
+    await saveBookChapters(reordered);
+  }, [bookChapters, saveBookChapters]);
 
   const handleHistoryRestore = useCallback(
     async (title: string, content: string) => {
@@ -416,6 +502,19 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
         </div>
       </div>
 
+      {/* ブック: ページタイトル入力 */}
+      {page.type === 'book' && (
+        <div className="border-b border-gray-100 px-6 py-3">
+          <input
+            defaultValue={page.title}
+            placeholder="ブックのタイトル"
+            onBlur={(e) => { if (user) update(user.uid, page.id, { title: e.target.value }); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+            className="w-full border-none text-2xl font-bold text-gray-900 outline-none placeholder:text-gray-200"
+          />
+        </div>
+      )}
+
       {/* パンくず（親ページがある場合のみ表示） */}
       {breadcrumbs.length > 1 && (
         <div className="flex items-center gap-0.5 overflow-x-auto whitespace-nowrap border-b border-gray-50 px-6 py-1.5 text-xs text-gray-400">
@@ -460,6 +559,91 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
           uid={user!.uid}
           onSaveSchema={handleSaveDbSchema}
         />
+      ) : page.type === 'book' ? (
+        <>
+          {/* チャプタータブバー */}
+          <div className="flex items-center gap-1 overflow-x-auto border-b border-gray-100 bg-gray-50 px-4 py-1.5 scrollbar-hide">
+            {bookChapters.map((chapter, idx) => (
+              <div key={chapter.id} className="group relative flex shrink-0 items-center">
+                {renamingChapterId === chapter.id ? (
+                  <input
+                    autoFocus
+                    value={renameDraft}
+                    onChange={(e) => setRenameDraft(e.target.value)}
+                    onBlur={() => handleRenameChapter(chapter.id, renameDraft || chapter.title)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleRenameChapter(chapter.id, renameDraft || chapter.title);
+                      if (e.key === 'Escape') setRenamingChapterId(null);
+                    }}
+                    className="w-24 rounded border border-brand-400 px-2 py-0.5 text-xs outline-none"
+                  />
+                ) : (
+                  <button
+                    onClick={() => { setActiveChapterId(chapter.id); setEditorKey((k) => k + 1); }}
+                    onDoubleClick={() => { setRenamingChapterId(chapter.id); setRenameDraft(chapter.title); }}
+                    title="ダブルクリックでリネーム"
+                    className={`flex items-center gap-1 rounded-md px-3 py-1 text-xs font-medium transition ${
+                      activeChapterId === chapter.id
+                        ? 'bg-white text-brand-600 shadow-sm ring-1 ring-gray-200'
+                        : 'text-gray-500 hover:bg-white hover:text-gray-700'
+                    }`}
+                  >
+                    {chapter.title}
+                    {/* 並び替えボタン（hover時） */}
+                    <span className="hidden gap-0.5 group-hover:flex">
+                      {idx > 0 && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleMoveChapter(chapter.id, 'left'); }}
+                          className="rounded px-0.5 text-gray-300 hover:text-gray-600"
+                          title="左へ移動"
+                        >‹</button>
+                      )}
+                      {idx < bookChapters.length - 1 && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleMoveChapter(chapter.id, 'right'); }}
+                          className="rounded px-0.5 text-gray-300 hover:text-gray-600"
+                          title="右へ移動"
+                        >›</button>
+                      )}
+                      {bookChapters.length > 1 && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeleteChapter(chapter.id); }}
+                          className="rounded px-0.5 text-gray-300 hover:text-red-400"
+                          title="削除"
+                        >×</button>
+                      )}
+                    </span>
+                  </button>
+                )}
+              </div>
+            ))}
+            {/* チャプター追加ボタン */}
+            <button
+              onClick={handleAddChapter}
+              className="shrink-0 rounded-md px-2 py-1 text-xs text-gray-400 hover:bg-white hover:text-brand-500"
+              title="チャプターを追加"
+            >＋</button>
+          </div>
+          {/* アクティブチャプターのエディタ */}
+          {(() => {
+            const activeChapter = bookChapters.find((c) => c.id === activeChapterId);
+            if (!activeChapter) return null;
+            return (
+              <NotionEditor
+                key={`${page.id}-${activeChapterId}-${editorKey}`}
+                initialTitle=""
+                initialContent={activeChapter.content}
+                onSave={handleBookChapterSave}
+                onCreateSubPage={handleCreateSubPage}
+                recordTriggerRef={recordTriggerRef}
+                notionPageId={page.id}
+                notionPagePath={`${breadcrumbs.map((p) => p.title || 'Untitled').join(' / ')} / ${activeChapter.title}`}
+                highlightText={highlightText}
+                hideTitle
+              />
+            );
+          })()}
+        </>
       ) : (
         <NotionEditor
           key={`${page.id}-${editorKey}`}

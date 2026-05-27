@@ -30,6 +30,7 @@ import Underline from '@tiptap/extension-underline';
 import Youtube from '@tiptap/extension-youtube';
 import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
 import { DragHandleExtension } from './DragHandleExtension';
+import { AnnotationMark } from './AnnotationMark';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useLearningStore } from '@/stores/learningStore';
@@ -1117,6 +1118,7 @@ interface NotionEditorProps {
   notionPagePath?: string;
   highlightText?: string;
   onPageNavigate?: (href: string) => void;
+  hideTitle?: boolean; // ブック用: タイトル入力を非表示
 }
 
 interface PastePopup {
@@ -1128,6 +1130,7 @@ interface PastePopup {
 export function NotionEditor({
   initialTitle, initialContent, onSave, onCreateSubPage,
   recordTriggerRef, onRecordText, notionPageId, notionPagePath, highlightText, onPageNavigate,
+  hideTitle,
 }: NotionEditorProps) {
   const notionPlusLayout = useSettingsStore((s) => s.notionPlusLayout);
   const notionPlusParaLineHeight = useSettingsStore((s) => s.notionPlusParaLineHeight);
@@ -1149,6 +1152,12 @@ export function NotionEditor({
   const [pastePopup, setPastePopup] = useState<PastePopup | null>(null);
   const [pasteLoading, setPasteLoading] = useState(false);
   const [recordText, setRecordText] = useState<string | null>(null);
+
+  // Annotation (Tip) 関連
+  const [annotationDialogPos, setAnnotationDialogPos] = useState<{ x: number; y: number } | null>(null);
+  const [annotationDraft, setAnnotationDraft] = useState('');
+  const [annotationTooltip, setAnnotationTooltip] = useState<{ text: string; x: number; y: number } | null>(null);
+  const savedAnnotationSelRef = useRef<{ from: number; to: number } | null>(null);
 
   const contentDivRef = useRef<HTMLDivElement>(null);
   const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
@@ -1213,6 +1222,7 @@ export function NotionEditor({
       DragHandleExtension,
       MarkdownBulletShortcut,
       LineBoldShortcut,
+      AnnotationMark,
     ],
     content: (() => {
       if (!initialContent) return '';
@@ -1417,6 +1427,37 @@ export function NotionEditor({
     };
   }, [editor]);
 
+  // annotation ホバー → tooltip 表示
+  useEffect(() => {
+    if (!editor) return;
+    const editorEl = editor.view.dom as HTMLElement;
+    let hideTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const onMouseOver = (e: MouseEvent) => {
+      const target = (e.target as Element).closest('.annotation-mark') as HTMLElement | null;
+      if (!target) return;
+      const note = target.dataset.note ?? '';
+      if (!note) return;
+      if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+      const rect = target.getBoundingClientRect();
+      setAnnotationTooltip({ text: note, x: rect.left + rect.width / 2, y: rect.top - 4 });
+    };
+
+    const onMouseOut = (e: MouseEvent) => {
+      const related = e.relatedTarget as Element | null;
+      if (related?.closest('.annotation-mark') || related?.closest('.annotation-tooltip')) return;
+      hideTimer = setTimeout(() => setAnnotationTooltip(null), 200);
+    };
+
+    editorEl.addEventListener('mouseover', onMouseOver);
+    editorEl.addEventListener('mouseout', onMouseOut);
+    return () => {
+      editorEl.removeEventListener('mouseover', onMouseOver);
+      editorEl.removeEventListener('mouseout', onMouseOut);
+      if (hideTimer) clearTimeout(hideTimer);
+    };
+  }, [editor]);
+
   // 左余白ドラッグでマーキー選択（クリックは無視、4px以上動いた時だけ発動）
   const handleOuterMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!contentDivRef.current || !editor) return;
@@ -1511,6 +1552,40 @@ export function NotionEditor({
     editor?.chain().focus().insertContent({ type: 'callout', attrs: { background: '#FEF9CD' }, content: [{ type: 'paragraph' }] }).run();
   }, [editor]);
 
+  const handleOpenAnnotationDialog = useCallback((pos: { x: number; y: number }) => {
+    if (!editor) return;
+    const { from, to } = editor.state.selection;
+    if (from === to) return; // 選択なし
+    // 既存の annotation があれば note を初期値に
+    const existing = editor.state.doc.rangeHasMark(from, to, editor.state.schema.marks.annotation)
+      ? (editor.state.doc.nodeAt(from)?.marks.find((m) => m.type.name === 'annotation')?.attrs.note as string ?? '')
+      : '';
+    savedAnnotationSelRef.current = { from, to };
+    setAnnotationDraft(existing);
+    setCtxMenu(null);
+    setAnnotationDialogPos(pos);
+  }, [editor]);
+
+  const confirmAnnotation = useCallback(() => {
+    if (!editor || !savedAnnotationSelRef.current) return;
+    const { from, to } = savedAnnotationSelRef.current;
+    if (annotationDraft.trim()) {
+      editor.chain()
+        .setTextSelection({ from, to })
+        .setMark('annotation', { note: annotationDraft.trim() })
+        .run();
+    } else {
+      editor.chain()
+        .setTextSelection({ from, to })
+        .unsetMark('annotation')
+        .run();
+    }
+    setAnnotationDialogPos(null);
+    setAnnotationDraft('');
+    savedAnnotationSelRef.current = null;
+    scheduleSave();
+  }, [editor, annotationDraft, scheduleSave]);
+
   const handlePasteMention = useCallback(async () => {
     if (!pastePopup || !editor) return;
     const url = pastePopup.url;
@@ -1563,13 +1638,15 @@ export function NotionEditor({
       onMouseDown={handleOuterMouseDown}
     >
       <div className="w-full" ref={contentDivRef}>
-        <input
-          ref={titleRef}
-          defaultValue={initialTitle}
-          placeholder="Untitled"
-          onChange={(e) => { titleValue.current = e.target.value; scheduleSave(); }}
-          className="mb-6 w-full border-none text-3xl font-bold text-gray-900 outline-none placeholder:text-gray-200"
-        />
+        {!hideTitle && (
+          <input
+            ref={titleRef}
+            defaultValue={initialTitle}
+            placeholder="Untitled"
+            onChange={(e) => { titleValue.current = e.target.value; scheduleSave(); }}
+            className="mb-6 w-full border-none text-3xl font-bold text-gray-900 outline-none placeholder:text-gray-200"
+          />
+        )}
         {editor && <Toolbar editor={editor} />}
         <EditorContent editor={editor} />
       </div>
@@ -1725,6 +1802,14 @@ export function NotionEditor({
               <button onClick={handleRecord} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
                 <span className="text-base">📚</span>学習リストに記録
               </button>
+              {editor && !editor.state.selection.empty && (
+                <button
+                  onMouseDown={(e) => { e.preventDefault(); handleOpenAnnotationDialog({ x: ctxMenu?.x ?? 0, y: ctxMenu?.y ?? 0 }); }}
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-yellow-700 hover:bg-yellow-50"
+                >
+                  <span className="text-base">💡</span>Tip を追加
+                </button>
+              )}
             </div>
           </div>
         </>
@@ -1733,6 +1818,50 @@ export function NotionEditor({
       {/* 学習記録ダイアログ */}
       {recordText !== null && (
         <RecordDialog initialContent={recordText} notionPageId={notionPageId} notionPagePath={notionPagePath} onClose={() => setRecordText(null)} />
+      )}
+
+      {/* Annotation 追加ダイアログ */}
+      {annotationDialogPos && (
+        <>
+          <div className="fixed inset-0 z-[75]" onClick={() => setAnnotationDialogPos(null)} />
+          <div
+            className="fixed z-[80] w-64 rounded-xl border border-yellow-200 bg-white p-3 shadow-xl"
+            style={{ top: annotationDialogPos.y, left: annotationDialogPos.x, transform: 'translateY(-110%)' }}
+          >
+            <p className="mb-2 text-xs font-semibold text-yellow-700">💡 Tip を追加</p>
+            <textarea
+              autoFocus
+              value={annotationDraft}
+              onChange={(e) => setAnnotationDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); confirmAnnotation(); } if (e.key === 'Escape') setAnnotationDialogPos(null); }}
+              placeholder="メモを入力... (Enter で確定)"
+              rows={3}
+              className="w-full resize-none rounded-lg border border-gray-200 px-2 py-1.5 text-xs outline-none focus:border-yellow-400"
+            />
+            <div className="mt-2 flex justify-end gap-2">
+              {annotationDraft === '' && savedAnnotationSelRef.current && (
+                <button
+                  onClick={() => { confirmAnnotation(); }}
+                  className="text-xs text-red-400 hover:text-red-600"
+                >削除</button>
+              )}
+              <button onClick={() => setAnnotationDialogPos(null)} className="rounded px-2 py-1 text-xs text-gray-400 hover:bg-gray-100">キャンセル</button>
+              <button onClick={confirmAnnotation} className="rounded bg-yellow-400 px-2 py-1 text-xs font-medium text-white hover:bg-yellow-500">確定</button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Annotation ホバー tooltip */}
+      {annotationTooltip && (
+        <div
+          className="annotation-tooltip pointer-events-none fixed z-[90] max-w-xs rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-900 shadow-lg"
+          style={{ left: annotationTooltip.x, top: annotationTooltip.y, transform: 'translate(-50%, -100%)' }}
+          onMouseEnter={() => setAnnotationTooltip(annotationTooltip)}
+          onMouseLeave={() => setAnnotationTooltip(null)}
+        >
+          💡 {annotationTooltip.text}
+        </div>
       )}
 
       {/* マーキー選択矩形 */}
