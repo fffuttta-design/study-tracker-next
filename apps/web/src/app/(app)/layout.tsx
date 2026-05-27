@@ -24,9 +24,13 @@ declare global {
       onBackupRequest?:  (cb: () => void) => void;
       sendBackupData?:   (json: string) => void;
       onBackupComplete?: (cb: (info: BackupInfo) => void) => void;
-      triggerBackup?:    () => void;
-      getBackupInfo?:    () => Promise<BackupStatus>;
-      setBackupTime?:    (time: string) => void;
+      triggerBackup?:      () => void;
+      getBackupInfo?:      () => Promise<BackupStatus>;
+      setBackupTime?:      (time: string) => void;
+      // Google Drive バックアップ
+      getDriveBackupPath?: () => Promise<string | null>;
+      setDriveBackupPath?: (path: string | null) => void;
+      selectDriveFolder?:  () => Promise<string | null>;
     };
   }
 }
@@ -43,6 +47,7 @@ export interface BackupStatus {
   backupDir: string;
   backupHour: number;
   backupMinute: number;
+  driveBackupPath: string | null;
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

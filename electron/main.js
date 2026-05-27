@@ -1,5 +1,5 @@
 import { app, BrowserWindow, shell, Tray, Menu, nativeImage, dialog, ipcMain, Notification } from 'electron'
-import { readFile, writeFile, mkdir, readdir, unlink } from 'fs/promises'
+import { readFile, writeFile, mkdir, readdir, unlink, copyFile } from 'fs/promises'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { existsSync } from 'fs'
@@ -28,12 +28,37 @@ let backupTimerId        = null
 let backupHour           = 3    // 毎日03:00
 let backupMinute         = 0
 let lastBackupInfo       = null // { time: ISO文字列, path: string, success: boolean }
+let driveBackupPath      = null // Google Drive バックアップ先フォルダ
 
 const preloadPath = join(__dirname, 'preload.cjs')
 
 // ── バックアップ保存先 ────────────────────────────────────────────
 function getBackupDir() {
   return join(app.getPath('documents'), 'StudyTrackerBackups')
+}
+
+// ── Google Drive バックアップ設定の永続化 ─────────────────────────
+const DRIVE_CONFIG_PATH = () => join(app.getPath('userData'), 'backup-config.json')
+
+async function loadDriveConfig() {
+  try {
+    const raw = await readFile(DRIVE_CONFIG_PATH(), 'utf-8')
+    const cfg = JSON.parse(raw)
+    if (cfg.drivePath && existsSync(cfg.drivePath)) {
+      driveBackupPath = cfg.drivePath
+      console.log(`[backup] Google Driveパス読込: ${driveBackupPath}`)
+    }
+  } catch {
+    // 初回起動時はファイルなし → 無視
+  }
+}
+
+async function saveDriveConfig() {
+  try {
+    await writeFile(DRIVE_CONFIG_PATH(), JSON.stringify({ drivePath: driveBackupPath }, null, 2), 'utf-8')
+  } catch (e) {
+    console.warn('[backup] Drive設定保存失敗:', e.message)
+  }
 }
 
 // ── バックアップファイルを書き込み・世代管理 ────────────────────────
@@ -65,6 +90,29 @@ async function writeBackupFile(jsonString) {
     }
   } catch (e) {
     console.warn('[backup] 世代管理失敗:', e.message)
+  }
+
+  // Google Drive にもコピー
+  if (driveBackupPath && existsSync(driveBackupPath)) {
+    try {
+      const destDir = join(driveBackupPath, 'StudyTrackerBackups')
+      await mkdir(destDir, { recursive: true })
+      const destFile = join(destDir, `backup-${stamp}.json`)
+      await copyFile(filePath, destFile)
+      console.log(`[backup] Google Driveへコピー完了: ${destFile}`)
+
+      // Drive側も30件世代管理
+      const driveFiles = (await readdir(destDir))
+        .filter((f) => f.startsWith('backup-') && f.endsWith('.json'))
+        .sort()
+      if (driveFiles.length > 30) {
+        for (const f of driveFiles.slice(0, driveFiles.length - 30)) {
+          await unlink(join(destDir, f))
+        }
+      }
+    } catch (e) {
+      console.warn('[backup] Google Driveコピー失敗:', e.message)
+    }
   }
 
   return filePath
@@ -333,10 +381,11 @@ ipcMain.on('trigger-backup', () => {
 // 最後のバックアップ情報を返す（invoke/handle パターン）
 ipcMain.handle('get-backup-info', () => {
   return {
-    lastBackup: lastBackupInfo,
-    backupDir:  getBackupDir(),
+    lastBackup:     lastBackupInfo,
+    backupDir:      getBackupDir(),
     backupHour,
     backupMinute,
+    driveBackupPath: driveBackupPath ?? null,
   }
 })
 
@@ -352,6 +401,27 @@ ipcMain.on('backup-time-update', (_, time) => {
   }
 })
 
+// Google Drive バックアップパス取得
+ipcMain.handle('get-drive-backup-path', () => driveBackupPath)
+
+// Google Drive バックアップパスを手動設定
+ipcMain.on('set-drive-backup-path', (_, path) => {
+  driveBackupPath = path || null
+  saveDriveConfig()
+})
+
+// フォルダ選択ダイアログ → パスを返す
+ipcMain.handle('select-drive-folder', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWin, {
+    title: 'Google Driveのフォルダを選択',
+    properties: ['openDirectory'],
+  })
+  if (canceled || !filePaths[0]) return null
+  driveBackupPath = filePaths[0]
+  await saveDriveConfig()
+  return driveBackupPath
+})
+
 // ── シングルインスタンス ──────────────────────────────────────────
 const gotLock = app.requestSingleInstanceLock()
 
@@ -362,8 +432,9 @@ if (!gotLock) {
     if (mainWin) { mainWin.show(); mainWin.focus() }
   })
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     Menu.setApplicationMenu(null)
+    await loadDriveConfig()
     createWindow()
     createTray()
     mainWin.once('ready-to-show', () => {

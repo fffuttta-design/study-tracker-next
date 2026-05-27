@@ -125,11 +125,15 @@ function BackupSection() {
   const [status, setStatus] = useState<BackupStatus | null>(null);
   const [running, setRunning] = useState(false);
   const [toast, setToast] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [drivePath, setDrivePath] = useState<string | null>(null);
 
   // 起動時にバックアップ情報を取得
   useEffect(() => {
     window.electronAPI?.getBackupInfo?.().then((info) => {
-      if (info) setStatus(info);
+      if (info) {
+        setStatus(info);
+        setDrivePath(info.driveBackupPath ?? null);
+      }
     });
 
     // バックアップ完了イベントを購読
@@ -156,6 +160,16 @@ function BackupSection() {
       const [h, m] = time.split(':').map(Number);
       setStatus({ ...status, backupHour: h ?? 3, backupMinute: m ?? 0 });
     }
+  };
+
+  const handleSelectDriveFolder = async () => {
+    const selected = await window.electronAPI?.selectDriveFolder?.();
+    if (selected) setDrivePath(selected);
+  };
+
+  const handleClearDrivePath = () => {
+    window.electronAPI?.setDriveBackupPath?.(null);
+    setDrivePath(null);
   };
 
   const backupTimeValue = status
@@ -185,13 +199,40 @@ function BackupSection() {
         />
       </div>
 
-      {/* 保存先 */}
+      {/* ローカル保存先 */}
       {status?.backupDir && (
         <div className="mt-2 rounded-lg bg-gray-50 px-3 py-2">
-          <p className="text-xs text-gray-400">保存先</p>
+          <p className="text-xs text-gray-400">ローカル保存先</p>
           <p className="mt-0.5 break-all font-mono text-xs text-gray-600">{status.backupDir}</p>
         </div>
       )}
+
+      {/* Google Drive 保存先 */}
+      <div className="mt-2">
+        <p className="mb-1 text-xs text-gray-500">Google Drive バックアップ先</p>
+        {drivePath ? (
+          <div className="flex items-start gap-2 rounded-lg bg-blue-50 px-3 py-2">
+            <div className="min-w-0 flex-1">
+              <p className="break-all font-mono text-xs text-blue-700">{drivePath}</p>
+              <p className="mt-0.5 text-xs text-blue-400">バックアップ時に自動コピーされます</p>
+            </div>
+            <button
+              onClick={handleClearDrivePath}
+              className="shrink-0 text-xs text-gray-400 hover:text-red-400"
+            >
+              削除
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={handleSelectDriveFolder}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-300 px-3 py-2 text-xs text-gray-400 hover:border-brand-300 hover:text-brand-500"
+          >
+            <span>＋</span>
+            <span>Google Driveのフォルダを選択</span>
+          </button>
+        )}
+      </div>
 
       {/* 最後のバックアップ */}
       <div className="mt-3 flex items-center justify-between">

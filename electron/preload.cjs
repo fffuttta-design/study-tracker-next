@@ -12,7 +12,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onBackupRequest:  (cb) => ipcRenderer.on('backup-request', () => cb()),
   sendBackupData:   (json) => ipcRenderer.send('backup-data', json),
   onBackupComplete: (cb) => ipcRenderer.on('backup-complete', (_, info) => cb(info)),
-  triggerBackup:    () => ipcRenderer.send('trigger-backup'),
-  getBackupInfo:    () => ipcRenderer.invoke('get-backup-info'),
-  setBackupTime:    (time) => ipcRenderer.send('backup-time-update', time),
+  triggerBackup:       () => ipcRenderer.send('trigger-backup'),
+  getBackupInfo:       () => ipcRenderer.invoke('get-backup-info'),
+  setBackupTime:       (time) => ipcRenderer.send('backup-time-update', time),
+  // Google Drive バックアップ
+  getDriveBackupPath:  () => ipcRenderer.invoke('get-drive-backup-path'),
+  setDriveBackupPath:  (path) => ipcRenderer.send('set-drive-backup-path', path),
+  selectDriveFolder:   () => ipcRenderer.invoke('select-drive-folder'),
 })
