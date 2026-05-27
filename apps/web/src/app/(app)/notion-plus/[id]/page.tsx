@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotionPageStore, WORKSPACE_ID, type PageHistorySnapshot } from '@/stores/notionPageStore';
-import { useSettingsStore } from '@/stores/settingsStore';
+import { useSettingsStore, type NotionBlockOffsets, DEFAULT_BLOCK_OFFSETS } from '@/stores/settingsStore';
 import { type NotionPage } from '@study-tracker/core';
 import { DatabaseView } from '@/components/database/DatabaseView';
 
@@ -118,12 +118,14 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
     notionPlusLayout, setNotionPlusLayout,
     notionPlusParaLineHeight, setNotionPlusParaLineHeight,
     notionPlusSoftLineHeight, setNotionPlusSoftLineHeight,
+    notionPlusBlockOffsets, setNotionPlusBlockOffsets, resetNotionPlusBlockOffsets,
   } = useSettingsStore();
   const [saving, setSaving] = useState(false);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [iconUrlDraft, setIconUrlDraft] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [blockOffsetOpen, setBlockOffsetOpen] = useState(false);
   const [editorKey, setEditorKey] = useState(0);
   const iconPickerRef = useRef<HTMLDivElement>(null);
   const settingsRef = useRef<HTMLDivElement>(null);
@@ -325,6 +327,14 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
             🕐 履歴
           </button>
           <span className="text-xs text-gray-400">{saving ? '保存中...' : '自動保存'}</span>
+          {/* 書式の位置調整ボタン */}
+          <button
+            onClick={() => setBlockOffsetOpen(true)}
+            className="rounded p-1.5 text-sm text-gray-400 transition hover:bg-gray-100"
+            title="書式の位置調整"
+          >
+            ⇅
+          </button>
           {/* 設定ボタン */}
           <div className="relative" ref={settingsRef}>
             <button
@@ -473,6 +483,130 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
           onClose={() => setHistoryOpen(false)}
         />
       )}
+
+      {blockOffsetOpen && (
+        <BlockOffsetDialog
+          offsets={notionPlusBlockOffsets ?? DEFAULT_BLOCK_OFFSETS}
+          onSave={(o) => { setNotionPlusBlockOffsets(o); setBlockOffsetOpen(false); }}
+          onReset={resetNotionPlusBlockOffsets}
+          onClose={() => setBlockOffsetOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── 書式の位置調整ダイアログ ───────────────────────────────────────────
+
+const BLOCK_OFFSET_ROWS: Array<{ key: keyof NotionBlockOffsets; label: string; icon: string }> = [
+  { key: 'bullet',     label: '箇条書き',       icon: '•' },
+  { key: 'ol',         label: '番号付きリスト',  icon: '1.' },
+  { key: 'check',      label: 'チェックリスト',  icon: '☑' },
+  { key: 'h1',         label: '見出し 1',        icon: 'H1' },
+  { key: 'h2',         label: '見出し 2',        icon: 'H2' },
+  { key: 'h3',         label: '見出し 3',        icon: 'H3' },
+  { key: 'h4',         label: '見出し 4',        icon: 'H4' },
+  { key: 'p',          label: '段落',            icon: '¶' },
+  { key: 'blockquote', label: '引用',            icon: '=' },
+];
+
+function BlockOffsetDialog({
+  offsets,
+  onSave,
+  onReset,
+  onClose,
+}: {
+  offsets: NotionBlockOffsets;
+  onSave: (o: NotionBlockOffsets) => void;
+  onReset: () => void;
+  onClose: () => void;
+}) {
+  const [draft, setDraft] = useState<NotionBlockOffsets>({ ...offsets });
+
+  const adjust = (key: keyof NotionBlockOffsets, delta: number) => {
+    setDraft((prev) => ({
+      ...prev,
+      [key]: Math.round((prev[key] + delta) * 10) / 10,
+    }));
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
+      <div
+        className="w-80 rounded-2xl bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* ヘッダー */}
+        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
+          <div>
+            <p className="text-sm font-semibold text-gray-800">書式の位置調整</p>
+            <p className="text-xs text-gray-400">0.1px 単位で調整 → 「確定」でベースライン保存</p>
+          </div>
+          <button onClick={onClose} className="rounded p-1 text-gray-400 hover:bg-gray-100">✕</button>
+        </div>
+
+        {/* 行リスト */}
+        <div className="px-5 py-3 space-y-2">
+          {BLOCK_OFFSET_ROWS.map(({ key, label, icon }) => (
+            <div key={key} className="flex items-center justify-between">
+              <div className="flex items-center gap-2 w-40">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-gray-100 text-xs font-bold text-gray-500">
+                  {icon}
+                </span>
+                <span className="text-sm text-gray-700">{label}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => adjust(key, -0.1)}
+                  className="flex h-6 w-6 items-center justify-center rounded border border-gray-200 text-sm text-gray-500 hover:bg-gray-50"
+                >
+                  −
+                </button>
+                <span className="w-10 text-center text-sm tabular-nums text-gray-700">
+                  {draft[key].toFixed(1)}
+                </span>
+                <span className="text-xs text-gray-400">px</span>
+                <button
+                  onClick={() => adjust(key, 0.1)}
+                  className="flex h-6 w-6 items-center justify-center rounded border border-gray-200 text-sm text-gray-500 hover:bg-gray-50"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* フッター */}
+        <div className="flex items-center justify-between border-t border-gray-100 px-5 py-3">
+          <button
+            onClick={() => { onReset(); setDraft({ ...DEFAULT_BLOCK_OFFSETS }); }}
+            className="text-xs text-gray-400 hover:text-gray-600 hover:underline"
+          >
+            ↺ デフォルトに戻す
+          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-50"
+            >
+              閉じる
+            </button>
+            <button
+              onClick={() => onSave(draft)}
+              className="rounded-lg bg-brand-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-600"
+            >
+              ✓ 確定
+            </button>
+          </div>
+        </div>
+
+        {/* 説明文 */}
+        <div className="rounded-b-2xl bg-gray-50 px-5 py-2.5 text-xs text-gray-400">
+          <p>値は即プレビューされます。気に入った値が見つかったら「確定」を押してベースラインに保存。</p>
+          <p className="mt-0.5">「デフォルトに戻す」は最後に確定したベースラインに戻します。</p>
+        </div>
+      </div>
     </div>
   );
 }

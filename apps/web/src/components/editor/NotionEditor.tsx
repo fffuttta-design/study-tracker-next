@@ -1132,6 +1132,7 @@ export function NotionEditor({
   const notionPlusLayout = useSettingsStore((s) => s.notionPlusLayout);
   const notionPlusParaLineHeight = useSettingsStore((s) => s.notionPlusParaLineHeight);
   const notionPlusSoftLineHeight = useSettingsStore((s) => s.notionPlusSoftLineHeight);
+  const notionPlusBlockOffsets = useSettingsStore((s) => s.notionPlusBlockOffsets);
   const router = useRouter();
   const titleRef = useRef<HTMLInputElement>(null);
   const titleValue = useRef(initialTitle);
@@ -1545,7 +1546,19 @@ export function NotionEditor({
     <PageNavigationContext.Provider value={onPageNavigate ?? null}>
     <div
       className={outerClass}
-      style={{ '--para-lh': notionPlusParaLineHeight, '--soft-lh': notionPlusSoftLineHeight } as React.CSSProperties}
+      style={{
+        '--para-lh': notionPlusParaLineHeight,
+        '--soft-lh': notionPlusSoftLineHeight,
+        '--offset-bullet': `${notionPlusBlockOffsets?.bullet ?? 0}px`,
+        '--offset-ol':     `${notionPlusBlockOffsets?.ol ?? 0}px`,
+        '--offset-check':  `${notionPlusBlockOffsets?.check ?? 0}px`,
+        '--offset-h1':     `${notionPlusBlockOffsets?.h1 ?? 0}px`,
+        '--offset-h2':     `${notionPlusBlockOffsets?.h2 ?? 0}px`,
+        '--offset-h3':     `${notionPlusBlockOffsets?.h3 ?? 0}px`,
+        '--offset-h4':     `${notionPlusBlockOffsets?.h4 ?? 0}px`,
+        '--offset-p':      `${notionPlusBlockOffsets?.p ?? 0}px`,
+        '--offset-blockquote': `${notionPlusBlockOffsets?.blockquote ?? 0}px`,
+      } as React.CSSProperties}
       onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }); }}
       onMouseDown={handleOuterMouseDown}
     >

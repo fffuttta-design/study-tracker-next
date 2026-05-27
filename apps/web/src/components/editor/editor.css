@@ -6,17 +6,17 @@
   color: #111;
 }
 
-.notion-editor p { margin: 0.25rem 0; }
+.notion-editor p { margin: calc(0.25rem + var(--offset-p, 0px)) 0; }
 /* Shift+Enter（hardBreak = <br>）を含む段落だけ行間を詰める */
 .notion-editor p:has(br) { line-height: var(--soft-lh, 1.15); }
-.notion-editor h1 { font-size: 1.875rem; font-weight: 700; margin: 1.25rem 0 0.5rem; }
-.notion-editor h2 { font-size: 1.5rem; font-weight: 600; margin: 1rem 0 0.375rem; }
-.notion-editor h3 { font-size: 1.25rem; font-weight: 600; margin: 0.75rem 0 0.25rem; }
-.notion-editor h4 { font-size: 1.1rem; font-weight: 600; margin: 0.5rem 0 0.25rem; }
+.notion-editor h1 { font-size: 1.875rem; font-weight: 700; margin: calc(1.25rem + var(--offset-h1, 0px)) 0 0.5rem; }
+.notion-editor h2 { font-size: 1.5rem; font-weight: 600; margin: calc(1rem + var(--offset-h2, 0px)) 0 0.375rem; }
+.notion-editor h3 { font-size: 1.25rem; font-weight: 600; margin: calc(0.75rem + var(--offset-h3, 0px)) 0 0.25rem; }
+.notion-editor h4 { font-size: 1.1rem; font-weight: 600; margin: calc(0.5rem + var(--offset-h4, 0px)) 0 0.25rem; }
 
 /* 箇条書き インデント別マーカー */
 .notion-editor ul { list-style: none; padding-left: 1.5rem; margin: 0.25rem 0; }
-.notion-editor ul li { position: relative; margin: 0.125rem 0; padding-left: 1.5rem; }
+.notion-editor ul li { position: relative; margin: calc(0.125rem + var(--offset-bullet, 0px)) 0; padding-left: 1.5rem; }
 .notion-editor ul li::before { position: absolute; left: 0.1rem; top: 0; }
 
 /* 1階層目: 中黒 */
@@ -29,11 +29,11 @@
 .notion-editor ul ul ul ul > li::before { content: '•'; font-size: 1.4em; line-height: 1.3; color: #374151; }
 
 .notion-editor ol { list-style: decimal; padding-left: 1.5rem; margin: 0.25rem 0; }
-.notion-editor ol li { margin: 0.125rem 0; }
+.notion-editor ol li { margin: calc(0.125rem + var(--offset-ol, 0px)) 0; }
 
 /* チェックリスト */
 .notion-editor ul[data-type="taskList"] { list-style: none; padding-left: 0; }
-.notion-editor ul[data-type="taskList"] li { display: flex; align-items: flex-start; gap: 0.5rem; padding-left: 0; }
+.notion-editor ul[data-type="taskList"] li { display: flex; align-items: flex-start; gap: 0.5rem; padding-left: 0; margin-top: var(--offset-check, 0px); }
 .notion-editor ul[data-type="taskList"] li::before { display: none; }
 .notion-editor ul[data-type="taskList"] li > label { margin-top: 0.25rem; }
 .notion-editor ul[data-type="taskList"] li > div { flex: 1; }
@@ -42,7 +42,7 @@
   border-left: 4px solid #111;
   padding-left: 1rem;
   color: #374151;
-  margin: 0.5rem 0;
+  margin: calc(0.5rem + var(--offset-blockquote, 0px)) 0;
 }
 
 /* コールアウト */

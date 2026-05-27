@@ -187,7 +187,7 @@ function LearningPageContent() {
 
       {/* タブ */}
       <div className="flex border-b border-gray-100 px-6">
-        {['ダッシュボード', '本日の学習', '今日の復習', '全学習リスト', '達成リスト', '通知ログ'].map((label, i) => (
+        {['ダッシュボード', '本日の学習', '今日の復習', '達成リスト', '全学習リスト', '通知ログ'].map((label, i) => (
           <button
             key={i}
             onClick={() => setTab(i)}
@@ -206,8 +206,8 @@ function LearningPageContent() {
         {tab === 0 && <DashboardTab todayItems={todayItems} dueItems={dueItems} uid={user?.uid ?? ''} onAdd={() => setAddDialogOpen(true)} />}
         {tab === 1 && <TodayTab items={todayItems} uid={user?.uid ?? ''} onAdd={() => setAddDialogOpen(true)} />}
         {tab === 2 && <ReviewTab dueItems={dueItems} uid={user?.uid ?? ''} />}
-        {tab === 3 && <AllItemsTab items={items} uid={user?.uid ?? ''} />}
-        {tab === 4 && <AchievementTab items={items} uid={user?.uid ?? ''} />}
+        {tab === 3 && <AchievementTab items={items} uid={user?.uid ?? ''} />}
+        {tab === 4 && <AllItemsTab items={items} uid={user?.uid ?? ''} />}
         {tab === 5 && <LogTab />}
       </div>
 

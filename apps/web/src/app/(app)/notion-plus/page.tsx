@@ -1,24 +1,36 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotionPageStore, WORKSPACE_ID } from '@/stores/notionPageStore';
 
 export default function NotionPlusPage() {
   const { user } = useAuthStore();
-  const { ensureWorkspace } = useNotionPageStore();
+  const { pages, loading, ensureWorkspace } = useNotionPageStore();
   const router = useRouter();
+  const didEnsureRef = useRef(false);
 
-  // loading を待たない（ensureWorkspace は getState() で直接チェックするため不要）
   useEffect(() => {
     if (!user) return;
-    ensureWorkspace(user.uid)
-      .catch(() => {})
-      .finally(() => {
-        router.replace(`/notion-plus/${WORKSPACE_ID}`);
-      });
-  }, [user, ensureWorkspace, router]);
+
+    // ワークスペースが pages に入ったら即座に遷移（リアクティブ）
+    const ws = pages.find((p) => p.id === WORKSPACE_ID);
+    if (ws) {
+      router.replace(`/notion-plus/${WORKSPACE_ID}`);
+      return;
+    }
+
+    // Firestore データ読み込み完了待ち
+    if (loading) return;
+
+    // データ読込済みでワークスペースがない → 一度だけ作成してFirestore更新を待つ
+    if (!didEnsureRef.current) {
+      didEnsureRef.current = true;
+      ensureWorkspace(user.uid).catch(() => {});
+      // 作成後は Firestore の onSnapshot が pages を更新 → 上の ws チェックで遷移する
+    }
+  }, [pages, loading, user, router, ensureWorkspace]);
 
   return (
     <div className="flex h-full items-center justify-center">
