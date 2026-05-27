@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { APP_VERSION } from '@/lib/version';
 import { useAuthStore } from '@/stores/authStore';
 import { useSettingsStore, REVIEW_STAGE_LABELS } from '@/stores/settingsStore';
+import type { BackupStatus } from '@/app/(app)/layout';
 
 // window.electronAPI の型は layout.tsx で一元定義済み
 
@@ -87,6 +88,9 @@ export default function SettingsPage() {
           </Section>
         )}
 
+        {/* バックアップ（Electronのみ） */}
+        {isElectron && <BackupSection />}
+
         {/* アプリ操作 */}
         {isElectron && (
           <Section title="アプリ操作">
@@ -114,6 +118,111 @@ export default function SettingsPage() {
     </div>
   );
 }
+
+// ── バックアップセクション ─────────────────────────────────────────
+
+function BackupSection() {
+  const [status, setStatus] = useState<BackupStatus | null>(null);
+  const [running, setRunning] = useState(false);
+  const [toast, setToast] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  // 起動時にバックアップ情報を取得
+  useEffect(() => {
+    window.electronAPI?.getBackupInfo?.().then((info) => {
+      if (info) setStatus(info);
+    });
+
+    // バックアップ完了イベントを購読
+    window.electronAPI?.onBackupComplete?.((info) => {
+      setRunning(false);
+      setStatus((prev) => prev ? { ...prev, lastBackup: info } : null);
+      setToast(info.success
+        ? { ok: true,  msg: 'バックアップ完了！' }
+        : { ok: false, msg: `バックアップ失敗: ${info.error ?? '不明'}` }
+      );
+      setTimeout(() => setToast(null), 4000);
+    });
+  }, []);
+
+  const handleNow = () => {
+    setRunning(true);
+    window.electronAPI?.triggerBackup?.();
+  };
+
+  const handleTimeChange = (time: string) => {
+    window.electronAPI?.setBackupTime?.(time);
+    // ローカル表示も更新
+    if (status) {
+      const [h, m] = time.split(':').map(Number);
+      setStatus({ ...status, backupHour: h ?? 3, backupMinute: m ?? 0 });
+    }
+  };
+
+  const backupTimeValue = status
+    ? `${String(status.backupHour).padStart(2, '0')}:${String(status.backupMinute).padStart(2, '0')}`
+    : '03:00';
+
+  const lastBackupText = (() => {
+    if (!status?.lastBackup) return 'まだ実行されていません';
+    const d = new Date(status.lastBackup.time);
+    const fmt = d.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return status.lastBackup.success ? `✅ ${fmt}` : `❌ ${fmt}（失敗）`;
+  })();
+
+  return (
+    <Section title="自動バックアップ">
+      {/* 自動実行時刻 */}
+      <div className="flex items-center justify-between py-1">
+        <div>
+          <p className="text-sm text-gray-700">自動バックアップ時刻</p>
+          <p className="text-xs text-gray-400">毎日この時刻に全データを保存</p>
+        </div>
+        <input
+          type="time"
+          value={backupTimeValue}
+          onChange={(e) => handleTimeChange(e.target.value)}
+          className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+        />
+      </div>
+
+      {/* 保存先 */}
+      {status?.backupDir && (
+        <div className="mt-2 rounded-lg bg-gray-50 px-3 py-2">
+          <p className="text-xs text-gray-400">保存先</p>
+          <p className="mt-0.5 break-all font-mono text-xs text-gray-600">{status.backupDir}</p>
+        </div>
+      )}
+
+      {/* 最後のバックアップ */}
+      <div className="mt-3 flex items-center justify-between">
+        <div>
+          <p className="text-xs text-gray-400">前回のバックアップ</p>
+          <p className="text-xs font-medium text-gray-600">{lastBackupText}</p>
+        </div>
+        <button
+          onClick={handleNow}
+          disabled={running}
+          className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-sm font-medium text-brand-600 hover:bg-brand-100 disabled:opacity-50"
+        >
+          {running ? '実行中...' : '今すぐバックアップ'}
+        </button>
+      </div>
+
+      {/* トースト */}
+      {toast && (
+        <div className={`mt-3 rounded-lg px-3 py-2 text-sm font-medium ${toast.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+          {toast.msg}
+        </div>
+      )}
+
+      <p className="mt-3 text-xs text-gray-400">
+        最新30件を自動保持。古いものは自動削除されます。
+      </p>
+    </Section>
+  );
+}
+
+// ── 共通コンポーネント ─────────────────────────────────────────────
 
 function ReviewStageRow({ stageLabel, stageIndex, days, onChange }: {
   stageLabel: string;

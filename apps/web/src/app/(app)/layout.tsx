@@ -20,8 +20,29 @@ declare global {
       relaunch?: () => void;
       setReviewCount?: (count: number) => void;
       setNotificationTime?: (time: string) => void;
+      // バックアップ
+      onBackupRequest?:  (cb: () => void) => void;
+      sendBackupData?:   (json: string) => void;
+      onBackupComplete?: (cb: (info: BackupInfo) => void) => void;
+      triggerBackup?:    () => void;
+      getBackupInfo?:    () => Promise<BackupStatus>;
+      setBackupTime?:    (time: string) => void;
     };
   }
+}
+
+export interface BackupInfo {
+  time: string;
+  path: string | null;
+  success: boolean;
+  error?: string;
+}
+
+export interface BackupStatus {
+  lastBackup: BackupInfo | null;
+  backupDir: string;
+  backupHour: number;
+  backupMinute: number;
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -61,6 +82,36 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (typeof window === 'undefined') return;
     window.electronAPI?.setNotificationTime?.(reviewNotificationTime);
   }, [reviewNotificationTime]);
+
+  // Electron バックアップリクエストを受信してデータを返す
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.electronAPI?.onBackupRequest) return;
+
+    window.electronAPI.onBackupRequest(() => {
+      try {
+        // 全ストアのデータを getState() で直接取得
+        const json = JSON.stringify({
+          exportedAt: new Date().toISOString(),
+          version: 1,
+          uid: useAuthStore.getState().user?.uid ?? null,
+          data: {
+            learningItems:    useLearningStore.getState().items,
+            categories:       useCategoryStore.getState().categories,
+            notionPages:      useNotionPageStore.getState().pages,
+            improvementTasks: useImprovementTaskStore.getState().tasks,
+            goals:            useGoalStore.getState().goals,
+            memos:            useMemoStore.getState().memos,
+          },
+        }, null, 2);
+
+        window.electronAPI?.sendBackupData?.(json);
+      } catch (e) {
+        console.error('[backup] データ収集失敗:', e);
+      }
+    });
+  // 初回マウント時のみ登録
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (loading || !user) {
     return (

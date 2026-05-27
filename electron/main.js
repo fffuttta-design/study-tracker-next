@@ -1,5 +1,5 @@
 import { app, BrowserWindow, shell, Tray, Menu, nativeImage, dialog, ipcMain, Notification } from 'electron'
-import { readFile } from 'fs/promises'
+import { readFile, writeFile, mkdir, readdir, unlink } from 'fs/promises'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { existsSync } from 'fs'
@@ -23,7 +23,82 @@ let notifHour            = 8
 let notifMinute          = 0
 let notifTimerId         = null
 
+// バックアップ関連
+let backupTimerId        = null
+let backupHour           = 3    // 毎日03:00
+let backupMinute         = 0
+let lastBackupInfo       = null // { time: ISO文字列, path: string, success: boolean }
+
 const preloadPath = join(__dirname, 'preload.cjs')
+
+// ── バックアップ保存先 ────────────────────────────────────────────
+function getBackupDir() {
+  return join(app.getPath('documents'), 'StudyTrackerBackups')
+}
+
+// ── バックアップファイルを書き込み・世代管理 ────────────────────────
+async function writeBackupFile(jsonString) {
+  const backupDir = getBackupDir()
+  await mkdir(backupDir, { recursive: true })
+
+  // ファイル名: backup-YYYY-MM-DD_HHmm.json
+  const now = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`
+  const filePath = join(backupDir, `backup-${stamp}.json`)
+
+  await writeFile(filePath, jsonString, 'utf-8')
+  console.log(`[backup] 保存完了: ${filePath}`)
+
+  // 古いバックアップを削除（30件超え分）
+  try {
+    const files = (await readdir(backupDir))
+      .filter((f) => f.startsWith('backup-') && f.endsWith('.json'))
+      .sort()  // 名前順 = 日付順
+    const MAX_BACKUPS = 30
+    if (files.length > MAX_BACKUPS) {
+      const toDelete = files.slice(0, files.length - MAX_BACKUPS)
+      for (const f of toDelete) {
+        await unlink(join(backupDir, f))
+        console.log(`[backup] 古いバックアップ削除: ${f}`)
+      }
+    }
+  } catch (e) {
+    console.warn('[backup] 世代管理失敗:', e.message)
+  }
+
+  return filePath
+}
+
+// ── バックアップをレンダラーにリクエストして実行 ───────────────────
+function requestBackup() {
+  if (!mainWin || mainWin.isDestroyed()) {
+    console.warn('[backup] ウィンドウが存在しないためスキップ')
+    return
+  }
+  console.log('[backup] データをレンダラーにリクエスト中...')
+  mainWin.webContents.send('backup-request')
+}
+
+// ── バックアップスケジューラー ────────────────────────────────────
+function scheduleBackup() {
+  if (backupTimerId) { clearTimeout(backupTimerId); backupTimerId = null }
+
+  const now  = new Date()
+  const next = new Date(now)
+  next.setHours(backupHour, backupMinute, 0, 0)
+  if (next <= now) next.setDate(next.getDate() + 1)
+
+  const delay = next.getTime() - now.getTime()
+  const hhmm  = `${String(backupHour).padStart(2,'0')}:${String(backupMinute).padStart(2,'0')}`
+  console.log(`[backup] 次回バックアップ予定: ${next.toLocaleString('ja-JP')} (${Math.round(delay / 60000)}分後)`)
+
+  backupTimerId = setTimeout(() => {
+    backupTimerId = null
+    requestBackup()
+    scheduleBackup() // 翌日同時刻に再スケジュール
+  }, delay)
+}
 
 // ── トレイアイコンのパス ───────────────────────────────────────────
 function getTrayIconPath() {
@@ -49,6 +124,11 @@ function createTray() {
     {
       label: '学習トラッカーを開く',
       click: () => { mainWin?.show(); mainWin?.focus() },
+    },
+    { type: 'separator' },
+    {
+      label: '今すぐバックアップ',
+      click: () => requestBackup(),
     },
     { type: 'separator' },
     {
@@ -127,9 +207,6 @@ function createWindow() {
 }
 
 // ── バージョンチェック（Driveの version.json と比較）─────────────────
-// Google Drive がバックグラウンドで新しい exe + version.json を同期する
-// 起動時に exe と同じフォルダの version.json を読んで buildNumber を比較
-// 新しければダイアログを出して「今すぐ更新 / 後で」を選択させる
 async function checkForUpdate() {
   try {
     const exeDir          = dirname(app.getPath('exe'))
@@ -144,7 +221,7 @@ async function checkForUpdate() {
     const remoteNum = remote.buildNumber ?? 0
     const localNum  = local.buildNumber  ?? 0
 
-    if (remoteNum <= localNum) return  // 最新 or チェック不要
+    if (remoteNum <= localNum) return
 
     console.log(`[update] 新バージョン検知: build ${localNum} → ${remoteNum}`)
 
@@ -199,7 +276,7 @@ function scheduleReviewNotification() {
       })
       notif.show()
     }
-    scheduleReviewNotification() // 翌日同時刻に再スケジュール
+    scheduleReviewNotification()
   }, delay)
 }
 
@@ -220,7 +297,58 @@ ipcMain.on('notification-time-update', (_, time) => {
   if (!isNaN(h) && h >= 0 && h <= 23 && !isNaN(m) && m >= 0 && m <= 59) {
     notifHour   = h
     notifMinute = m
-    scheduleReviewNotification() // 新しい時刻で即再スケジュール
+    scheduleReviewNotification()
+  }
+})
+
+// バックアップデータ受信 → ファイル書き込み
+ipcMain.on('backup-data', async (_, jsonString) => {
+  try {
+    const filePath = await writeBackupFile(jsonString)
+    lastBackupInfo = { time: new Date().toISOString(), path: filePath, success: true }
+
+    // レンダラーに完了を通知
+    mainWin?.webContents.send('backup-complete', lastBackupInfo)
+
+    // OS通知
+    if (Notification.isSupported()) {
+      new Notification({
+        title: '学習トラッカー バックアップ完了 ✅',
+        body:  `データを保存しました\n${filePath}`,
+        silent: true,
+      }).show()
+    }
+  } catch (e) {
+    console.error('[backup] 書き込み失敗:', e.message)
+    lastBackupInfo = { time: new Date().toISOString(), path: null, success: false, error: e.message }
+    mainWin?.webContents.send('backup-complete', lastBackupInfo)
+  }
+})
+
+// 手動バックアップトリガー（設定画面から）
+ipcMain.on('trigger-backup', () => {
+  requestBackup()
+})
+
+// 最後のバックアップ情報を返す（invoke/handle パターン）
+ipcMain.handle('get-backup-info', () => {
+  return {
+    lastBackup: lastBackupInfo,
+    backupDir:  getBackupDir(),
+    backupHour,
+    backupMinute,
+  }
+})
+
+// バックアップ時刻変更
+ipcMain.on('backup-time-update', (_, time) => {
+  const parts = String(time).split(':').map(Number)
+  const h = parts[0] ?? NaN
+  const m = parts[1] ?? 0
+  if (!isNaN(h) && h >= 0 && h <= 23 && !isNaN(m) && m >= 0 && m <= 59) {
+    backupHour   = h
+    backupMinute = m
+    scheduleBackup()
   }
 })
 
@@ -228,7 +356,6 @@ ipcMain.on('notification-time-update', (_, time) => {
 const gotLock = app.requestSingleInstanceLock()
 
 if (!gotLock) {
-  // すでに起動中 → そちらのウィンドウを前面に出して終了
   app.quit()
 } else {
   app.on('second-instance', () => {
@@ -236,16 +363,16 @@ if (!gotLock) {
   })
 
   app.whenReady().then(() => {
-    // デフォルトメニューバーを非表示
     Menu.setApplicationMenu(null)
     createWindow()
     createTray()
-    // ウィンドウが表示されてからダイアログを出す（1.5秒後）
     mainWin.once('ready-to-show', () => {
       setTimeout(() => checkForUpdate(), 1500)
     })
-    // 復習通知を毎朝08:00にスケジュール
+    // 復習通知スケジュール（毎朝08:00）
     scheduleReviewNotification()
+    // バックアップスケジュール（毎日03:00）
+    scheduleBackup()
   })
 }
 
