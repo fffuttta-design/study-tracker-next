@@ -10,14 +10,26 @@ export default function NotionPlusPage() {
   const { pages, loading, ensureWorkspace } = useNotionPageStore();
   const router = useRouter();
   const didEnsureRef = useRef(false);
+  const didNavigateRef = useRef(false);
 
   useEffect(() => {
     if (!user) return;
+    if (didNavigateRef.current) return;
 
     // ワークスペースが pages に入ったら即座に遷移（リアクティブ）
     const ws = pages.find((p) => p.id === WORKSPACE_ID);
     if (ws) {
-      router.replace(`/notion-plus/${WORKSPACE_ID}`);
+      didNavigateRef.current = true;
+      // router.replace が Electron 環境で失敗することがあるため window.location も併用
+      try {
+        router.replace(`/notion-plus/${WORKSPACE_ID}`);
+      } catch {
+        // fallback
+      }
+      // Electron では window.location による遷移が確実
+      if (typeof window !== 'undefined' && window.electronAPI) {
+        window.location.href = `/notion-plus/${WORKSPACE_ID}`;
+      }
       return;
     }
 
