@@ -11,6 +11,7 @@ import { useGoalStore } from '@/stores/goalStore';
 import { useMemoStore } from '@/stores/memoStore';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { hasDueReview } from '@study-tracker/core';
+import { fetchAll } from '@study-tracker/firebase';
 import { useSettingsStore } from '@/stores/settingsStore';
 
 declare global {
@@ -92,21 +93,40 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (typeof window === 'undefined' || !window.electronAPI?.onBackupRequest) return;
 
-    window.electronAPI.onBackupRequest(() => {
+    window.electronAPI.onBackupRequest(async () => {
       try {
-        // 全ストアのデータを getState() で直接取得
+        const uid = useAuthStore.getState().user?.uid ?? null;
+
+        // notionDatabaseRows は subscribeWhere（DB単位）なので Firestore から全件取得
+        const notionDatabaseRows = uid
+          ? await fetchAll(uid, 'notionDatabaseRows')
+          : [];
+
+        // settingsStore は localStorage 永続化なので getState() で取得
+        const s = useSettingsStore.getState();
+        const settings = {
+          reviewStageDays:          s.reviewStageDays,
+          notionPlusLayout:         s.notionPlusLayout,
+          notionPlusParaLineHeight:  s.notionPlusParaLineHeight,
+          notionPlusSoftLineHeight:  s.notionPlusSoftLineHeight,
+          notionPlusBlockOffsets:   s.notionPlusBlockOffsets,
+          reviewNotificationTime:   s.reviewNotificationTime,
+        };
+
         const json = JSON.stringify({
           exportedAt: new Date().toISOString(),
-          version: 1,
-          uid: useAuthStore.getState().user?.uid ?? null,
+          version: 2,
+          uid,
           data: {
-            learningItems:    useLearningStore.getState().items,
-            categories:       useCategoryStore.getState().categories,
-            notionPages:      useNotionPageStore.getState().pages,
-            improvementTasks: useImprovementTaskStore.getState().tasks,
-            goals:            useGoalStore.getState().goals,
-            memos:            useMemoStore.getState().memos,
+            learningItems:      useLearningStore.getState().items,
+            categories:         useCategoryStore.getState().categories,
+            notionPages:        useNotionPageStore.getState().pages,
+            improvementTasks:   useImprovementTaskStore.getState().tasks,
+            goals:              useGoalStore.getState().goals,
+            memos:              useMemoStore.getState().memos,
+            notionDatabaseRows, // 全DB行（Firestoreから直接取得）
           },
+          settings, // ユーザー設定（localStorage）
         }, null, 2);
 
         window.electronAPI?.sendBackupData?.(json);
