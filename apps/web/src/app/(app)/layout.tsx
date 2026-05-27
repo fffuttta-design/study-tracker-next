@@ -32,6 +32,9 @@ declare global {
       getDriveBackupPath?: () => Promise<string | null>;
       setDriveBackupPath?: (path: string | null) => void;
       selectDriveFolder?:  () => Promise<string | null>;
+      // 自動起動
+      getAutoLaunch?:      () => Promise<boolean>;
+      setAutoLaunch?:      (enable: boolean) => void;
     };
   }
 }

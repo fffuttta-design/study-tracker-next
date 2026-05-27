@@ -19,4 +19,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getDriveBackupPath:  () => ipcRenderer.invoke('get-drive-backup-path'),
   setDriveBackupPath:  (path) => ipcRenderer.send('set-drive-backup-path', path),
   selectDriveFolder:   () => ipcRenderer.invoke('select-drive-folder'),
+  // 自動起動
+  getAutoLaunch:       () => ipcRenderer.invoke('get-auto-launch'),
+  setAutoLaunch:       (enable) => ipcRenderer.send('set-auto-launch', enable),
 })

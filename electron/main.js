@@ -328,6 +328,19 @@ function scheduleReviewNotification() {
   }, delay)
 }
 
+// ── 自動起動 IPC ─────────────────────────────────────────────────
+ipcMain.handle('get-auto-launch', () => {
+  return app.getLoginItemSettings().openAtLogin
+})
+
+ipcMain.on('set-auto-launch', (_, enable) => {
+  app.setLoginItemSettings({
+    openAtLogin: !!enable,
+    openAsHidden: true, // 起動時はトレイのみ（ウィンドウ非表示）
+  })
+  console.log(`[auto-launch] 自動起動: ${enable ? '有効' : '無効'}`)
+})
+
 // ── IPC ──────────────────────────────────────────────────────────
 ipcMain.on('app-relaunch', () => {
   app.relaunch()

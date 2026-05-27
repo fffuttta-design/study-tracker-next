@@ -92,22 +92,7 @@ export default function SettingsPage() {
         {isElectron && <BackupSection />}
 
         {/* アプリ操作 */}
-        {isElectron && (
-          <Section title="アプリ操作">
-            <div className="flex items-center justify-between py-1">
-              <div>
-                <p className="text-sm text-gray-700">アプリを再起動</p>
-                <p className="text-xs text-gray-400">設定を反映させたいときに使用</p>
-              </div>
-              <button
-                onClick={() => window.electronAPI?.relaunch?.()}
-                className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-800"
-              >
-                再起動
-              </button>
-            </div>
-          </Section>
-        )}
+        {isElectron && <AppOperationSection />}
 
         {/* アプリ情報 */}
         <Section title="アプリ情報">
@@ -116,6 +101,59 @@ export default function SettingsPage() {
         </Section>
       </div>
     </div>
+  );
+}
+
+// ── アプリ操作セクション ──────────────────────────────────────────
+
+function AppOperationSection() {
+  const [autoLaunch, setAutoLaunchState] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    window.electronAPI?.getAutoLaunch?.().then((v) => setAutoLaunchState(v ?? false));
+  }, []);
+
+  const handleToggle = (enable: boolean) => {
+    window.electronAPI?.setAutoLaunch?.(enable);
+    setAutoLaunchState(enable);
+  };
+
+  return (
+    <Section title="アプリ操作">
+      {/* PC起動時に自動起動 */}
+      <div className="flex items-center justify-between py-1">
+        <div>
+          <p className="text-sm text-gray-700">PC起動時に自動起動</p>
+          <p className="text-xs text-gray-400">Windowsログイン時にトレイへ常駐</p>
+        </div>
+        <button
+          onClick={() => handleToggle(!autoLaunch)}
+          disabled={autoLaunch === null}
+          className={`relative h-6 w-11 rounded-full transition-colors duration-200 focus:outline-none disabled:opacity-40 ${
+            autoLaunch ? 'bg-brand-500' : 'bg-gray-200'
+          }`}
+        >
+          <span
+            className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ${
+              autoLaunch ? 'translate-x-5' : 'translate-x-0.5'
+            }`}
+          />
+        </button>
+      </div>
+      {/* 再起動 */}
+      <div className="flex items-center justify-between py-1">
+        <div>
+          <p className="text-sm text-gray-700">アプリを再起動</p>
+          <p className="text-xs text-gray-400">設定を反映させたいときに使用</p>
+        </div>
+        <button
+          onClick={() => window.electronAPI?.relaunch?.()}
+          className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-800"
+        >
+          再起動
+        </button>
+      </div>
+    </Section>
   );
 }
 
