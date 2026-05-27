@@ -137,6 +137,9 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
   const [activeChapterId, setActiveChapterId] = useState<string>('');
   const [renamingChapterId, setRenamingChapterId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
+  const [tabCtxMenu, setTabCtxMenu] = useState<{ chapterId: string; x: number; y: number } | null>(null);
+
+  const TOC_TAB_ID = '__toc__';
 
   const page = pages.find((p) => p.id === id);
   const breadcrumbs = buildBreadcrumbs(pages, id);
@@ -168,6 +171,14 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [iconPickerOpen, settingsOpen]);
+
+  // タブ右クリックメニューの外クリックで閉じる
+  useEffect(() => {
+    if (!tabCtxMenu) return;
+    const handler = () => setTabCtxMenu(null);
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [tabCtxMenu]);
 
   const handleSave = useCallback(
     async (title: string, content: string) => {
@@ -563,6 +574,20 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
         <>
           {/* チャプタータブバー */}
           <div className="flex items-center gap-1 overflow-x-auto border-b border-gray-100 bg-gray-50 px-4 py-1.5 scrollbar-hide">
+            {/* 目次タブ */}
+            <button
+              onClick={() => setActiveChapterId(TOC_TAB_ID)}
+              className={`shrink-0 flex items-center gap-1 rounded-md px-3 py-1 text-xs font-medium transition ${
+                activeChapterId === TOC_TAB_ID
+                  ? 'bg-white text-brand-600 shadow-sm ring-1 ring-gray-200'
+                  : 'text-gray-400 hover:bg-white hover:text-gray-600'
+              }`}
+              title="目次"
+            >
+              📋 目次
+            </button>
+            <span className="shrink-0 text-gray-200">|</span>
+
             {bookChapters.map((chapter, idx) => (
               <div key={chapter.id} className="group relative flex shrink-0 items-center">
                 {renamingChapterId === chapter.id ? (
@@ -581,7 +606,11 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
                   <button
                     onClick={() => { setActiveChapterId(chapter.id); setEditorKey((k) => k + 1); }}
                     onDoubleClick={() => { setRenamingChapterId(chapter.id); setRenameDraft(chapter.title); }}
-                    title="ダブルクリックでリネーム"
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setTabCtxMenu({ chapterId: chapter.id, x: e.clientX, y: e.clientY });
+                    }}
+                    title="右クリックでメニュー"
                     className={`flex items-center gap-1 rounded-md px-3 py-1 text-xs font-medium transition ${
                       activeChapterId === chapter.id
                         ? 'bg-white text-brand-600 shadow-sm ring-1 ring-gray-200'
@@ -624,25 +653,77 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
               title="チャプターを追加"
             >＋</button>
           </div>
-          {/* アクティブチャプターのエディタ */}
-          {(() => {
-            const activeChapter = bookChapters.find((c) => c.id === activeChapterId);
-            if (!activeChapter) return null;
-            return (
-              <NotionEditor
-                key={`${page.id}-${activeChapterId}-${editorKey}`}
-                initialTitle=""
-                initialContent={activeChapter.content}
-                onSave={handleBookChapterSave}
-                onCreateSubPage={handleCreateSubPage}
-                recordTriggerRef={recordTriggerRef}
-                notionPageId={page.id}
-                notionPagePath={`${breadcrumbs.map((p) => p.title || 'Untitled').join(' / ')} / ${activeChapter.title}`}
-                highlightText={highlightText}
-                hideTitle
-              />
-            );
-          })()}
+
+          {/* タブ右クリックメニュー */}
+          {tabCtxMenu && (
+            <div
+              className="fixed z-50 min-w-[140px] rounded-xl border border-gray-200 bg-white py-1 shadow-xl"
+              style={{ left: tabCtxMenu.x, top: tabCtxMenu.y }}
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <button
+                className="flex w-full items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50"
+                onClick={() => {
+                  const chapter = bookChapters.find((c) => c.id === tabCtxMenu.chapterId);
+                  if (chapter) { setRenamingChapterId(chapter.id); setRenameDraft(chapter.title); }
+                  setTabCtxMenu(null);
+                }}
+              >
+                ✏️ リネーム
+              </button>
+              {bookChapters.findIndex((c) => c.id === tabCtxMenu.chapterId) > 0 && (
+                <button
+                  className="flex w-full items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50"
+                  onClick={() => { handleMoveChapter(tabCtxMenu.chapterId, 'left'); setTabCtxMenu(null); }}
+                >
+                  ‹ 左へ移動
+                </button>
+              )}
+              {bookChapters.findIndex((c) => c.id === tabCtxMenu.chapterId) < bookChapters.length - 1 && (
+                <button
+                  className="flex w-full items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50"
+                  onClick={() => { handleMoveChapter(tabCtxMenu.chapterId, 'right'); setTabCtxMenu(null); }}
+                >
+                  › 右へ移動
+                </button>
+              )}
+              {bookChapters.length > 1 && (
+                <>
+                  <div className="my-1 border-t border-gray-100" />
+                  <button
+                    className="flex w-full items-center gap-2 px-3 py-2 text-xs text-red-500 hover:bg-red-50"
+                    onClick={() => { handleDeleteChapter(tabCtxMenu.chapterId); setTabCtxMenu(null); }}
+                  >
+                    🗑️ 削除
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* 目次ビュー or チャプターエディタ */}
+          {activeChapterId === TOC_TAB_ID ? (
+            <BookTocView chapters={bookChapters} onJump={(id) => { setActiveChapterId(id); setEditorKey((k) => k + 1); }} />
+          ) : (
+            (() => {
+              const activeChapter = bookChapters.find((c) => c.id === activeChapterId);
+              if (!activeChapter) return null;
+              return (
+                <NotionEditor
+                  key={`${page.id}-${activeChapterId}-${editorKey}`}
+                  initialTitle=""
+                  initialContent={activeChapter.content}
+                  onSave={handleBookChapterSave}
+                  onCreateSubPage={handleCreateSubPage}
+                  recordTriggerRef={recordTriggerRef}
+                  notionPageId={page.id}
+                  notionPagePath={`${breadcrumbs.map((p) => p.title || 'Untitled').join(' / ')} / ${activeChapter.title}`}
+                  highlightText={highlightText}
+                  hideTitle
+                />
+              );
+            })()
+          )}
         </>
       ) : (
         <NotionEditor
@@ -919,6 +1000,74 @@ function HistoryModal({ uid, pageId, loadHistory, onRestore, onClose }: {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── ブック目次ビュー ─────────────────────────────────────────────────────
+
+function extractHeadings(content: string): { level: number; text: string }[] {
+  try {
+    const json = JSON.parse(content) as { content?: unknown[] };
+    const headings: { level: number; text: string }[] = [];
+    function traverse(node: { type?: string; text?: string; content?: unknown[]; attrs?: { level?: number } }) {
+      if (node.type === 'heading' && node.attrs?.level) {
+        const text = ((node.content ?? []) as { text?: string }[]).map((c) => c.text ?? '').join('');
+        if (text.trim()) headings.push({ level: node.attrs.level, text: text.trim() });
+      }
+      if (Array.isArray(node.content)) (node.content as typeof node[]).forEach(traverse);
+    }
+    if (Array.isArray(json?.content)) (json.content as typeof json[]).forEach(traverse);
+    return headings;
+  } catch {
+    return [];
+  }
+}
+
+function BookTocView({ chapters, onJump }: { chapters: BookChapter[]; onJump: (chapterId: string) => void }) {
+  return (
+    <div className="flex-1 overflow-y-auto px-8 py-6">
+      <h2 className="mb-5 text-base font-bold text-gray-700">📋 目次</h2>
+      {chapters.length === 0 ? (
+        <p className="text-sm text-gray-400">チャプターがありません</p>
+      ) : (
+        <div className="space-y-5">
+          {chapters.map((chapter) => {
+            const headings = extractHeadings(chapter.content);
+            return (
+              <div key={chapter.id}>
+                {/* チャプター名 */}
+                <button
+                  onClick={() => onJump(chapter.id)}
+                  className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-gray-800 hover:text-brand-600"
+                >
+                  <span className="text-brand-400">▶</span>
+                  {chapter.title}
+                </button>
+                {/* 見出し一覧 */}
+                {headings.length > 0 ? (
+                  <ul className="space-y-0.5 border-l-2 border-gray-100 pl-4">
+                    {headings.map((h, i) => (
+                      <li
+                        key={i}
+                        style={{ paddingLeft: `${(h.level - 1) * 12}px` }}
+                        className="text-sm text-gray-500"
+                      >
+                        <span className="mr-1.5 text-xs text-gray-300">
+                          {'H' + h.level}
+                        </span>
+                        {h.text}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="pl-4 text-xs text-gray-300 border-l-2 border-gray-100">見出しなし</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
