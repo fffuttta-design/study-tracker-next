@@ -17,7 +17,7 @@ interface SidebarProps {
 
 const NAV = [
   { href: '/learning', label: '学習リスト', icon: '📚' },
-  { href: `/notion-plus/${WORKSPACE_ID}`, label: 'NotionPlus', icon: '📝' },
+  { href: '/notion-plus', label: 'NotionPlus', icon: '📝' },
   { href: '/goals', label: '絶対覚える', icon: '🎯' },
 ];
 
@@ -368,7 +368,7 @@ function NotionPageSidebar({ user }: { user: User }) {
       />
       {/* ヘッダー */}
       <div className="flex items-center justify-between border-b border-gray-100 px-3 py-3">
-        <Link href={`/notion-plus/${WORKSPACE_ID}`} className="flex items-center gap-1.5 rounded px-1 hover:bg-gray-100">
+        <Link href="/notion-plus" className="flex items-center gap-1.5 rounded px-1 hover:bg-gray-100">
           <span className="text-base">📝</span>
           <span className="text-sm font-semibold text-gray-800">NotionPlus</span>
         </Link>

@@ -1,52 +1,72 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotionPageStore, WORKSPACE_ID } from '@/stores/notionPageStore';
 
 export default function NotionPlusPage() {
   const { user } = useAuthStore();
-  const { pages, loading, ensureWorkspace } = useNotionPageStore();
+  const { pages, loading, ensureWorkspace, add } = useNotionPageStore();
   const router = useRouter();
-  const didEnsureRef = useRef(false);
-  const didNavigateRef = useRef(false);
 
+  // ワークスペースが未作成なら作成（初回のみ）
   useEffect(() => {
+    if (!user || loading) return;
+    ensureWorkspace(user.uid).catch(() => {});
+  }, [user, loading, ensureWorkspace]);
+
+  const roots = pages
+    .filter((p) => !p.parentId && p.id !== WORKSPACE_ID)
+    .sort((a, b) => {
+      if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1;
+      return a.order - b.order;
+    });
+
+  const handleAdd = async () => {
     if (!user) return;
-    if (didNavigateRef.current) return;
-
-    // ワークスペースが pages に入ったら即座に遷移（リアクティブ）
-    const ws = pages.find((p) => p.id === WORKSPACE_ID);
-    if (ws) {
-      didNavigateRef.current = true;
-      // router.replace が Electron 環境で失敗することがあるため window.location も併用
-      try {
-        router.replace(`/notion-plus/${WORKSPACE_ID}`);
-      } catch {
-        // fallback
-      }
-      // Electron では window.location による遷移が確実
-      if (typeof window !== 'undefined' && window.electronAPI) {
-        window.location.href = `/notion-plus/${WORKSPACE_ID}`;
-      }
-      return;
-    }
-
-    // Firestore データ読み込み完了待ち
-    if (loading) return;
-
-    // データ読込済みでワークスペースがない → 一度だけ作成してFirestore更新を待つ
-    if (!didEnsureRef.current) {
-      didEnsureRef.current = true;
-      ensureWorkspace(user.uid).catch(() => {});
-      // 作成後は Firestore の onSnapshot が pages を更新 → 上の ws チェックで遷移する
-    }
-  }, [pages, loading, user, router, ensureWorkspace]);
+    const page = await add(user.uid);
+    router.push(`/notion-plus/${page.id}`);
+  };
 
   return (
-    <div className="flex h-full items-center justify-center">
-      <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+    <div className="mx-auto max-w-2xl px-6 py-10">
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-xl font-bold text-gray-800">📝 NotionPlus</h1>
+        <button
+          onClick={handleAdd}
+          className="flex items-center gap-1 rounded-lg bg-brand-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-600"
+        >
+          ＋ 新規ページ
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex h-40 items-center justify-center">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+        </div>
+      ) : roots.length === 0 ? (
+        <div className="flex h-40 flex-col items-center justify-center gap-3 text-gray-400">
+          <span className="text-4xl">📄</span>
+          <p className="text-sm">ページがありません。「＋ 新規ページ」で作成しましょう。</p>
+        </div>
+      ) : (
+        <ul className="space-y-1">
+          {roots.map((page) => (
+            <li key={page.id}>
+              <Link
+                href={`/notion-plus/${page.id}`}
+                className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                <span className="text-base leading-none">{page.icon || '📄'}</span>
+                <span className="flex-1 truncate">{page.title || '無題'}</span>
+                {page.isFavorite && <span className="text-xs text-yellow-500">★</span>}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
