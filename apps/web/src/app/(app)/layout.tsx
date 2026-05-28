@@ -9,6 +9,7 @@ import { useNotionPageStore } from '@/stores/notionPageStore';
 import { useImprovementTaskStore } from '@/stores/improvementTaskStore';
 import { useGoalStore } from '@/stores/goalStore';
 import { useMemoStore } from '@/stores/memoStore';
+import { useDailyMemoStore } from '@/stores/dailyMemoStore';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { hasDueReview } from '@study-tracker/core';
 import { fetchAll } from '@study-tracker/firebase';
@@ -66,6 +67,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const subscribeTasks = useImprovementTaskStore((s) => s.subscribe);
   const subscribeGoals = useGoalStore((s) => s.subscribe);
   const subscribeMemos = useMemoStore((s) => s.subscribe);
+  const subscribeDailyMemos = useDailyMemoStore((s) => s.subscribe);
   const items = useLearningStore((s) => s.items);
   const reviewNotificationTime = useSettingsStore((s) => s.reviewNotificationTime);
 
@@ -81,8 +83,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const unsub4 = subscribeTasks(user.uid);
     const unsub5 = subscribeGoals(user.uid);
     const unsub6 = subscribeMemos(user.uid);
-    return () => { unsub1(); unsub2(); unsub3(); unsub4(); unsub5(); unsub6(); };
-  }, [user, subscribeCategories, subscribeItems, subscribePages, subscribeTasks, subscribeGoals, subscribeMemos]);
+    const unsub7 = subscribeDailyMemos(user.uid);
+    return () => { unsub1(); unsub2(); unsub3(); unsub4(); unsub5(); unsub6(); unsub7(); };
+  }, [user, subscribeCategories, subscribeItems, subscribePages, subscribeTasks, subscribeGoals, subscribeMemos, subscribeDailyMemos]);
 
   // Electron に復習件数・通知時刻を送信
   useEffect(() => {

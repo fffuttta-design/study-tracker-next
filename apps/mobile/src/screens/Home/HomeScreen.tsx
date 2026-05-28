@@ -58,6 +58,12 @@ export default function HomeScreen({ navigation }: any) {
           </TouchableOpacity>
         </View>
 
+        {/* 統計（今週 + 累計）— ヘッダー直下 */}
+        <View style={styles.statsRow}>
+          <StatMini label="今週" value={weekCount} color="#10b981" />
+          <StatMini label="累計" value={items.length} color="#6366f1" />
+        </View>
+
         {/* 2カラム: 今日の登録 | 今日の復習 */}
         <View style={styles.twoCol}>
           {/* 今日の登録 */}
@@ -74,7 +80,7 @@ export default function HomeScreen({ navigation }: any) {
                   <HomeItemChip
                     key={item.id}
                     item={item}
-                    onPress={() => navigation.navigate('Learning')}
+                    onPress={() => navigation.navigate('Learning', { itemId: item.id, initialTab: 'today' })}
                   />
                 ))
             }
@@ -97,17 +103,11 @@ export default function HomeScreen({ navigation }: any) {
                     key={item.id}
                     item={item}
                     isDue
-                    onPress={() => navigation.navigate('Learning')}
+                    onPress={() => navigation.navigate('Learning', { itemId: item.id, initialTab: 'review' })}
                   />
                 ))
             }
           </View>
-        </View>
-
-        {/* 統計（今週 + 累計） */}
-        <View style={styles.statsRow}>
-          <StatMini label="今週" value={weekCount} color="#10b981" />
-          <StatMini label="累計" value={items.length} color="#6366f1" />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
   chipStageBadge: { backgroundColor: '#fef2f2', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1, alignSelf: 'flex-start', marginTop: 2 },
   chipStageBadgeText: { fontSize: 10, color: '#ef4444', fontWeight: '600' },
 
-  statsRow: { flexDirection: 'row', gap: 12 },
+  statsRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
   statMini: {
     flex: 1,
     backgroundColor: '#ffffff',

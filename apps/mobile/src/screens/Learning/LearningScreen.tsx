@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Markdown from 'react-native-markdown-display';
 import { useAuthStore } from '../../store/authStore';
 import { useLearningStore } from '../../store/learningStore';
 import {
@@ -22,10 +23,21 @@ import {
 
 type Tab = 'today' | 'review' | 'all';
 
-export default function LearningScreen({ navigation }: any) {
+export default function LearningScreen({ navigation, route }: any) {
   const { user } = useAuthStore();
   const { items, categories, completeReview, deleteItem } = useLearningStore();
-  const [tab, setTab] = useState<Tab>('today');
+
+  const params = route?.params as { itemId?: string; initialTab?: Tab } | undefined;
+  const [tab, setTab] = useState<Tab>(params?.initialTab ?? 'today');
+  const [focusedItemId, setFocusedItemId] = useState<string | undefined>(params?.itemId);
+  const flatListRef = useRef<FlatList>(null);
+
+  // ホーム画面からのナビゲーション時にタブ切替・フォーカス更新
+  useEffect(() => {
+    if (!params?.initialTab) return;
+    setTab(params.initialTab);
+    setFocusedItemId(params.itemId);
+  }, [params?.itemId, params?.initialTab]);
 
   const today = localDateKey();
 
@@ -91,6 +103,7 @@ export default function LearningScreen({ navigation }: any) {
 
       {/* リスト */}
       <FlatList
+        ref={flatListRef}
         data={filtered}
         keyExtractor={item => item.id}
         contentContainerStyle={styles.list}
@@ -100,8 +113,14 @@ export default function LearningScreen({ navigation }: any) {
             categoryName={getCategoryName(item.categoryId)}
             onCompleteReview={handleCompleteReview}
             onDelete={() => handleDelete(item)}
+            initialExpanded={item.id === focusedItemId}
           />
         )}
+        onLayout={() => {
+          if (!focusedItemId) return;
+          const idx = filtered.findIndex(i => i.id === focusedItemId);
+          if (idx >= 0) flatListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.1 });
+        }}
         ListEmptyComponent={
           <Text style={styles.empty}>
             {tab === 'today' ? '今日の記録はまだありません' : tab === 'review' ? '復習の必要なアイテムはありません 🎉' : 'アイテムがありません'}
@@ -113,14 +132,15 @@ export default function LearningScreen({ navigation }: any) {
 }
 
 function LearningItemCard({
-  item, categoryName, onCompleteReview, onDelete,
+  item, categoryName, onCompleteReview, onDelete, initialExpanded,
 }: {
   item: LearningItem;
   categoryName?: string;
   onCompleteReview: (item: LearningItem, stageIndex: number) => void;
   onDelete: () => void;
+  initialExpanded?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(initialExpanded ?? false);
   const completed = isFullyCompleted(item);
   const due = hasDueReview(item);
 
@@ -158,7 +178,9 @@ function LearningItemCard({
 
       {expanded && (
         <>
-          {item.content ? <Text style={styles.cardContent}>{item.content}</Text> : null}
+          {item.content ? (
+            <Markdown style={markdownStyles}>{item.content}</Markdown>
+          ) : null}
           {/* 復習ステージ */}
           <View style={styles.reviewRow}>
             {item.reviews.map((r, i) => (
@@ -179,6 +201,21 @@ function LearningItemCard({
     </TouchableOpacity>
   );
 }
+
+const markdownStyles = {
+  body:        { fontSize: 13, color: '#6b7280', marginBottom: 8 },
+  strong:      { fontWeight: '700' as const, color: '#374151' },
+  em:          { fontStyle: 'italic' as const },
+  code_inline: { backgroundColor: '#f3f4f6', borderRadius: 3, paddingHorizontal: 4, fontFamily: 'monospace', fontSize: 12 },
+  code_block:  { backgroundColor: '#f3f4f6', borderRadius: 6, padding: 8, fontFamily: 'monospace', fontSize: 12 },
+  bullet_list: { marginVertical: 2 },
+  ordered_list:{ marginVertical: 2 },
+  list_item:   { marginVertical: 1 },
+  heading1:    { fontSize: 16, fontWeight: '700' as const, color: '#111827', marginVertical: 4 },
+  heading2:    { fontSize: 14, fontWeight: '700' as const, color: '#111827', marginVertical: 3 },
+  heading3:    { fontSize: 13, fontWeight: '700' as const, color: '#374151', marginVertical: 2 },
+  blockquote:  { borderLeftWidth: 3, borderLeftColor: '#d1d5db', paddingLeft: 8, marginLeft: 4 },
+};
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f9fafb' },

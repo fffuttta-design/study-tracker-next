@@ -8,6 +8,7 @@ import { type User } from 'firebase/auth';
 import { type NotionPage } from '@study-tracker/core';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotionPageStore, WORKSPACE_ID } from '@/stores/notionPageStore';
+import { useDailyMemoStore } from '@/stores/dailyMemoStore';
 import { APP_VERSION } from '@/lib/version';
 import appIcon from '@/app/icon.png';
 
@@ -18,6 +19,7 @@ interface SidebarProps {
 const NAV = [
   { href: '/learning', label: '学習リスト', icon: '📚' },
   { href: '/notion-plus', label: 'NotionPlus', icon: '📝' },
+  { href: '/quick-memo', label: '学習メモ', icon: '📓' },
   { href: '/goals', label: '絶対覚える', icon: '🎯' },
 ];
 
@@ -503,6 +505,89 @@ function NotionPageSidebar({ user }: { user: User }) {
   );
 }
 
+function toLocalDateString(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function QuickMemoSidebar({ user }: { user: User }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { memos } = useDailyMemoStore();
+
+  const today = toLocalDateString(new Date());
+  const selectedDate = searchParams.get('date') ?? today;
+
+  const pastDates = memos
+    .map((m) => m.id)
+    .filter((d) => d !== today)
+    .sort((a, b) => b.localeCompare(a));
+  const dateList = [today, ...pastDates];
+
+  const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+  const formatLabel = (dateStr: string) => {
+    if (dateStr === today) return '今日';
+    const d = new Date(dateStr + 'T00:00:00');
+    return `${d.getMonth() + 1}/${d.getDate()}（${weekdays[d.getDay()]}）`;
+  };
+
+  const handleSelect = (date: string) => {
+    router.push(`/quick-memo?date=${date}`);
+  };
+
+  return (
+    <aside className="flex h-full w-44 flex-col border-r border-gray-100 bg-gray-50">
+      <div className="flex items-center gap-1.5 border-b border-gray-100 px-3 py-3">
+        <span className="text-base">📓</span>
+        <span className="text-sm font-semibold text-gray-800">学習メモ</span>
+      </div>
+
+      <nav className="flex-1 overflow-y-auto py-1">
+        {dateList.map((date) => {
+          const isActive = date === selectedDate;
+          const memo = memos.find((m) => m.id === date);
+          const hasContent = !!memo?.content;
+          const isToday = date === today;
+          return (
+            <button
+              key={date}
+              onClick={() => handleSelect(date)}
+              className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
+                isActive
+                  ? 'bg-white font-semibold text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:bg-white hover:text-gray-800'
+              }`}
+            >
+              {isToday && (
+                <span className="shrink-0 text-[9px] font-bold text-brand-500">●</span>
+              )}
+              <span className={hasContent ? 'text-gray-800' : isToday ? 'text-gray-500' : 'text-gray-300'}>
+                {formatLabel(date)}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
+
+      <div className="border-t border-gray-100">
+        <Link
+          href="/learning"
+          className="flex items-center gap-2 px-3 py-2.5 text-xs text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+        >
+          <span>←</span>
+          <span>学習リストに戻る</span>
+        </Link>
+        <div className="border-t border-gray-100 py-1">
+          <UserFooter user={user} />
+        </div>
+        <p className="px-4 pb-2 text-[10px] text-gray-300">{APP_VERSION}</p>
+      </div>
+    </aside>
+  );
+}
+
 export function Sidebar({ user }: SidebarProps) {
   const pathname = usePathname();
   const signOut = useAuthStore((s) => s.signOut);
@@ -510,6 +595,15 @@ export function Sidebar({ user }: SidebarProps) {
   // NotionPlus エリアではページサイドバーに切り替え
   if (pathname.startsWith('/notion-plus')) {
     return <NotionPageSidebar user={user} />;
+  }
+
+  // quick-memo エリアでは日付サイドバーに切り替え
+  if (pathname.startsWith('/quick-memo')) {
+    return (
+      <Suspense fallback={<aside className="w-44 border-r border-gray-100 bg-gray-50" />}>
+        <QuickMemoSidebar user={user} />
+      </Suspense>
+    );
   }
 
   return (

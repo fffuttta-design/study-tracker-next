@@ -3,3 +3,4 @@ export * from './models/learningCategory';
 export * from './models/notionPage';
 export * from './models/notionDatabase';
 export * from './models/wishlistItem';
+export * from './models/dailyMemo';
