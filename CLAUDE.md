@@ -37,17 +37,18 @@ packages/
 | ファイル | 役割 |
 |---|---|
 | `electron/build-info.json` | `version`（semver）+ `buildNumber`（通し番号）。**配信スクリプトが自動でインクリメントする** |
-| `apps/web/src/lib/version.ts` | UI表示用の `APP_VERSION` 文字列。配信前に `build-info.json` の値と揃えること |
+| `apps/web/src/lib/version.ts` | UI表示用の `APP_VERSION` 文字列。**配信スクリプトが自動で書き換える。手動で編集しないこと。** |
 | `apps/mobile/android/app/build.gradle` | `versionCode` / `versionName`。配信スクリプトが自動更新する |
 
 ### バージョンの上げ方
 
-基本的に **配信スクリプト実行時に自動でインクリメント** される（patch +1、buildNumber +1）。
-手動で変更する場合は上記3ファイルを一致させること。
+**3ファイルすべて配信スクリプト（`npm run dist:win:sync`）が自動更新する。手動で触る必要はない。**
 
-現在のバージョン管理例：
-- `electron/build-info.json` → `"version": "1.0.60", "buildNumber": 80`
-- `apps/web/src/lib/version.ts` → `export const APP_VERSION = 'v1.0.60';`
+- `electron/build-info.json` → patch +1、buildNumber +1
+- `apps/web/src/lib/version.ts` → `build-info.json` の新バージョンに自動上書き
+- `apps/mobile/android/app/build.gradle` → `update-mobile-build-number.mjs` が更新
+
+> ⚠️ `version.ts` は **絶対に手動編集しないこと**。スクリプトが管理するファイルのため、手動で変更すると次回配信時に上書きされるか、バージョンの逆行を引き起こす。
 
 ---
 

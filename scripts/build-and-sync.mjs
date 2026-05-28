@@ -73,6 +73,14 @@ const newBuildInfo = { version: newVersion, buildNumber: newBuildNumber, builtAt
 writeFileSync(buildInfoPath, JSON.stringify(newBuildInfo, null, 2) + '\n', 'utf-8')
 console.log(`[build-and-sync] build-info.json 書き込み完了`)
 
+// apps/web/src/lib/version.ts を自動更新（手動編集不要・ズレ防止）
+writeFileSync(
+  path.join(ROOT, 'apps', 'web', 'src', 'lib', 'version.ts'),
+  `export const APP_VERSION = 'v${newVersion}';\n`,
+  'utf-8'
+)
+console.log(`[build-and-sync] version.ts 書き込み完了 (v${newVersion})`)
+
 // apps/mobile/version.json を更新（GitHub raw URL で参照される）
 writeFileSync(
   path.join(ROOT, 'apps', 'mobile', 'version.json'),
