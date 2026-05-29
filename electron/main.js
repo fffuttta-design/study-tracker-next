@@ -1,5 +1,5 @@
 import { app, BrowserWindow, shell, Tray, Menu, nativeImage, dialog, ipcMain, Notification } from 'electron'
-import { readFile, writeFile, mkdir, readdir, unlink, copyFile } from 'fs/promises'
+import { readFile, writeFile, mkdir, readdir, unlink, copyFile, appendFile } from 'fs/promises'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { existsSync } from 'fs'
@@ -7,6 +7,15 @@ import { exec, spawn as spawnChild } from 'child_process'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const isDev = !app.isPackaged
+
+// ── デバッグログ（userData/debug.log に追記） ─────────────────────────
+// 調査が終わったら削除すること
+function debugLog(msg) {
+  const line = `[${new Date().toISOString()}] ${msg}\n`
+  console.log(line.trimEnd())
+  const logPath = join(app.getPath('userData'), 'debug.log')
+  appendFile(logPath, line).catch(() => {})
+}
 
 // ── ローカルインストール先 ────────────────────────────────────────────
 // Drive から起動した場合に自動で AppData にインストールし、以降はそこから起動する
@@ -240,6 +249,8 @@ function createWindow() {
 
   // Firebase / Google OAuth ポップアップを許可
   mainWin.webContents.setWindowOpenHandler(({ url: popupUrl }) => {
+    debugLog(`[setWindowOpenHandler] url="${popupUrl}"`)
+
     const authWindowOptions = {
       width: 500,
       height: 660,
@@ -251,6 +262,7 @@ function createWindow() {
     // これを openExternal に渡すと Windows がコンソールウィンドウを起動してしまうため、
     // ポップアップとして allow する。
     if (!popupUrl || popupUrl === 'about:blank') {
+      debugLog(`[setWindowOpenHandler] → allow (blank)`)
       return { action: 'allow', overrideBrowserWindowOptions: authWindowOptions }
     }
 
@@ -261,13 +273,17 @@ function createWindow() {
       popupUrl.includes('google.com/o/oauth2')
 
     if (isAuthPopup) {
+      debugLog(`[setWindowOpenHandler] → allow (auth)`)
       return { action: 'allow', overrideBrowserWindowOptions: authWindowOptions }
     }
 
     // http/https の外部リンクのみブラウザで開く。
     // 空URL・不明プロトコルを openExternal に渡すとコンソールウィンドウが開くため除外。
     if (popupUrl.startsWith('http://') || popupUrl.startsWith('https://')) {
+      debugLog(`[setWindowOpenHandler] → openExternal`)
       shell.openExternal(popupUrl)
+    } else {
+      debugLog(`[setWindowOpenHandler] → deny (unknown protocol)`)
     }
     return { action: 'deny' }
   })
@@ -297,6 +313,7 @@ async function saveUpdateSourcePath(sourcePath) {
 // wscript.exe //B（コンソールサブシステムを持たない GUI プロセス）経由で起動することで
 // コンソールウィンドウを完全に排除する。
 async function launchPS1(scriptLines) {
+  debugLog(`[launchPS1] called, stack=${new Error().stack.split('\n')[2]?.trim()}`)
   const ts     = Date.now()
   const tmpPs1 = join(app.getPath('temp'), `st-update-${ts}.ps1`)
   const tmpVbs = join(app.getPath('temp'), `st-update-${ts}.vbs`)
@@ -316,6 +333,7 @@ async function launchPS1(scriptLines) {
   ].join('\r\n')
   await writeFile(tmpVbs, vbs, 'utf-8')
 
+  debugLog(`[launchPS1] spawning wscript.exe //B ${tmpVbs}`)
   spawnChild('wscript.exe', ['//B', tmpVbs], {
     detached: true,
     windowsHide: true,
@@ -529,6 +547,7 @@ ipcMain.on('set-auto-launch', (_, enable) => {
 
 // ── IPC ──────────────────────────────────────────────────────────
 ipcMain.on('app-relaunch', () => {
+  debugLog('[app-relaunch] IPC received')
   app.relaunch()
   app.exit(0)
 })
@@ -632,6 +651,7 @@ ipcMain.handle('check-for-update', async () => {
 })
 
 ipcMain.on('apply-update', async (_, arg) => {
+  debugLog(`[apply-update] IPC received arg=${JSON.stringify(arg)}`)
   // arg には { sourcePath, version, buildNumber } が渡される
   const sourcePath  = arg?.sourcePath  ?? await getUpdateSourcePath()
   const newVersion  = arg?.version     ?? '?'
