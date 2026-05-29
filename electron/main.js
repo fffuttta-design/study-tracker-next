@@ -181,6 +181,11 @@ function createTray() {
     },
     { type: 'separator' },
     {
+      label: '最新版を確認',
+      click: () => checkForUpdateManual(),
+    },
+    { type: 'separator' },
+    {
       label: '今すぐバックアップ',
       click: () => requestBackup(),
     },
@@ -356,6 +361,75 @@ async function autoInstallIfNeeded() {
   ])
   setTimeout(() => app.exit(0), 300)
   return true
+}
+
+// ── トレイメニューから手動チェック（結果を必ずダイアログで通知）────────
+async function checkForUpdateManual() {
+  try {
+    const sourcePath = await getUpdateSourcePath()
+    if (!sourcePath) {
+      dialog.showMessageBox(mainWin, {
+        type: 'info', title: '最新版を確認',
+        message: 'アップデート元が設定されていません',
+        detail: 'Drive からインストールし直してください。',
+        buttons: ['OK'],
+      })
+      return
+    }
+
+    const versionJsonPath = join(sourcePath, 'version.json')
+    if (!existsSync(versionJsonPath)) {
+      dialog.showMessageBox(mainWin, {
+        type: 'warning', title: '最新版を確認',
+        message: 'version.json が見つかりません',
+        detail: `確認先: ${sourcePath}`,
+        buttons: ['OK'],
+      })
+      return
+    }
+
+    const [remote, local] = await Promise.all([
+      readFile(versionJsonPath,                   'utf-8').then(JSON.parse),
+      readFile(join(__dirname, 'build-info.json'), 'utf-8').then(JSON.parse),
+    ])
+
+    const remoteNum = remote.buildNumber ?? 0
+    const localNum  = local.buildNumber  ?? 0
+
+    if (remoteNum <= localNum) {
+      dialog.showMessageBox(mainWin, {
+        type: 'info', title: '最新版を確認',
+        message: '✅ 最新版です',
+        detail: `v${local.version} (build ${localNum})`,
+        buttons: ['OK'],
+      })
+      return
+    }
+
+    const { response } = await dialog.showMessageBox(mainWin, {
+      type: 'info', title: '学習トラッカー - アップデート',
+      message: '新しいバージョンが利用可能です 🎉',
+      detail: [
+        `現在 : v${local.version} (build ${localNum})`,
+        `最新 : v${remote.version} (build ${remoteNum})`,
+        '',
+        '今すぐ更新しますか？',
+      ].join('\n'),
+      buttons: ['今すぐ更新', '後で'],
+      defaultId: 0, cancelId: 1,
+    })
+
+    if (response === 0) {
+      await applyUpdate(sourcePath, remote.version ?? '?', remoteNum)
+    }
+  } catch (e) {
+    dialog.showMessageBox(mainWin, {
+      type: 'error', title: '最新版を確認',
+      message: 'チェックに失敗しました',
+      detail: e.message,
+      buttons: ['OK'],
+    })
+  }
 }
 
 // ── バージョンチェック（update-source.json の Drive パスと比較）────────
