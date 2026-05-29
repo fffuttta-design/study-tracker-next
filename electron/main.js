@@ -365,20 +365,52 @@ async function launchPS1(scriptLines) {
   }).unref()
 }
 
-// ── アップデート適用（サイレント：ウィンドウなし・エラー時のみダイアログ）
+// ── アップデート適用（可視ターミナルでステータス表示）──────────────────
 async function applyUpdate(sourcePath, newVersion, newBuildNum) {
-  await launchPS1([
-    // アプリ終了を待ってからコピー（終了まで最大5秒待機）
-    `$maxWait = 10; $i = 0; while ((Get-Process -Name '学習トラッカー' -ErrorAction SilentlyContinue) -and $i -lt $maxWait) { Start-Sleep -Milliseconds 500; $i++ }`,
+  const ts     = Date.now()
+  const tmpPs1 = join(app.getPath('temp'), `st-update-${ts}.ps1`)
+  const bom    = '﻿'
+
+  const script = [
+    '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+    '$OutputEncoding = [System.Text.Encoding]::UTF8',
+    `$Host.UI.RawUI.WindowTitle = 'Study Tracker - アップデート'`,
+    `Write-Host ''`,
+    `Write-Host '  Study Tracker アップデート' -ForegroundColor White`,
+    `Write-Host '  ──────────────────────────────' -ForegroundColor DarkGray`,
+    `Write-Host ''`,
+    `Write-Host '  アプリを終了します...' -ForegroundColor Cyan`,
+    `$maxWait = 20; $i = 0`,
+    `while ((Get-Process -Name '学習トラッカー' -ErrorAction SilentlyContinue) -and $i -lt $maxWait) { Start-Sleep -Milliseconds 500; $i++ }`,
+    `Write-Host '  EXEをコピーします...' -ForegroundColor Cyan`,
     `robocopy "${sourcePath}" "${LOCAL_INSTALL_DIR}" /MIR /R:2 /W:1 /NFL /NDL /NJH /NJS /NC /NS /NP`,
-    'if ($LASTEXITCODE -ge 8) {',
-    // エラー時のみWindowsダイアログで通知
-    '  Add-Type -AssemblyName System.Windows.Forms',
-    `  [System.Windows.Forms.MessageBox]::Show("アップデートに失敗しました。\\nトレイメニューの「最新版を確認」から再試行してください。\\n(code: $LASTEXITCODE)", "Study Tracker 更新エラー", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null`,
-    '} else {',
+    `if ($LASTEXITCODE -ge 8) {`,
+    `  Write-Host ''`,
+    `  Write-Host "  ❌ コピーに失敗しました (code: $LASTEXITCODE)" -ForegroundColor Red`,
+    `  Write-Host '  トレイメニューの「最新版を確認」から再試行してください。' -ForegroundColor Gray`,
+    `  Write-Host ''`,
+    `  Write-Host '  何かキーを押して閉じる...' -ForegroundColor DarkGray`,
+    `  $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')`,
+    `} else {`,
+    `  Write-Host "  ✅ v${newVersion} にアップデート完了！" -ForegroundColor Green`,
+    `  Write-Host '  再起動します...' -ForegroundColor Cyan`,
+    `  Start-Sleep -Seconds 2`,
     `  Start-Process "${LOCAL_EXE}"`,
-    '}',
-  ])
+    `}`,
+  ].join('\n')
+
+  await writeFile(tmpPs1, bom + script, 'utf-8')
+
+  // windowsHide を指定しないことで可視コンソールウィンドウを表示
+  spawnChild('powershell.exe', [
+    '-ExecutionPolicy', 'Bypass',
+    '-NoProfile',
+    '-File', tmpPs1,
+  ], {
+    detached: true,
+    stdio: 'ignore',
+  }).unref()
+
   setTimeout(() => app.exit(0), 300)
 }
 
