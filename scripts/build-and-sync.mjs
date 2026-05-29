@@ -171,12 +171,33 @@ try {
 }
 console.log('[build-and-sync] 同期完了 ✓')
 
-// ── Step 6: アプリを再起動（ローカルインストール優先）───────────────
-// ローカルインストール済みなら AppData から起動、なければ Drive から起動
+// ── Step 6: AppData にも同期（開発者自身が常に最新版を実行するため）────
+// build-and-sync は Google Drive だけを更新するため、開発者の AppData が
+// 古いままになり「古いコードで更新処理が走る」ブートストラップ問題が起きる。
+// ビルドのたびに AppData も最新版に揃えることで問題を防ぐ。
 const localInstallDir = path.join(process.env.LOCALAPPDATA || '', 'StudyTracker')
 const localExePath    = path.join(localInstallDir, '学習トラッカー.exe')
-const driveExePath    = path.join(destDir, '学習トラッカー.exe')
-const exeLaunchPath   = existsSync(localExePath) ? localExePath : driveExePath
+
+if (existsSync(localInstallDir)) {
+  console.log(`[build-and-sync] AppData にも同期中...`)
+  try {
+    execSync(
+      `robocopy "${srcDir}" "${localInstallDir}" /MIR /R:1 /W:1 /NFL /NDL /NJH /NJS /NC /NS /NP`,
+      { stdio: 'pipe' }
+    )
+    console.log(`[build-and-sync] AppData 同期完了 ✓ (${localInstallDir})`)
+  } catch (e) {
+    if ((e.status ?? 0) >= 8) {
+      console.warn(`[build-and-sync] AppData 同期失敗 (exit code ${e.status}) → スキップ`)
+    } else {
+      console.log(`[build-and-sync] AppData 同期完了 ✓`)
+    }
+  }
+}
+
+// ── Step 7: アプリを再起動（AppData 優先）────────────────────────────
+const driveExePath = path.join(destDir, '学習トラッカー.exe')
+const exeLaunchPath = existsSync(localExePath) ? localExePath : driveExePath
 
 if (existsSync(exeLaunchPath)) {
   const launchFrom = existsSync(localExePath) ? 'ローカル (AppData)' : 'Drive (初回)'
@@ -185,7 +206,7 @@ if (existsSync(exeLaunchPath)) {
   console.log(`[build-and-sync] 起動完了 ✓ (v${newVersion} / build ${newBuildNumber})\n`)
 }
 
-// ── Step 7: Android APK ビルド & Drive 同期 ───────────────────────
+// ── Step 8: Android APK ビルド & Drive 同期 ───────────────────────
 const androidSrcDir  = path.join(ROOT, 'apps', 'mobile')
 const androidDestDir = path.join(destDir, 'android')
 const apkSrcPath     = path.join(androidSrcDir, 'android', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk')
@@ -263,7 +284,7 @@ try {
   console.warn('[build-and-sync] Android ビルド失敗（Windows ビルドは成功）:', e.message)
 }
 
-// ── Step 8: GitHub へ自動プッシュ ────────────────────────────────
+// ── Step 9: GitHub へ自動プッシュ ────────────────────────────────
 console.log('[build-and-sync] GitHub へプッシュ中...')
 let pushed = false
 try {
@@ -281,7 +302,7 @@ try {
   console.warn('[build-and-sync] GitHub プッシュ失敗（ビルド自体は成功）:', e.message)
 }
 
-// ── Step 9: GitHub 反映確認（テスト可能チェック）────────────────
+// ── Step 10: GitHub 反映確認（テスト可能チェック）────────────────
 if (pushed) {
   const GITHUB_VERSION_URL = 'https://api.github.com/repos/fffuttta-design/study-tracker-next/contents/apps/mobile/version.json'
   console.log('\n[build-and-sync] GitHub 反映確認中...')
