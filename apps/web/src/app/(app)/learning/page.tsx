@@ -354,6 +354,9 @@ function ReviewTab({ dueItems, uid }: {
   dueItems: LearningItem[];
   uid: string;
 }) {
+  // デフォルト: 降順（新しい学習日が上）
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+
   const grouped = STAGE_LABELS.map((label, i) => ({
     label,
     index: i,
@@ -367,46 +370,59 @@ function ReviewTab({ dueItems, uid }: {
     <div className="p-6 space-y-6">
       {dueItems.length === 0
         ? <Empty text="復習待ちのアイテムはありません 🎉" />
-        : grouped.map((g) => {
-          // ステージ内をさらに学習日（dateKey）でサブグループ化（古い順）
-          const byDate = Array.from(
-            g.items.reduce((map, item) => {
-              const key = item.dateKey ?? item.createdAt?.slice(0, 10) ?? 'unknown';
-              if (!map.has(key)) map.set(key, []);
-              map.get(key)!.push(item);
-              return map;
-            }, new Map<string, LearningItem[]>())
-          ).sort(([a], [b]) => a.localeCompare(b)); // 古い学習日が上
+        : <>
+          {/* ソート切替ボタン */}
+          <div className="flex justify-end">
+            <button
+              onClick={() => setSortDir((d) => d === 'asc' ? 'desc' : 'asc')}
+              className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-500 shadow-sm hover:bg-gray-50"
+            >
+              {sortDir === 'desc' ? '↓ 新しい順' : '↑ 古い順'}
+            </button>
+          </div>
 
-          return (
-            <div key={g.index} className={`rounded-xl border p-3 ${STAGE_CARD_BG[g.index]} ${STAGE_SECTION_BORDER[g.index]}`}>
-              <BadgeDivider
-                label={g.label}
-                count={g.items.length}
-                badgeClass={STAGE_COLORS[g.index]}
-                countBg={STAGE_BADGE_COUNT_BG[g.index]}
-                leftAlign
-              />
-              <div className="space-y-2">
-                {byDate.map(([dateKey, dateItems]) => (
-                  <div key={dateKey}>
-                    {/* 学習日サブヘッダー（複数日がある場合のみ表示） */}
-                    {byDate.length > 1 && (
-                      <div className="mb-1.5 flex items-center gap-2 text-xs text-gray-400">
-                        <span className="shrink-0">
-                          {format(new Date(dateKey), 'M/d（E）', { locale: ja })} に学習
-                        </span>
-                        <div className="h-px flex-1 bg-gray-200" />
-                        <span className="shrink-0 tabular-nums">{dateItems.length}件</span>
-                      </div>
-                    )}
-                    <ItemList items={dateItems} uid={uid} showReviewAction fromTab={2} />
-                  </div>
-                ))}
+          {grouped.map((g) => {
+            const byDate = Array.from(
+              g.items.reduce((map, item) => {
+                const key = item.dateKey ?? item.createdAt?.slice(0, 10) ?? 'unknown';
+                if (!map.has(key)) map.set(key, []);
+                map.get(key)!.push(item);
+                return map;
+              }, new Map<string, LearningItem[]>())
+            ).sort(([a], [b]) =>
+              sortDir === 'desc' ? b.localeCompare(a) : a.localeCompare(b)
+            );
+
+            return (
+              <div key={g.index} className={`rounded-xl border p-3 ${STAGE_CARD_BG[g.index]} ${STAGE_SECTION_BORDER[g.index]}`}>
+                <BadgeDivider
+                  label={g.label}
+                  count={g.items.length}
+                  badgeClass={STAGE_COLORS[g.index]}
+                  countBg={STAGE_BADGE_COUNT_BG[g.index]}
+                  leftAlign
+                />
+                <div className="space-y-2">
+                  {byDate.map(([dateKey, dateItems]) => (
+                    <div key={dateKey}>
+                      {byDate.length > 1 && (
+                        <div className="mb-1.5 flex items-center gap-2 text-xs text-gray-400">
+                          <span className="shrink-0">
+                            {format(new Date(dateKey), 'M/d（E）', { locale: ja })} に学習
+                          </span>
+                          <div className="h-px flex-1 bg-gray-200" />
+                          <span className="shrink-0 tabular-nums">{dateItems.length}件</span>
+                        </div>
+                      )}
+                      <ItemList items={dateItems} uid={uid} showReviewAction fromTab={2} />
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </>
+      }
     </div>
   );
 }
