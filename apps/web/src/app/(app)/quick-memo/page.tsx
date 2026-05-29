@@ -85,23 +85,20 @@ const DateSection = forwardRef<HTMLDivElement, DateSectionProps>(function DateSe
       {/* セクションヘッダー（クリックで開閉） */}
       <button
         onClick={onToggle}
-        className="flex w-full items-center gap-2 px-6 py-3 text-left transition-colors hover:bg-gray-50"
+        className="flex w-full items-center gap-1.5 px-4 py-1.5 text-left transition-colors hover:bg-gray-50"
       >
-        <span className="shrink-0 text-xs text-gray-300">{isOpen ? '▼' : '▶'}</span>
-        <span className={`shrink-0 text-sm font-semibold ${isToday ? 'text-brand-600' : 'text-gray-700'}`}>
+        <span className="shrink-0 text-[10px] text-gray-300">{isOpen ? '▼' : '▶'}</span>
+        <span className={`shrink-0 text-xs font-semibold ${isToday ? 'text-brand-600' : 'text-gray-600'}`}>
           {formatDateHeading(date)}
         </span>
         {isToday && (
-          <span className="shrink-0 rounded bg-brand-500 px-1.5 py-0.5 text-xs text-white">今日</span>
+          <span className="shrink-0 rounded bg-brand-500 px-1 py-0.5 text-[10px] text-white">今日</span>
         )}
-        {/* 折りたたみ時はプレビューテキスト */}
         {!isOpen && (
-          <span className="min-w-0 flex-1 truncate text-xs text-gray-400">
-            {preview || <span className="italic">（未記入）</span>}
-          </span>
+          <span className="min-w-0 flex-1 truncate text-xs text-gray-400">{preview}</span>
         )}
         {saving && <span className="ml-auto shrink-0 text-xs text-gray-400">保存中...</span>}
-        {!saving && isOpen && <span className="ml-auto shrink-0 text-xs text-gray-300">自動保存</span>}
+        {!saving && isOpen && <span className="ml-auto shrink-0 text-[10px] text-gray-300">自動保存</span>}
       </button>
 
       {/* エディタ（展開時のみ） */}
@@ -133,9 +130,12 @@ export default function QuickMemoPage() {
   // サイドバーからジャンプしてきた日付
   const jumpDate = searchParams.get('date');
 
-  // 表示する日付一覧（今日 + メモのある日、新しい順）
+  // 表示する日付一覧（今日 + 内容のある日のみ、新しい順）
   const allDates = useMemo(() => {
-    const set = new Set([today, ...memos.map((m) => m.id)]);
+    const datesWithContent = memos
+      .filter((m) => m.content && m.content.trim().length > 0)
+      .map((m) => m.id);
+    const set = new Set([today, ...datesWithContent]);
     return Array.from(set).sort((a, b) => b.localeCompare(a));
   }, [memos, today]);
 
