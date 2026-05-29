@@ -240,25 +240,35 @@ function createWindow() {
 
   // Firebase / Google OAuth ポップアップを許可
   mainWin.webContents.setWindowOpenHandler(({ url: popupUrl }) => {
-    const isAuthPopup =
-      popupUrl.includes('firebaseapp.com/__/auth') ||
-      popupUrl.includes('accounts.google.com') ||
-      popupUrl.includes('googleapis.com/oauth')
-
-    if (isAuthPopup) {
-      return {
-        action: 'allow',
-        overrideBrowserWindowOptions: {
-          width: 500,
-          height: 660,
-          title: 'Googleでログイン',
-          webPreferences: { nodeIntegration: false, contextIsolation: true },
-        },
-      }
+    const authWindowOptions = {
+      width: 500,
+      height: 660,
+      title: 'Googleでログイン',
+      webPreferences: { nodeIntegration: false, contextIsolation: true },
     }
 
-    // それ以外の外部リンクはブラウザで開く
-    shell.openExternal(popupUrl)
+    // about:blank / 空URL: Firebase SDK が signInWithPopup 時に最初に開く中間ウィンドウ。
+    // これを openExternal に渡すと Windows がコンソールウィンドウを起動してしまうため、
+    // ポップアップとして allow する。
+    if (!popupUrl || popupUrl === 'about:blank') {
+      return { action: 'allow', overrideBrowserWindowOptions: authWindowOptions }
+    }
+
+    const isAuthPopup =
+      popupUrl.includes('firebaseapp.com') ||      // /__/auth/* など Firebase 全ドメイン
+      popupUrl.includes('accounts.google.com') ||
+      popupUrl.includes('googleapis.com') ||
+      popupUrl.includes('google.com/o/oauth2')
+
+    if (isAuthPopup) {
+      return { action: 'allow', overrideBrowserWindowOptions: authWindowOptions }
+    }
+
+    // http/https の外部リンクのみブラウザで開く。
+    // 空URL・不明プロトコルを openExternal に渡すとコンソールウィンドウが開くため除外。
+    if (popupUrl.startsWith('http://') || popupUrl.startsWith('https://')) {
+      shell.openExternal(popupUrl)
+    }
     return { action: 'deny' }
   })
 
@@ -281,24 +291,32 @@ async function saveUpdateSourcePath(sourcePath) {
   await writeFile(cfgPath, JSON.stringify({ sourcePath }, null, 2), 'utf-8')
 }
 
-// ── PowerShell スクリプトを生成してバックグラウンドで実行（ウィンドウなし）
+// ── PowerShell スクリプトを生成して wscript.exe 経由でウィンドウなし実行
+// powershell.exe を spawn で直接起動すると detached:true と windowsHide:true が
+// Windows 内部フラグ (DETACHED_PROCESS vs CREATE_NO_WINDOW) で競合してコンソールが出る。
+// wscript.exe //B（コンソールサブシステムを持たない GUI プロセス）経由で起動することで
+// コンソールウィンドウを完全に排除する。
 async function launchPS1(scriptLines) {
-  const tmpPath = join(app.getPath('temp'), `st-update-${Date.now()}.ps1`)
-  const bom = '﻿'
+  const ts     = Date.now()
+  const tmpPs1 = join(app.getPath('temp'), `st-update-${ts}.ps1`)
+  const tmpVbs = join(app.getPath('temp'), `st-update-${ts}.vbs`)
+
+  const bom    = '﻿'
   const header = [
     '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
     '$OutputEncoding = [System.Text.Encoding]::UTF8',
     '',
   ]
-  await writeFile(tmpPath, bom + [...header, ...scriptLines].join('\n'), 'utf-8')
-  // spawn + windowsHide: true で完全に非表示（exec は内部で cmd.exe を経由するためウィンドウが出る）
-  spawnChild('powershell.exe', [
-    '-WindowStyle', 'Hidden',
-    '-ExecutionPolicy', 'Bypass',
-    '-NonInteractive',
-    '-NoProfile',
-    '-File', tmpPath,
-  ], {
+  await writeFile(tmpPs1, bom + [...header, ...scriptLines].join('\n'), 'utf-8')
+
+  // VBScript: Run の第2引数 0 = ウィンドウ非表示, 第3引数 False = 非同期
+  const vbs = [
+    'Set oShell = CreateObject("WScript.Shell")',
+    `oShell.Run "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -NonInteractive -NoProfile -File " & Chr(34) & "${tmpPs1}" & Chr(34), 0, False`,
+  ].join('\r\n')
+  await writeFile(tmpVbs, vbs, 'utf-8')
+
+  spawnChild('wscript.exe', ['//B', tmpVbs], {
     detached: true,
     windowsHide: true,
     stdio: 'ignore',
