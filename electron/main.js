@@ -3,7 +3,7 @@ import { readFile, writeFile, mkdir, readdir, unlink, copyFile, appendFile } fro
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { existsSync } from 'fs'
-import { exec, spawn as spawnChild } from 'child_process'
+import { exec, spawn as spawnChild, execFileSync } from 'child_process'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const isDev = !app.isPackaged
@@ -430,16 +430,24 @@ async function autoInstallIfNeeded() {
   // 次回アップデート時の参照先として保存
   await saveUpdateSourcePath(exeDir)
 
-  await launchPS1([
-    `robocopy "${exeDir}" "${LOCAL_INSTALL_DIR}" /MIR /R:2 /W:1 /NFL /NDL /NJH /NJS /NC /NS /NP`,
-    'if ($LASTEXITCODE -ge 8) {',
-    '  Add-Type -AssemblyName System.Windows.Forms',
-    `  [System.Windows.Forms.MessageBox]::Show("インストールに失敗しました。\\n(code: $LASTEXITCODE)", "Study Tracker インストールエラー", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null`,
-    '} else {',
-    `  Start-Process "${LOCAL_EXE}"`,
-    '}',
-  ])
-  setTimeout(() => app.exit(0), 300)
+  // PS1 を使わず Node.js から直接 robocopy（日本語パスの文字コード問題を回避）
+  try {
+    execFileSync('robocopy', [
+      exeDir, LOCAL_INSTALL_DIR,
+      '/MIR', '/R:2', '/W:1',
+      '/NFL', '/NDL', '/NJH', '/NJS', '/NC', '/NS', '/NP',
+    ], { stdio: 'ignore', windowsHide: true })
+  } catch (e) {
+    if ((e.status ?? 0) >= 8) {
+      dialog.showErrorBox('Study Tracker インストールエラー',
+        `インストールに失敗しました (code: ${e.status})`)
+      app.exit(1)
+      return true
+    }
+  }
+
+  spawnChild(LOCAL_EXE, [], { detached: true, stdio: 'ignore' }).unref()
+  setTimeout(() => app.exit(0), 500)
   return true
 }
 
@@ -509,6 +517,51 @@ async function checkForUpdateManual() {
       detail: e.message,
       buttons: ['OK'],
     })
+  }
+}
+
+// ── 起動時チェック（buildNumber と builtAt 両方で比較）────────────────
+async function checkForUpdateOnStartup() {
+  if (isDev) return
+  try {
+    const sourcePath = await getUpdateSourcePath()
+    if (!sourcePath) return
+
+    const versionJsonPath = join(sourcePath, 'version.json')
+    if (!existsSync(versionJsonPath)) return
+
+    const [remote, local] = await Promise.all([
+      readFile(versionJsonPath,                   'utf-8').then(JSON.parse),
+      readFile(join(__dirname, 'build-info.json'), 'utf-8').then(JSON.parse),
+    ])
+
+    const remoteNum = remote.buildNumber ?? 0
+    const localNum  = local.buildNumber  ?? 0
+    // buildNumber が同じでも builtAt が違えば更新あり（開発中の再ビルド対応）
+    const newerByNum = remoteNum > localNum
+    const newerByAt  = remoteNum === localNum && remote.builtAt && local.builtAt && remote.builtAt !== local.builtAt
+
+    if (!newerByNum && !newerByAt) return
+
+    console.log(`[update] 起動時に新バージョン検知: build ${localNum} → ${remoteNum}`)
+
+    const { response } = await dialog.showMessageBox(mainWin, {
+      type: 'info',
+      title: '学習トラッカー - アップデート',
+      message: '新しいバージョンが利用可能です 🎉',
+      detail: [
+        `現在 : v${local.version  ?? '?'} (build ${localNum})`,
+        `最新 : v${remote.version ?? '?'} (build ${remoteNum})`,
+        '',
+        '今すぐ更新しますか？',
+      ].join('\n'),
+      buttons: ['今すぐ更新', '後で'],
+      defaultId: 0, cancelId: 1,
+    })
+
+    if (response === 0) await applyUpdate(sourcePath, remote.version ?? '?', remoteNum)
+  } catch (e) {
+    console.warn('[update] 起動時チェック失敗:', e.message)
   }
 }
 
@@ -768,7 +821,13 @@ if (!gotLock) {
     createWindow()
     createTray()
     mainWin.once('ready-to-show', () => {
-      setTimeout(() => checkForUpdate(), 1500)
+      // 起動時に即時チェック（builtAt で比較）
+      setTimeout(() => checkForUpdateOnStartup(), 1500)
+      // 以降は定期チェック（起動30秒後から3分ごと）
+      setTimeout(() => {
+        checkForUpdate()
+        setInterval(() => checkForUpdate(), 3 * 60 * 1000)
+      }, 30_000)
     })
     // 復習通知スケジュール（毎朝08:00）
     scheduleReviewNotification()

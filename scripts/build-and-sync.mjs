@@ -171,6 +171,15 @@ try {
 }
 console.log('[build-and-sync] 同期完了 ✓')
 
+// version.json を Node.js で直接コピー（Drive 仮想FSで robocopy がスキップする場合の保険）
+try {
+  const { copyFileSync } = await import('fs')
+  copyFileSync(path.join(srcDir, 'version.json'), path.join(destDir, 'version.json'))
+  console.log('[build-and-sync] version.json 直接コピー完了 ✓')
+} catch (e) {
+  console.warn('[build-and-sync] version.json 直接コピー失敗:', e.message)
+}
+
 // ── Step 6: AppData にも同期（開発者自身が常に最新版を実行するため）────
 // build-and-sync は Google Drive だけを更新するため、開発者の AppData が
 // 古いままになり「古いコードで更新処理が走る」ブートストラップ問題が起きる。
