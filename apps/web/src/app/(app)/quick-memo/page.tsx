@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { useDailyMemoStore } from '@/stores/dailyMemoStore';
+import { AddItemDialog } from '@/components/notion/AddItemDialog';
 
 const NotionEditor = dynamic(
   () => import('@/components/editor/NotionEditor').then((m) => ({ default: m.NotionEditor })),
@@ -52,6 +53,7 @@ export default function QuickMemoPage() {
   const [memoReady, setMemoReady] = useState(false);
   const [editorKey, setEditorKey] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
 
   // 日付リスト: 今日 + メモがある日（降順）
   const memoDateSet = new Set(memos.map((m) => m.id));
@@ -93,6 +95,7 @@ export default function QuickMemoPage() {
   };
 
   return (
+    <>
     <div className="flex h-full">
       {/* 日付リスト */}
       <div className="flex w-36 shrink-0 flex-col border-r border-gray-100 bg-gray-50">
@@ -136,7 +139,16 @@ export default function QuickMemoPage() {
               {formatDateHeading(selectedDate)}
             </h1>
           </div>
-          <span className="text-xs text-gray-400">{saving ? '保存中...' : '自動保存'}</span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-400">{saving ? '保存中...' : '自動保存'}</span>
+            <button
+              onClick={() => setAddDialogOpen(true)}
+              className="rounded-lg bg-brand-500 px-3 py-1 text-xs font-medium text-white hover:bg-brand-600"
+              title="NotionPlusを開いて学習アイテムを記録"
+            >
+              📚 記録
+            </button>
+          </div>
         </div>
 
         {/* エディタ */}
@@ -155,5 +167,10 @@ export default function QuickMemoPage() {
         )}
       </div>
     </div>
+
+    {addDialogOpen && user && (
+      <AddItemDialog uid={user.uid} onClose={() => setAddDialogOpen(false)} />
+    )}
+    </>
   );
 }
