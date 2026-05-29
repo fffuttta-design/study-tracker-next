@@ -3,7 +3,7 @@ import { readFile, writeFile, mkdir, readdir, unlink, copyFile } from 'fs/promis
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { existsSync } from 'fs'
-import { exec } from 'child_process'
+import { exec, spawn as spawnChild } from 'child_process'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const isDev = !app.isPackaged
@@ -291,14 +291,25 @@ async function launchPS1(scriptLines) {
     '',
   ]
   await writeFile(tmpPath, bom + [...header, ...scriptLines].join('\n'), 'utf-8')
-  // -WindowStyle Hidden でウィンドウを表示しない（完全バックグラウンド）
-  exec(`powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -NonInteractive -NoProfile -File "${tmpPath}"`)
+  // spawn + windowsHide: true で完全に非表示（exec は内部で cmd.exe を経由するためウィンドウが出る）
+  spawnChild('powershell.exe', [
+    '-WindowStyle', 'Hidden',
+    '-ExecutionPolicy', 'Bypass',
+    '-NonInteractive',
+    '-NoProfile',
+    '-File', tmpPath,
+  ], {
+    detached: true,
+    windowsHide: true,
+    stdio: 'ignore',
+  }).unref()
 }
 
 // ── アップデート適用（サイレント：ウィンドウなし・エラー時のみダイアログ）
 async function applyUpdate(sourcePath, newVersion, newBuildNum) {
   await launchPS1([
-    'Start-Sleep -Seconds 2',
+    // アプリ終了を待ってからコピー（終了まで最大5秒待機）
+    `$maxWait = 10; $i = 0; while ((Get-Process -Name '学習トラッカー' -ErrorAction SilentlyContinue) -and $i -lt $maxWait) { Start-Sleep -Milliseconds 500; $i++ }`,
     `robocopy "${sourcePath}" "${LOCAL_INSTALL_DIR}" /MIR /R:2 /W:1 /NFL /NDL /NJH /NJS /NC /NS /NP`,
     'if ($LASTEXITCODE -ge 8) {',
     // エラー時のみWindowsダイアログで通知
