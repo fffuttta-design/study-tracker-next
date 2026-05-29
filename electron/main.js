@@ -281,64 +281,31 @@ async function saveUpdateSourcePath(sourcePath) {
   await writeFile(cfgPath, JSON.stringify({ sourcePath }, null, 2), 'utf-8')
 }
 
-// ── PowerShell スクリプトを生成して実行（新規ウィンドウ）─────────────
+// ── PowerShell スクリプトを生成してバックグラウンドで実行（ウィンドウなし）
 async function launchPS1(scriptLines) {
   const tmpPath = join(app.getPath('temp'), `st-update-${Date.now()}.ps1`)
-  // BOM付きUTF-8で書き込み（PowerShellの日本語対応）
   const bom = '﻿'
   const header = [
     '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
     '$OutputEncoding = [System.Text.Encoding]::UTF8',
-    // Win32 API: コンソールウィンドウの閉じるボタン制御
-    // GetConsoleWindow は kernel32.dll、GetSystemMenu/EnableMenuItem は user32.dll
-    `Add-Type -Name 'WinBtn' -Namespace '' -MemberDefinition '[DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow(); [DllImport("user32.dll")] public static extern IntPtr GetSystemMenu(IntPtr hWnd, bool bRevert); [DllImport("user32.dll")] public static extern bool EnableMenuItem(IntPtr hMenu, uint uIDEnableItem, uint uEnable);'`,
-    // 万が一失敗しても後続処理をブロックしないよう try/catch でラップ
-    `function Disable-Close { try { [WinBtn]::EnableMenuItem([WinBtn]::GetSystemMenu([WinBtn]::GetConsoleWindow(), $false), 0xF060, 1) | Out-Null } catch {} }`,
-    `function Enable-Close  { try { [WinBtn]::EnableMenuItem([WinBtn]::GetSystemMenu([WinBtn]::GetConsoleWindow(), $false), 0xF060, 0) | Out-Null } catch {} }`,
     '',
   ]
   await writeFile(tmpPath, bom + [...header, ...scriptLines].join('\n'), 'utf-8')
-  // cmd /c start で新しい PowerShell ウィンドウを開く
-  exec(`cmd /c start powershell.exe -ExecutionPolicy Bypass -NoProfile -File "${tmpPath}"`)
+  // -WindowStyle Hidden でウィンドウを表示しない（完全バックグラウンド）
+  exec(`powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -NonInteractive -NoProfile -File "${tmpPath}"`)
 }
 
-// ── アップデート適用（PS1で進捗表示してからアプリ終了）──────────────
+// ── アップデート適用（サイレント：ウィンドウなし・エラー時のみダイアログ）
 async function applyUpdate(sourcePath, newVersion, newBuildNum) {
   await launchPS1([
-    // 更新中: 閉じるボタン無効 + タイトル変更
-    `Disable-Close`,
-    `$host.UI.RawUI.WindowTitle = "⚠ Study Tracker 更新中... 閉じないでください"`,
-    'Write-Host ""',
-    `Write-Host "=====================================" -ForegroundColor Cyan`,
-    `Write-Host "  Study Tracker  アップデート" -ForegroundColor Cyan`,
-    `Write-Host "=====================================" -ForegroundColor Cyan`,
-    'Write-Host ""',
-    `Write-Host "[1/3] アプリを終了しました" -ForegroundColor Green`,
     'Start-Sleep -Seconds 2',
-    `Write-Host "[2/3] 最新版をコピー中... (v${newVersion} / build ${newBuildNum})" -ForegroundColor Yellow`,
     `robocopy "${sourcePath}" "${LOCAL_INSTALL_DIR}" /MIR /R:2 /W:1 /NFL /NDL /NJH /NJS /NC /NS /NP`,
-    // コピー失敗
     'if ($LASTEXITCODE -ge 8) {',
-    '  Enable-Close',
-    `  $host.UI.RawUI.WindowTitle = "❌ Study Tracker 更新失敗"`,
-    '  Write-Host ""',
-    '  Write-Host "  [エラー] コピーに失敗しました (code: $LASTEXITCODE)" -ForegroundColor Red',
-    '  Write-Host "  トレイメニューの「最新版を確認」から再試行できます。" -ForegroundColor Gray',
-    '  Write-Host ""',
-    '  Read-Host "  このウィンドウを閉じてください（Enter でも閉じます）"',
+    // エラー時のみWindowsダイアログで通知
+    '  Add-Type -AssemblyName System.Windows.Forms',
+    `  [System.Windows.Forms.MessageBox]::Show("アップデートに失敗しました。\\nトレイメニューの「最新版を確認」から再試行してください。\\n(code: $LASTEXITCODE)", "Study Tracker 更新エラー", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null`,
     '} else {',
-    // コピー成功
-    `  Write-Host "    コピーしました ✓" -ForegroundColor Green`,
-    '  Start-Sleep -Seconds 1',
-    `  Write-Host "[3/3] アプリを起動します..." -ForegroundColor Cyan`,
     `  Start-Process "${LOCAL_EXE}"`,
-    '  Start-Sleep -Seconds 1',
-    // 完了: タイトル更新 + ログ表示 → 3秒後に自動クローズ
-    `  $host.UI.RawUI.WindowTitle = "✅ Study Tracker 更新完了"`,
-    '  Write-Host ""',
-    `  Write-Host "  更新が完了しました。(v${newVersion} / build ${newBuildNum})" -ForegroundColor Green`,
-    '  Write-Host "  3秒後に自動で閉じます..." -ForegroundColor Gray',
-    '  Start-Sleep -Seconds 3',
     '}',
   ])
   setTimeout(() => app.exit(0), 300)
@@ -361,34 +328,12 @@ async function autoInstallIfNeeded() {
   await saveUpdateSourcePath(exeDir)
 
   await launchPS1([
-    `Disable-Close`,
-    `$host.UI.RawUI.WindowTitle = "⚠ Study Tracker インストール中... 閉じないでください"`,
-    'Write-Host ""',
-    `Write-Host "=====================================" -ForegroundColor Cyan`,
-    `Write-Host "  Study Tracker  インストール" -ForegroundColor Cyan`,
-    `Write-Host "=====================================" -ForegroundColor Cyan`,
-    'Write-Host ""',
-    `Write-Host "[1/2] ローカルにインストール中..." -ForegroundColor Yellow`,
     `robocopy "${exeDir}" "${LOCAL_INSTALL_DIR}" /MIR /R:2 /W:1 /NFL /NDL /NJH /NJS /NC /NS /NP`,
     'if ($LASTEXITCODE -ge 8) {',
-    '  Enable-Close',
-    `  $host.UI.RawUI.WindowTitle = "❌ Study Tracker インストール失敗"`,
-    '  Write-Host ""',
-    '  Write-Host "  [エラー] インストールに失敗しました (code: $LASTEXITCODE)" -ForegroundColor Red',
-    '  Write-Host ""',
-    '  Read-Host "  このウィンドウを閉じてください（Enter でも閉じます）"',
+    '  Add-Type -AssemblyName System.Windows.Forms',
+    `  [System.Windows.Forms.MessageBox]::Show("インストールに失敗しました。\\n(code: $LASTEXITCODE)", "Study Tracker インストールエラー", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null`,
     '} else {',
-    `  Write-Host "    インストールしました ✓" -ForegroundColor Green`,
-    '  Start-Sleep -Seconds 1',
-    `  Write-Host "[2/2] アプリを起動します..." -ForegroundColor Cyan`,
     `  Start-Process "${LOCAL_EXE}"`,
-    '  Start-Sleep -Seconds 1',
-    '  Enable-Close',
-    `  $host.UI.RawUI.WindowTitle = "✅ Study Tracker インストール完了"`,
-    '  Write-Host ""',
-    '  Write-Host "  インストールが完了しました。" -ForegroundColor Green',
-    '  Write-Host ""',
-    '  Read-Host "  このウィンドウを閉じてください（Enter でも閉じます）"',
     '}',
   ])
   setTimeout(() => app.exit(0), 300)

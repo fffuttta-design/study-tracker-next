@@ -307,12 +307,10 @@ function NotionPageSidebar({ user }: { user: User }) {
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const addMenuRef = useRef<HTMLDivElement>(null);
 
+  // お気に入りのみ表示（BOOKは除外）
   const roots = pages
-    .filter((p) => !p.parentId && p.id !== WORKSPACE_ID && p.type !== 'book')
-    .sort((a, b) => {
-      if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1;
-      return a.order - b.order;
-    });
+    .filter((p) => !p.parentId && p.id !== WORKSPACE_ID && p.type !== 'book' && p.isFavorite)
+    .sort((a, b) => a.order - b.order);
 
   useEffect(() => {
     if (!addMenuOpen) return;
@@ -425,34 +423,17 @@ function NotionPageSidebar({ user }: { user: User }) {
         </div>
       </div>
 
-      {/* ページリスト */}
+      {/* ページリスト（お気に入りのみ） */}
       <nav className="flex-1 overflow-y-auto px-1 py-1">
         {loading && <p className="px-3 py-2 text-xs text-gray-400">読込中...</p>}
 
-        {/* お気に入りセクション */}
-        {roots.some((p) => p.isFavorite) && (
-          <div className="mb-1">
-            <p className="px-2 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-yellow-500">★ お気に入り</p>
-            {roots.filter((p) => p.isFavorite && p.type !== 'book').map((page) => (
-              <Link
-                key={`fav-${page.id}`}
-                href={`/notion-plus/${page.id}`}
-                onContextMenu={(e) => { e.preventDefault(); handleCtxMenu(e, page); }}
-                className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 pl-4 text-xs transition-colors ${
-                  page.id === currentId
-                    ? 'bg-white font-semibold text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:bg-white hover:text-gray-900'
-                }`}
-              >
-                <PageIcon icon={page.icon} />
-                <span className="min-w-0 flex-1 truncate">{page.title || 'Untitled'}</span>
-              </Link>
-            ))}
-            <div className="mx-2 mb-1 mt-1 border-b border-gray-200" />
-          </div>
+        {!loading && roots.length === 0 && (
+          <p className="px-3 py-4 text-center text-[11px] text-gray-400">
+            ★ をつけたノートが<br />ここに表示されます
+          </p>
         )}
 
-        {/* 全ページツリー（ドラッグで並び替え可能） */}
+        {/* お気に入りページ一覧（ドラッグで並び替え可能） */}
         <RootPageList
           roots={roots}
           pages={pages}
