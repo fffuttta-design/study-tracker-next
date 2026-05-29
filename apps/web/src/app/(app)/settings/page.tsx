@@ -332,6 +332,8 @@ function VersionSection({ isElectron }: { isElectron: boolean }) {
   const [checkStatus, setCheckStatus] = useState<CheckStatus>('idle');
   const [latest, setLatest] = useState<VersionInfo | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
+  // Electron では APP_VERSION（Vercelキャッシュ由来）ではなくメインプロセスの build-info.json から取得した版数を使う
+  const [displayVersion, setDisplayVersion] = useState<string>(APP_VERSION);
 
   const checkVersion = useCallback(async () => {
     setCheckStatus('checking');
@@ -341,6 +343,8 @@ function VersionSection({ isElectron }: { isElectron: boolean }) {
         // Electron: ローカルの version.json と比較
         const result = await window.electronAPI?.checkForUpdate?.();
         if (!result) { setCheckStatus('error'); setErrorMsg('チェックできませんでした'); return; }
+        // メインプロセスの build-info.json から正確な現在版数を取得（Vercelキャッシュに依存しない）
+        if (result.current?.version) setDisplayVersion(`v${result.current.version}`);
         if (result.hasUpdate && result.latest) {
           setLatest(result.latest);
           setCheckStatus('available');
@@ -370,7 +374,7 @@ function VersionSection({ isElectron }: { isElectron: boolean }) {
       <SectionHeader title="バージョン情報" description="アプリのバージョンとアップデート確認" />
       <Card title="現在のバージョン">
         <div className="space-y-1 pb-2">
-          <InfoRow label="バージョン" value={APP_VERSION} />
+          <InfoRow label="バージョン" value={displayVersion} />
           <InfoRow label="Firebase プロジェクト" value="time-tracker-app-72eba" />
           <InfoRow label="プラットフォーム" value={isElectron ? 'Windows デスクトップ' : 'Web'} />
         </div>
@@ -393,7 +397,7 @@ function VersionSection({ isElectron }: { isElectron: boolean }) {
                 </p>
               )}
               {checkStatus === 'latest' && (
-                <p className="text-xs text-green-600">✅ 最新版です（{APP_VERSION}）</p>
+                <p className="text-xs text-green-600">✅ 最新版です（{displayVersion}）</p>
               )}
               {checkStatus === 'available' && latest && (
                 <div className="rounded-lg bg-brand-50 px-3 py-2">
