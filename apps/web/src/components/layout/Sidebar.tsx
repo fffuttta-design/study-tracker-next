@@ -628,10 +628,6 @@ export function Sidebar({ user }: SidebarProps) {
           <span>設定</span>
         </Link>
         <div className="flex items-center gap-2 rounded-md px-2 py-2">
-          {user.photoURL && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={user.photoURL} alt="" className="h-7 w-7 rounded-full" />
-          )}
           <div className="min-w-0 flex-1">
             <p className="truncate text-xs font-medium text-gray-700">{user.displayName}</p>
           </div>

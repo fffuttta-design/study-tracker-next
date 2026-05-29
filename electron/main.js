@@ -288,6 +288,30 @@ function createWindow() {
     return { action: 'deny' }
   })
 
+  // ── ポップアップ内の window.open・ナビゲーションを全追跡 ─────────────
+  mainWin.webContents.on('did-create-window', (popupWin, details) => {
+    debugLog(`[did-create-window] url="${details.url}"`)
+
+    // ポップアップ内で更に window.open が呼ばれたら記録して deny
+    popupWin.webContents.setWindowOpenHandler(({ url }) => {
+      debugLog(`[popup-window.open] url="${url}"`)
+      return { action: 'deny' }
+    })
+
+    // ポップアップ内のナビゲーションを全記録
+    popupWin.webContents.on('will-navigate', (_, url) => {
+      debugLog(`[popup-will-navigate] url="${url}"`)
+    })
+    popupWin.webContents.on('did-navigate', (_, url) => {
+      debugLog(`[popup-did-navigate] url="${url}"`)
+    })
+  })
+
+  // メインウィンドウのナビゲーションも記録
+  mainWin.webContents.on('will-navigate', (_, url) => {
+    debugLog(`[main-will-navigate] url="${url}"`)
+  })
+
   if (isDev) mainWin.webContents.openDevTools()
 }
 
@@ -466,10 +490,17 @@ async function checkForUpdate() {
     const versionJsonPath = join(sourcePath, 'version.json')
     if (!existsSync(versionJsonPath)) { console.log('[update] version.json が Drive に見つかりません'); return }
 
+    const buildInfoPath = join(__dirname, 'build-info.json')
+    debugLog(`[checkForUpdate] __dirname="${__dirname}"`)
+    debugLog(`[checkForUpdate] buildInfoPath="${buildInfoPath}"`)
+
     const [remote, local] = await Promise.all([
-      readFile(versionJsonPath,                   'utf-8').then(JSON.parse),
-      readFile(join(__dirname, 'build-info.json'), 'utf-8').then(JSON.parse),
+      readFile(versionJsonPath, 'utf-8').then(JSON.parse),
+      readFile(buildInfoPath,   'utf-8').then(JSON.parse),
     ])
+
+    debugLog(`[checkForUpdate] local=${JSON.stringify(local)}`)
+    debugLog(`[checkForUpdate] remote=${JSON.stringify(remote)}`)
 
     const remoteNum = remote.buildNumber ?? 0
     const localNum  = local.buildNumber  ?? 0
@@ -692,6 +723,9 @@ if (!gotLock) {
   })
 
   app.whenReady().then(async () => {
+    debugLog(`[startup] __dirname="${__dirname}"`)
+    debugLog(`[startup] exe="${app.getPath('exe')}"`)
+    debugLog(`[startup] userData="${app.getPath('userData')}"`)
     Menu.setApplicationMenu(null)
     await loadDriveConfig()
 
