@@ -290,9 +290,11 @@ async function launchPS1(scriptLines) {
     '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
     '$OutputEncoding = [System.Text.Encoding]::UTF8',
     // Win32 API: コンソールウィンドウの閉じるボタン制御
-    `Add-Type -Name 'WinBtn' -Namespace '' -MemberDefinition '[DllImport("user32.dll")] public static extern IntPtr GetConsoleWindow(); [DllImport("user32.dll")] public static extern IntPtr GetSystemMenu(IntPtr hWnd, bool bRevert); [DllImport("user32.dll")] public static extern bool EnableMenuItem(IntPtr hMenu, uint uIDEnableItem, uint uEnable);'`,
-    `function Disable-Close { [WinBtn]::EnableMenuItem([WinBtn]::GetSystemMenu([WinBtn]::GetConsoleWindow(), $false), 0xF060, 1) | Out-Null }`,
-    `function Enable-Close  { [WinBtn]::EnableMenuItem([WinBtn]::GetSystemMenu([WinBtn]::GetConsoleWindow(), $false), 0xF060, 0) | Out-Null }`,
+    // GetConsoleWindow は kernel32.dll、GetSystemMenu/EnableMenuItem は user32.dll
+    `Add-Type -Name 'WinBtn' -Namespace '' -MemberDefinition '[DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow(); [DllImport("user32.dll")] public static extern IntPtr GetSystemMenu(IntPtr hWnd, bool bRevert); [DllImport("user32.dll")] public static extern bool EnableMenuItem(IntPtr hMenu, uint uIDEnableItem, uint uEnable);'`,
+    // 万が一失敗しても後続処理をブロックしないよう try/catch でラップ
+    `function Disable-Close { try { [WinBtn]::EnableMenuItem([WinBtn]::GetSystemMenu([WinBtn]::GetConsoleWindow(), $false), 0xF060, 1) | Out-Null } catch {} }`,
+    `function Enable-Close  { try { [WinBtn]::EnableMenuItem([WinBtn]::GetSystemMenu([WinBtn]::GetConsoleWindow(), $false), 0xF060, 0) | Out-Null } catch {} }`,
     '',
   ]
   await writeFile(tmpPath, bom + [...header, ...scriptLines].join('\n'), 'utf-8')

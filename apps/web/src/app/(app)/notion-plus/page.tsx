@@ -59,7 +59,11 @@ export default function NotionPlusPage() {
                 href={`/notion-plus/${page.id}`}
                 className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100"
               >
-                <span className="text-base leading-none">{page.icon || '📄'}</span>
+                {(page.icon ?? '').startsWith('http') || (page.icon ?? '').startsWith('data:')
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={page.icon} alt="" className="h-5 w-5 shrink-0 rounded object-cover" />
+                  : <span className="text-base leading-none">{page.icon || '📄'}</span>
+                }
                 <span className="flex-1 truncate">{page.title || '無題'}</span>
                 {page.isFavorite && <span className="text-xs text-yellow-500">★</span>}
               </Link>

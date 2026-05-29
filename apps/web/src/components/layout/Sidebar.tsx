@@ -375,41 +375,53 @@ function NotionPageSidebar({ user }: { user: User }) {
           <span className="text-sm font-semibold text-gray-800">NotionPlus</span>
         </Link>
         <div className="flex items-center gap-0.5">
-        <div ref={addMenuRef} className="relative">
-          <button
-            onClick={() => setAddMenuOpen((v) => !v)}
-            title="新規作成"
-            className="rounded p-1 text-lg leading-none text-gray-400 hover:bg-gray-200 hover:text-brand-500"
+          {/* 設定ボタン */}
+          <Link
+            href="/notion-plus/settings"
+            title="NotionPlus設定"
+            className={`rounded p-1 text-sm transition-colors ${
+              pathname === '/notion-plus/settings'
+                ? 'bg-gray-200 text-gray-700'
+                : 'text-gray-400 hover:bg-gray-200 hover:text-gray-700'
+            }`}
           >
-            +
+            ⚙️
+          </Link>
+          <div ref={addMenuRef} className="relative">
+            <button
+              onClick={() => setAddMenuOpen((v) => !v)}
+              title="新規作成"
+              className="rounded p-1 text-lg leading-none text-gray-400 hover:bg-gray-200 hover:text-brand-500"
+            >
+              +
+            </button>
+            {addMenuOpen && (
+              <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
+                <button
+                  onClick={addPage}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <span>📄</span>
+                  <span>ページを作成</span>
+                </button>
+                <button
+                  onClick={addDatabase}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <span>📊</span>
+                  <span>データベースを作成</span>
+                </button>
+              </div>
+            )}
+          </div>
+          {/* 閉じるボタン */}
+          <button
+            onClick={() => setOpen(false)}
+            title="サイドバーを閉じる"
+            className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700"
+          >
+            ‹
           </button>
-          {addMenuOpen && (
-            <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
-              <button
-                onClick={addPage}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
-              >
-                <span>📄</span>
-                <span>ページを作成</span>
-              </button>
-              <button
-                onClick={addDatabase}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
-              >
-                <span>📊</span>
-                <span>データベースを作成</span>
-              </button>
-            </div>
-          )}
-        </div>
-        {/* 閉じるボタン */}
-        <button
-          onClick={() => setOpen(false)}
-          title="サイドバーを閉じる"
-          className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700"
-        >
-          ‹
-        </button>
         </div>
       </div>
 
@@ -474,32 +486,15 @@ function NotionPageSidebar({ user }: { user: User }) {
         )}
       </nav>
 
-      {/* フッター: 学習リストに戻る + 設定 + ユーザー */}
+      {/* フッター: 学習リストに戻るのみ */}
       <div className="border-t border-gray-100">
-        <div className="flex items-center justify-between">
-          <Suspense fallback={
-            <Link href="/learning" className="flex items-center gap-2 px-3 py-2.5 text-xs text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700">
-              <span>←</span><span>学習リストに戻る</span>
-            </Link>
-          }>
-            <BackToLearningLink />
-          </Suspense>
-          <Link
-            href="/notion-plus/settings"
-            title="NotionPlus設定"
-            className={`mr-2 rounded p-1.5 text-sm transition-colors ${
-              pathname === '/notion-plus/settings'
-                ? 'bg-gray-200 text-gray-700'
-                : 'text-gray-400 hover:bg-gray-200 hover:text-gray-700'
-            }`}
-          >
-            ⚙️
+        <Suspense fallback={
+          <Link href="/learning" className="flex items-center gap-2 px-3 py-2.5 text-xs text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700">
+            <span>←</span><span>学習リストに戻る</span>
           </Link>
-        </div>
-        <div className="border-t border-gray-100 py-1">
-          <UserFooter user={user} />
-        </div>
-        <p className="px-4 pb-2 text-[10px] text-gray-300">{APP_VERSION}</p>
+        }>
+          <BackToLearningLink />
+        </Suspense>
       </div>
     </aside>
   );
