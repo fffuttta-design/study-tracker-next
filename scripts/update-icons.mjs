@@ -74,10 +74,11 @@ for (const { dir, size } of mipmapSizes) {
     .png()
     .toFile(path.join(destDir, 'ic_launcher.png'))
 
-  // ic_launcher_round：背景色の円 + アイコン（85%・透明コーナー保持）を中央合成
+  // ic_launcher_round：背景色の円 + アイコン（72%・透明コーナー保持）を中央合成
   // icon.png はすでに角が透明（checkerboard）なので透明チャンネルを保持したまま乗せる
   // → 角丸の形がそのまま背景に溶け込み、白い枠が出ない
-  const iconSize = Math.round(size * 0.85)
+  // 85%だと端が切れるため72%に縮小してアイコン全体が円内に収まるようにする
+  const iconSize = Math.round(size * 0.72)
   const offset   = Math.round((size - iconSize) / 2)
 
   const bgCircleSvg = `<svg width="${size}" height="${size}"><circle cx="${size / 2}" cy="${size / 2}" r="${size / 2}" fill="${bgColor}"/></svg>`
@@ -105,13 +106,13 @@ for (const { dir, size } of mipmapSizes) {
 //
 // iconSize = canvas の 55%（ロゴが端まであるiOSアイコン素材の場合、
 // 66.7%では円マスクに引っかかるため余白を多めに取る）
-// iconSize = canvas の 85%（透明コーナー保持 → 角丸が背景に自然に溶け込む）
+// iconSize = canvas の 72%（透明コーナー保持 → 角丸が背景に自然に溶け込む）
 const adaptiveSizes = [
-  { dir: 'mipmap-mdpi',    canvas: 108, iconSize: 92  },
-  { dir: 'mipmap-hdpi',    canvas: 162, iconSize: 138 },
-  { dir: 'mipmap-xhdpi',   canvas: 216, iconSize: 184 },
-  { dir: 'mipmap-xxhdpi',  canvas: 324, iconSize: 275 },
-  { dir: 'mipmap-xxxhdpi', canvas: 432, iconSize: 367 },
+  { dir: 'mipmap-mdpi',    canvas: 108, iconSize: 78  },
+  { dir: 'mipmap-hdpi',    canvas: 162, iconSize: 117 },
+  { dir: 'mipmap-xhdpi',   canvas: 216, iconSize: 156 },
+  { dir: 'mipmap-xxhdpi',  canvas: 324, iconSize: 233 },
+  { dir: 'mipmap-xxxhdpi', canvas: 432, iconSize: 311 },
 ]
 
 console.log('[update-icons] Android Adaptive Icon フォアグラウンドを生成中...')
