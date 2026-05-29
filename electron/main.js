@@ -331,13 +331,12 @@ async function applyUpdate(sourcePath, newVersion, newBuildNum) {
     `  Write-Host "[3/3] アプリを起動します..." -ForegroundColor Cyan`,
     `  Start-Process "${LOCAL_EXE}"`,
     '  Start-Sleep -Seconds 1',
-    // 完了: 閉じるボタン有効 + 完了メッセージ
-    '  Enable-Close',
+    // 完了: タイトル更新 + ログ表示 → 3秒後に自動クローズ
     `  $host.UI.RawUI.WindowTitle = "✅ Study Tracker 更新完了"`,
     '  Write-Host ""',
     `  Write-Host "  更新が完了しました。(v${newVersion} / build ${newBuildNum})" -ForegroundColor Green`,
-    '  Write-Host ""',
-    '  Read-Host "  このウィンドウを閉じてください（Enter でも閉じます）"',
+    '  Write-Host "  3秒後に自動で閉じます..." -ForegroundColor Gray',
+    '  Start-Sleep -Seconds 3',
     '}',
   ])
   setTimeout(() => app.exit(0), 300)
