@@ -31,10 +31,10 @@ function PageIcon({ icon }: { icon: string }) {
   return <span className="shrink-0 text-sm leading-none">{icon}</span>;
 }
 
-// currentId が parentId の子孫かどうかを確認し、直接の子ページIDを返す
+// currentId が parentId の子孫かどうかを確認し、直接の子ページIDを返す（BOOKは除外）
 function findActiveChild(pages: NotionPage[], parentId: string, currentId: string): string | null {
   for (const p of pages) {
-    if (p.parentId !== parentId) continue;
+    if (p.parentId !== parentId || p.type === 'book') continue;
     if (p.id === currentId) return p.id;
     const found = findActiveChild(pages, p.id, currentId);
     if (found !== null) return p.id;
@@ -308,7 +308,7 @@ function NotionPageSidebar({ user }: { user: User }) {
   const addMenuRef = useRef<HTMLDivElement>(null);
 
   const roots = pages
-    .filter((p) => !p.parentId && p.id !== WORKSPACE_ID)
+    .filter((p) => !p.parentId && p.id !== WORKSPACE_ID && p.type !== 'book')
     .sort((a, b) => {
       if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1;
       return a.order - b.order;
@@ -433,7 +433,7 @@ function NotionPageSidebar({ user }: { user: User }) {
         {roots.some((p) => p.isFavorite) && (
           <div className="mb-1">
             <p className="px-2 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-yellow-500">★ お気に入り</p>
-            {roots.filter((p) => p.isFavorite).map((page) => (
+            {roots.filter((p) => p.isFavorite && p.type !== 'book').map((page) => (
               <Link
                 key={`fav-${page.id}`}
                 href={`/notion-plus/${page.id}`}
