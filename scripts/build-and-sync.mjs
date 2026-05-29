@@ -179,7 +179,7 @@ const localInstallDir = path.join(process.env.LOCALAPPDATA || '', 'StudyTracker'
 const localExePath    = path.join(localInstallDir, '学習トラッカー.exe')
 
 // AppData 自動同期（更新テスト時は下の行をコメントアウト）
-const SYNC_APPDATA = false  // ← true にすると毎ビルド時に AppData も自動更新
+const SYNC_APPDATA = true   // ← true にすると毎ビルド時に AppData も自動更新
 
 if (SYNC_APPDATA && existsSync(localInstallDir)) {
   console.log(`[build-and-sync] AppData にも同期中...`)
