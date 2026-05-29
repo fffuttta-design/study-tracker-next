@@ -171,10 +171,16 @@ try {
 }
 console.log('[build-and-sync] 同期完了 ✓')
 
-// ── Step 6: アプリを再起動 ────────────────────────────────────────
-const exeLaunchPath = path.join(destDir, '学習トラッカー.exe')
+// ── Step 6: アプリを再起動（ローカルインストール優先）───────────────
+// ローカルインストール済みなら AppData から起動、なければ Drive から起動
+const localInstallDir = path.join(process.env.LOCALAPPDATA || '', 'StudyTracker')
+const localExePath    = path.join(localInstallDir, '学習トラッカー.exe')
+const driveExePath    = path.join(destDir, '学習トラッカー.exe')
+const exeLaunchPath   = existsSync(localExePath) ? localExePath : driveExePath
+
 if (existsSync(exeLaunchPath)) {
-  console.log('[build-and-sync] アプリを再起動...')
+  const launchFrom = existsSync(localExePath) ? 'ローカル (AppData)' : 'Drive (初回)'
+  console.log(`[build-and-sync] アプリを再起動 [${launchFrom}]...`)
   spawn(exeLaunchPath, [], { detached: true, stdio: 'ignore' }).unref()
   console.log(`[build-and-sync] 起動完了 ✓ (v${newVersion} / build ${newBuildNumber})\n`)
 }

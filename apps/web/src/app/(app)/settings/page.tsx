@@ -417,9 +417,13 @@ function VersionSection({ isElectron }: { isElectron: boolean }) {
           </div>
 
           <div className="flex shrink-0 flex-col gap-2">
-            {checkStatus === 'available' && isElectron && (
+            {checkStatus === 'available' && isElectron && latest && (
               <button
-                onClick={() => window.electronAPI?.applyUpdate?.()}
+                onClick={() => window.electronAPI?.applyUpdate?.({
+                  sourcePath:  (latest as any).sourcePath,
+                  version:     latest.version,
+                  buildNumber: latest.buildNumber,
+                })}
                 className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600"
               >
                 今すぐ更新

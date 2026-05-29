@@ -24,5 +24,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setAutoLaunch:       (enable) => ipcRenderer.send('set-auto-launch', enable),
   // アップデート
   checkForUpdate:      () => ipcRenderer.invoke('check-for-update'),
-  applyUpdate:         () => ipcRenderer.send('apply-update'),
+  applyUpdate:         (arg) => ipcRenderer.send('apply-update', arg),
 })

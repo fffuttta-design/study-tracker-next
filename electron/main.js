@@ -3,9 +3,15 @@ import { readFile, writeFile, mkdir, readdir, unlink, copyFile } from 'fs/promis
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { existsSync } from 'fs'
+import { exec } from 'child_process'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const isDev = !app.isPackaged
+
+// ── ローカルインストール先 ────────────────────────────────────────────
+// Drive から起動した場合に自動で AppData にインストールし、以降はそこから起動する
+const LOCAL_INSTALL_DIR = join(process.env.LOCALAPPDATA || '', 'StudyTracker')
+const LOCAL_EXE         = join(LOCAL_INSTALL_DIR, '学習トラッカー.exe')
 
 // ── URL ───────────────────────────────────────────────────────────
 // デプロイ後に VERCEL_URL を実際の URL に書き換えてください
@@ -254,22 +260,123 @@ function createWindow() {
   if (isDev) mainWin.webContents.openDevTools()
 }
 
-// ── バージョンチェック（Driveの version.json と比較）─────────────────
-async function checkForUpdate() {
+// ── ローカルインストール設定の永続化 ─────────────────────────────────
+const UPDATE_SOURCE_CONFIG = () => join(app.getPath('userData'), 'update-source.json')
+
+async function getUpdateSourcePath() {
   try {
-    const exeDir          = dirname(app.getPath('exe'))
-    const versionJsonPath = join(exeDir, 'version.json')
-    if (!existsSync(versionJsonPath)) return
+    const cfg = JSON.parse(await readFile(UPDATE_SOURCE_CONFIG(), 'utf-8'))
+    return typeof cfg.sourcePath === 'string' ? cfg.sourcePath : null
+  } catch { return null }
+}
+
+async function saveUpdateSourcePath(sourcePath) {
+  const cfgPath = UPDATE_SOURCE_CONFIG()
+  await mkdir(dirname(cfgPath), { recursive: true })
+  await writeFile(cfgPath, JSON.stringify({ sourcePath }, null, 2), 'utf-8')
+}
+
+// ── PowerShell スクリプトを生成して実行（新規ウィンドウ）─────────────
+async function launchPS1(scriptLines) {
+  const tmpPath = join(app.getPath('temp'), `st-update-${Date.now()}.ps1`)
+  // BOM付きUTF-8で書き込み（PowerShellの日本語対応）
+  const bom = '﻿'
+  const header = [
+    '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+    '$OutputEncoding = [System.Text.Encoding]::UTF8',
+    '',
+  ]
+  await writeFile(tmpPath, bom + [...header, ...scriptLines].join('\n'), 'utf-8')
+  // cmd /c start で新しい PowerShell ウィンドウを開く
+  exec(`cmd /c start powershell.exe -ExecutionPolicy Bypass -NoProfile -File "${tmpPath}"`)
+}
+
+// ── アップデート適用（PS1で進捗表示してからアプリ終了）──────────────
+async function applyUpdate(sourcePath, newVersion, newBuildNum) {
+  await launchPS1([
+    'Write-Host ""',
+    `Write-Host "=====================================" -ForegroundColor Cyan`,
+    `Write-Host "  Study Tracker  アップデート" -ForegroundColor Cyan`,
+    `Write-Host "=====================================" -ForegroundColor Cyan`,
+    'Write-Host ""',
+    `Write-Host "[1/3] アプリを終了しました" -ForegroundColor Green`,
+    'Start-Sleep -Seconds 2',
+    `Write-Host "[2/3] 最新版をコピー中... (v${newVersion} / build ${newBuildNum})" -ForegroundColor Yellow`,
+    `robocopy "${sourcePath}" "${LOCAL_INSTALL_DIR}" /MIR /R:2 /W:1 /NFL /NDL /NJH /NJS /NC /NS /NP`,
+    'if ($LASTEXITCODE -ge 8) {',
+    '  Write-Host ""',
+    '  Write-Host "  [エラー] コピーに失敗しました (code: $LASTEXITCODE)" -ForegroundColor Red',
+    '  Read-Host "  Enterキーで閉じる"',
+    '  exit 1',
+    '}',
+    `Write-Host "    コピーしました ✓" -ForegroundColor Green`,
+    'Start-Sleep -Seconds 1',
+    `Write-Host "[3/3] アプリを起動します..." -ForegroundColor Cyan`,
+    `Start-Process "${LOCAL_EXE}"`,
+    'Start-Sleep -Seconds 2',
+  ])
+  setTimeout(() => app.exit(0), 300)
+}
+
+// ── 初回: Drive から起動された場合に AppData へ自動インストール ───────
+async function autoInstallIfNeeded() {
+  if (isDev) return false
+
+  const exeDir = dirname(app.getPath('exe'))
+
+  // すでに AppData から起動している → 何もしない
+  if (exeDir.toLowerCase().startsWith(LOCAL_INSTALL_DIR.toLowerCase())) return false
+
+  console.log(`[install] Drive実行を検知 → ローカルインストール開始`)
+  console.log(`[install]   元: ${exeDir}`)
+  console.log(`[install]   先: ${LOCAL_INSTALL_DIR}`)
+
+  // 次回アップデート時の参照先として保存
+  await saveUpdateSourcePath(exeDir)
+
+  await launchPS1([
+    'Write-Host ""',
+    `Write-Host "=====================================" -ForegroundColor Cyan`,
+    `Write-Host "  Study Tracker  インストール" -ForegroundColor Cyan`,
+    `Write-Host "=====================================" -ForegroundColor Cyan`,
+    'Write-Host ""',
+    `Write-Host "[1/2] ローカルにインストール中..." -ForegroundColor Yellow`,
+    `robocopy "${exeDir}" "${LOCAL_INSTALL_DIR}" /MIR /R:2 /W:1 /NFL /NDL /NJH /NJS /NC /NS /NP`,
+    'if ($LASTEXITCODE -ge 8) {',
+    '  Write-Host ""',
+    '  Write-Host "  [エラー] インストールに失敗しました (code: $LASTEXITCODE)" -ForegroundColor Red',
+    '  Read-Host "  Enterキーで閉じる"',
+    '  exit 1',
+    '}',
+    `Write-Host "    インストールしました ✓" -ForegroundColor Green`,
+    'Start-Sleep -Seconds 1',
+    `Write-Host "[2/2] アプリを起動します..." -ForegroundColor Cyan`,
+    `Start-Process "${LOCAL_EXE}"`,
+    'Start-Sleep -Seconds 2',
+  ])
+  setTimeout(() => app.exit(0), 300)
+  return true
+}
+
+// ── バージョンチェック（update-source.json の Drive パスと比較）────────
+async function checkForUpdate() {
+  if (isDev) return
+  try {
+    const sourcePath = await getUpdateSourcePath()
+    if (!sourcePath) { console.log('[update] update-source.json なし → スキップ'); return }
+
+    const versionJsonPath = join(sourcePath, 'version.json')
+    if (!existsSync(versionJsonPath)) { console.log('[update] version.json が Drive に見つかりません'); return }
 
     const [remote, local] = await Promise.all([
-      readFile(versionJsonPath,                    'utf-8').then(JSON.parse),
-      readFile(join(__dirname, 'build-info.json'),  'utf-8').then(JSON.parse),
+      readFile(versionJsonPath,                   'utf-8').then(JSON.parse),
+      readFile(join(__dirname, 'build-info.json'), 'utf-8').then(JSON.parse),
     ])
 
     const remoteNum = remote.buildNumber ?? 0
     const localNum  = local.buildNumber  ?? 0
 
-    if (remoteNum <= localNum) return
+    if (remoteNum <= localNum) { console.log(`[update] 最新版です (build ${localNum})`); return }
 
     console.log(`[update] 新バージョン検知: build ${localNum} → ${remoteNum}`)
 
@@ -278,10 +385,10 @@ async function checkForUpdate() {
       title: '学習トラッカー - アップデート',
       message: '新しいバージョンが利用可能です 🎉',
       detail: [
-        `現在のバージョン : v${local.version  ?? '?'} (build ${localNum})`,
-        `最新バージョン   : v${remote.version ?? '?'} (build ${remoteNum})`,
+        `現在 : v${local.version  ?? '?'} (build ${localNum})`,
+        `最新 : v${remote.version ?? '?'} (build ${remoteNum})`,
         '',
-        '今すぐ再起動して更新しますか？',
+        '今すぐ更新しますか？',
       ].join('\n'),
       buttons: ['今すぐ更新', '後で'],
       defaultId: 0,
@@ -289,8 +396,7 @@ async function checkForUpdate() {
     })
 
     if (response === 0) {
-      app.relaunch()
-      app.exit(0)
+      await applyUpdate(sourcePath, remote.version ?? '?', remoteNum)
     }
   } catch (e) {
     console.warn('[update] バージョンチェック失敗:', e.message)
@@ -417,12 +523,14 @@ ipcMain.on('backup-time-update', (_, time) => {
 // 手動アップデートチェック（設定画面から）
 ipcMain.handle('check-for-update', async () => {
   try {
-    const exeDir          = dirname(app.getPath('exe'))
-    const versionJsonPath = join(exeDir, 'version.json')
+    const sourcePath = await getUpdateSourcePath()
+    if (!sourcePath) return { hasUpdate: false, reason: 'no-source-config' }
+
+    const versionJsonPath = join(sourcePath, 'version.json')
     if (!existsSync(versionJsonPath)) return { hasUpdate: false, reason: 'no-version-file' }
 
     const [remote, local] = await Promise.all([
-      readFile(versionJsonPath,                    'utf-8').then(JSON.parse),
+      readFile(versionJsonPath,                   'utf-8').then(JSON.parse),
       readFile(join(__dirname, 'build-info.json'), 'utf-8').then(JSON.parse),
     ])
 
@@ -432,20 +540,24 @@ ipcMain.handle('check-for-update', async () => {
     if (remoteNum <= localNum) {
       return { hasUpdate: false, current: { version: local.version, buildNumber: localNum } }
     }
-
     return {
-      hasUpdate:  true,
-      current:    { version: local.version,  buildNumber: localNum  },
-      latest:     { version: remote.version, buildNumber: remoteNum },
+      hasUpdate: true,
+      current:   { version: local.version,  buildNumber: localNum  },
+      latest:    { version: remote.version, buildNumber: remoteNum },
+      sourcePath,
     }
   } catch (e) {
     return { hasUpdate: false, reason: String(e.message) }
   }
 })
 
-ipcMain.on('apply-update', () => {
-  app.relaunch()
-  app.exit(0)
+ipcMain.on('apply-update', async (_, arg) => {
+  // arg には { sourcePath, version, buildNumber } が渡される
+  const sourcePath  = arg?.sourcePath  ?? await getUpdateSourcePath()
+  const newVersion  = arg?.version     ?? '?'
+  const newBuildNum = arg?.buildNumber ?? 0
+  if (!sourcePath) { console.warn('[apply-update] sourcePath なし'); return }
+  await applyUpdate(sourcePath, newVersion, newBuildNum)
 })
 
 // Google Drive バックアップパス取得
@@ -482,6 +594,11 @@ if (!gotLock) {
   app.whenReady().then(async () => {
     Menu.setApplicationMenu(null)
     await loadDriveConfig()
+
+    // Drive から起動された場合は AppData に自動インストールして終了
+    const installed = await autoInstallIfNeeded()
+    if (installed) return
+
     createWindow()
     createTray()
     mainWin.once('ready-to-show', () => {
