@@ -614,8 +614,8 @@ export function Sidebar({ user }: SidebarProps) {
         })}
       </nav>
 
-      {/* 設定 + ユーザー情報 */}
-      <div className="border-t border-gray-100 p-3 space-y-1">
+      {/* 設定 */}
+      <div className="border-t border-gray-100 p-3">
         <Link
           href="/settings"
           className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors ${
@@ -627,11 +627,6 @@ export function Sidebar({ user }: SidebarProps) {
           <span>⚙️</span>
           <span>設定</span>
         </Link>
-        <div className="flex items-center gap-2 rounded-md px-2 py-2">
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-medium text-gray-700">{user.displayName}</p>
-          </div>
-        </div>
       </div>
     </aside>
   );

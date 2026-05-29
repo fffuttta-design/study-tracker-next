@@ -183,6 +183,7 @@ function DashboardTab({ todayItems, dueItems, uid, onAdd }: {
   uid: string;
   onAdd: () => void;
 }) {
+  const [reviewSortDir, setReviewSortDir] = useState<'asc' | 'desc'>('asc');
   // 今日の登録を時間帯でグループ化
   const hasTimeInfo = todayItems.some((i) => i.createdAt);
   const todayGrouped = hasTimeInfo
@@ -246,6 +247,14 @@ function DashboardTab({ todayItems, dueItems, uid, onAdd }: {
             ? <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-semibold text-white">{dueItems.length}</span>
             : <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500">0</span>
           }
+          {dueItems.length > 0 && (
+            <button
+              onClick={() => setReviewSortDir((d) => d === 'asc' ? 'desc' : 'asc')}
+              className="ml-auto flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-500 shadow-sm hover:bg-gray-50"
+            >
+              {reviewSortDir === 'desc' ? '↓ 新しい順' : '↑ 古い順'}
+            </button>
+          )}
         </div>
         <div className="p-6">
           {dueItems.length === 0 ? (
@@ -261,7 +270,9 @@ function DashboardTab({ todayItems, dueItems, uid, onAdd }: {
                     map.get(key)!.push(item);
                     return map;
                   }, new Map<string, LearningItem[]>())
-                ).sort(([a], [b]) => a.localeCompare(b));
+                ).sort(([a], [b]) =>
+                  reviewSortDir === 'desc' ? b.localeCompare(a) : a.localeCompare(b)
+                );
 
                 return (
                   <div key={g.index} className={`mb-3 rounded-xl border p-3 ${STAGE_CARD_BG[g.index]} ${STAGE_SECTION_BORDER[g.index]}`}>
