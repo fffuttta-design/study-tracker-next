@@ -74,13 +74,20 @@ for (const { dir, size } of mipmapSizes) {
     .png()
     .toFile(path.join(destDir, 'ic_launcher.png'))
 
-  // ic_launcher_round：背景色の円 + アイコン（55%サイズ）を中央合成
-  // 素材がiOS角丸アイコンでロゴが端ギリギリのため余白を多めに確保
-  const iconSize = Math.round(size * 0.55)
+  // ic_launcher_round：背景色の円 + アイコン（85%・透明コーナー保持）を中央合成
+  // icon.png はすでに角が透明（checkerboard）なので透明チャンネルを保持したまま乗せる
+  // → 角丸の形がそのまま背景に溶け込み、白い枠が出ない
+  const iconSize = Math.round(size * 0.85)
   const offset   = Math.round((size - iconSize) / 2)
 
   const bgCircleSvg = `<svg width="${size}" height="${size}"><circle cx="${size / 2}" cy="${size / 2}" r="${size / 2}" fill="${bgColor}"/></svg>`
-  const iconBuf = await sharp(SRC_ICON).resize(iconSize, iconSize).png().toBuffer()
+
+  // 透明チャンネルを保持したままリサイズ
+  const iconBuf = await sharp(SRC_ICON)
+    .resize(iconSize, iconSize)
+    .ensureAlpha()
+    .png()
+    .toBuffer()
 
   await sharp(Buffer.from(bgCircleSvg))
     .composite([{ input: iconBuf, left: offset, top: offset }])
@@ -98,12 +105,13 @@ for (const { dir, size } of mipmapSizes) {
 //
 // iconSize = canvas の 55%（ロゴが端まであるiOSアイコン素材の場合、
 // 66.7%では円マスクに引っかかるため余白を多めに取る）
+// iconSize = canvas の 85%（透明コーナー保持 → 角丸が背景に自然に溶け込む）
 const adaptiveSizes = [
-  { dir: 'mipmap-mdpi',    canvas: 108, iconSize: 60  },
-  { dir: 'mipmap-hdpi',    canvas: 162, iconSize: 89  },
-  { dir: 'mipmap-xhdpi',   canvas: 216, iconSize: 119 },
-  { dir: 'mipmap-xxhdpi',  canvas: 324, iconSize: 178 },
-  { dir: 'mipmap-xxxhdpi', canvas: 432, iconSize: 238 },
+  { dir: 'mipmap-mdpi',    canvas: 108, iconSize: 92  },
+  { dir: 'mipmap-hdpi',    canvas: 162, iconSize: 138 },
+  { dir: 'mipmap-xhdpi',   canvas: 216, iconSize: 184 },
+  { dir: 'mipmap-xxhdpi',  canvas: 324, iconSize: 275 },
+  { dir: 'mipmap-xxxhdpi', canvas: 432, iconSize: 367 },
 ]
 
 console.log('[update-icons] Android Adaptive Icon フォアグラウンドを生成中...')
@@ -113,12 +121,18 @@ for (const { dir, canvas, iconSize } of adaptiveSizes) {
   mkdirSync(destDir, { recursive: true })
 
   const padding = Math.round((canvas - iconSize) / 2)
-  await sharp(SRC_ICON)
+
+  // 透明チャンネル保持でリサイズ（角丸の透明コーナーが background レイヤーの濃紺に溶け込む）
+  const iconForFg = await sharp(SRC_ICON)
     .resize(iconSize, iconSize)
-    .extend({
-      top: padding, bottom: padding, left: padding, right: padding,
-      background: { r: 0, g: 0, b: 0, alpha: 0 }, // 透明パディング
-    })
+    .ensureAlpha()
+    .png()
+    .toBuffer()
+
+  await sharp({
+    create: { width: canvas, height: canvas, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+  })
+    .composite([{ input: iconForFg, left: padding, top: padding }])
     .png()
     .toFile(path.join(destDir, 'ic_launcher_foreground.png'))
 

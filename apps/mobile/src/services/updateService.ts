@@ -10,8 +10,8 @@ import RNBlobUtil from 'react-native-blob-util';
 const GITHUB_VERSION_URL =
   'https://api.github.com/repos/fffuttta-design/study-tracker-next/contents/apps/mobile/version.json';
 
-export const CURRENT_BUILD_NUMBER = 87;
-export const CURRENT_VERSION      = '1.0.67';
+export const CURRENT_BUILD_NUMBER = 88;
+export const CURRENT_VERSION      = '1.0.68';
 
 async function fetchVersionJson(): Promise<
   { ok: true; data: { version: string; buildNumber: number; builtAt: string; apkUrl: string } } |
