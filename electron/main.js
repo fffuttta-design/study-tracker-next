@@ -546,6 +546,8 @@ async function checkForUpdateOnStartup() {
 
     if (!newerByNum && !newerByAt) return
 
+    if (updateDialogShown) return
+    updateDialogShown = true
     console.log(`[update] 起動時に新バージョン検知: build ${localNum} → ${remoteNum}`)
 
     const { response } = await dialog.showMessageBox(mainWin, {
@@ -562,11 +564,18 @@ async function checkForUpdateOnStartup() {
       defaultId: 0, cancelId: 1,
     })
 
-    if (response === 0) await applyUpdate(sourcePath, remote.version ?? '?', remoteNum)
+    if (response === 0) {
+      await applyUpdate(sourcePath, remote.version ?? '?', remoteNum)
+    } else {
+      updateDialogShown = false  // 「後で」→ 次回チェック時にまた出せる
+    }
   } catch (e) {
     console.warn('[update] 起動時チェック失敗:', e.message)
   }
 }
+
+// ── 更新ダイアログの重複表示防止フラグ ────────────────────────────────
+let updateDialogShown = false
 
 // ── バージョンチェック（update-source.json の Drive パスと比較）────────
 async function checkForUpdate() {
@@ -594,6 +603,8 @@ async function checkForUpdate() {
     const localNum  = local.buildNumber  ?? 0
 
     if (remoteNum <= localNum) { console.log(`[update] 最新版です (build ${localNum})`); return }
+    if (updateDialogShown) return  // 既に表示中はスキップ
+    updateDialogShown = true
 
     console.log(`[update] 新バージョン検知: build ${localNum} → ${remoteNum}`)
 
@@ -614,6 +625,8 @@ async function checkForUpdate() {
 
     if (response === 0) {
       await applyUpdate(sourcePath, remote.version ?? '?', remoteNum)
+    } else {
+      updateDialogShown = false  // 「後で」→ 次回チェック時にまた出せる
     }
   } catch (e) {
     console.warn('[update] バージョンチェック失敗:', e.message)
