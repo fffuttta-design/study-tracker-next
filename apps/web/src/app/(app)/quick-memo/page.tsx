@@ -36,15 +36,15 @@ const DEFAULT_TABLE_CONTENT = JSON.stringify({
             { type: 'tableHeader', attrs: { colspan: 1, rowspan: 1, colwidth: [40] },  content: [{ type: 'paragraph', content: [{ type: 'text', text: '✓' }] }] },
           ],
         },
-        {
+        ...[1, 2, 3, 4, 5].map((n) => ({
           type: 'tableRow',
           content: [
-            { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: [36] },  content: [{ type: 'paragraph', content: [{ type: 'text', text: '1' }] }] },
+            { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: [36] },  content: [{ type: 'paragraph', content: [{ type: 'text', text: String(n) }] }] },
             { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: null },  content: [{ type: 'paragraph' }] },
             { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: null },  content: [{ type: 'paragraph' }] },
             { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: [40] },  content: [{ type: 'taskList', content: [{ type: 'taskItem', attrs: { checked: false }, content: [{ type: 'paragraph' }] }] }] },
           ],
-        },
+        })),
       ],
     },
   ],
