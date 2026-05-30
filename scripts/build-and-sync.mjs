@@ -180,17 +180,11 @@ try {
   console.warn('[build-and-sync] version.json 直接コピー失敗:', e.message)
 }
 
-// ── Step 6: AppData にも同期（開発者自身が常に最新版を実行するため）────
-// build-and-sync は Google Drive だけを更新するため、開発者の AppData が
-// 古いままになり「古いコードで更新処理が走る」ブートストラップ問題が起きる。
-// ビルドのたびに AppData も最新版に揃えることで問題を防ぐ。
+// ── Step 6: AppData にも同期（開発者が常に最新版を実行するため）────────
 const localInstallDir = path.join(process.env.LOCALAPPDATA || '', 'StudyTracker')
 const localExePath    = path.join(localInstallDir, '学習トラッカー.exe')
 
-// AppData 自動同期（更新テスト時は下の行をコメントアウト）
-const SYNC_APPDATA = true   // ← true にすると毎ビルド時に AppData も自動更新
-
-if (SYNC_APPDATA && existsSync(localInstallDir)) {
+if (existsSync(localInstallDir)) {
   console.log(`[build-and-sync] AppData にも同期中...`)
   try {
     execSync(
