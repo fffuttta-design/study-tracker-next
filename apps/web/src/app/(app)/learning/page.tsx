@@ -136,19 +136,12 @@ function LearningPageContent() {
           {!isToday(selectedDate) && (
             <button onClick={() => setSelectedDate(new Date())} className="ml-1 rounded border border-gray-200 px-2 py-0.5 text-xs text-gray-500 hover:bg-gray-50">今日</button>
           )}
-          <span className="ml-auto text-xs text-red-500">{dueItems.length > 0 ? `復習待ち ${dueItems.length}件` : ''}</span>
-          <Link
-            href="/settings"
-            title="設定"
-            className="shrink-0 rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors text-base"
-          >
-            ⚙️
-          </Link>
+          <div className="ml-auto" />
         </div>
       </div>
 
-      {/* タブ */}
-      <div className="flex border-b border-gray-100 px-6">
+      {/* タブ + 復習待ち + 設定ボタン */}
+      <div className="flex items-center border-b border-gray-100 px-6">
         {['ダッシュボード', '本日の学習', '今日の復習', '達成リスト', '全学習リスト', '通知ログ'].map((label, i) => (
           <button
             key={i}
@@ -161,6 +154,17 @@ function LearningPageContent() {
             )}
           </button>
         ))}
+        {/* 復習待ち件数（タブ行の右端） */}
+        {dueItems.length > 0 && (
+          <span className="ml-auto mr-3 text-xs font-medium text-red-500">復習待ち {dueItems.length}件</span>
+        )}
+        {/* 設定ボタン（タブ行の右上） */}
+        <Link
+          href="/settings"
+          className={`${dueItems.length === 0 ? 'ml-auto' : ''} shrink-0 flex items-center gap-1 rounded-md px-2.5 py-1.5 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors`}
+        >
+          設定⚙️
+        </Link>
       </div>
 
       {/* タブコンテンツ */}
