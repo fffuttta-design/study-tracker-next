@@ -12,12 +12,43 @@ const NotionEditor = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-24 items-center justify-center">
-        <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+      <div className="flex h-16 items-center justify-center">
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
       </div>
     ),
   }
 );
+
+// ── デフォルトテーブルJSON ────────────────────────────────────────────
+
+const DEFAULT_TABLE_CONTENT = JSON.stringify({
+  type: 'doc',
+  content: [
+    {
+      type: 'table',
+      content: [
+        {
+          type: 'tableRow',
+          content: [
+            { type: 'tableHeader', attrs: { colspan: 1, rowspan: 1, colwidth: null }, content: [{ type: 'paragraph', content: [{ type: 'text', text: 'No' }] }] },
+            { type: 'tableHeader', attrs: { colspan: 1, rowspan: 1, colwidth: null }, content: [{ type: 'paragraph', content: [{ type: 'text', text: 'タイトル' }] }] },
+            { type: 'tableHeader', attrs: { colspan: 1, rowspan: 1, colwidth: null }, content: [{ type: 'paragraph', content: [{ type: 'text', text: '内容' }] }] },
+            { type: 'tableHeader', attrs: { colspan: 1, rowspan: 1, colwidth: null }, content: [{ type: 'paragraph', content: [{ type: 'text', text: '✓' }] }] },
+          ],
+        },
+        {
+          type: 'tableRow',
+          content: [
+            { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: null }, content: [{ type: 'paragraph', content: [{ type: 'text', text: '1' }] }] },
+            { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: null }, content: [{ type: 'paragraph' }] },
+            { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: null }, content: [{ type: 'paragraph' }] },
+            { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: null }, content: [{ type: 'taskList', content: [{ type: 'taskItem', attrs: { checked: false }, content: [{ type: 'paragraph' }] }] }] },
+          ],
+        },
+      ],
+    },
+  ],
+});
 
 // ── ユーティリティ ────────────────────────────────────────────────────
 
@@ -34,12 +65,38 @@ function formatDateHeading(dateStr: string): string {
   return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}（${weekdays[d.getDay()]}）`;
 }
 
+/** TipTap JSON からデータ行数（ヘッダー行を除く）を数える */
+function countTableDataRows(content: string): number {
+  if (!content) return 0;
+  try {
+    const doc = JSON.parse(content);
+    if (doc?.type !== 'doc') return 0;
+    let count = 0;
+    const walk = (node: { type: string; content?: typeof node[] }) => {
+      if (node.type === 'table') {
+        const rows = (node.content ?? []).filter((r) => r.type === 'tableRow');
+        // ヘッダー行（tableHeader を含む行）を除いた数
+        count += rows.filter((r) =>
+          (r.content ?? []).some((cell) => cell.type === 'tableCell'),
+        ).length;
+        return;
+      }
+      (node.content ?? []).forEach(walk);
+    };
+    (doc.content ?? []).forEach(walk);
+    return count;
+  } catch {
+    return 0;
+  }
+}
+
 // ── 日付セクション ────────────────────────────────────────────────────
 
 interface DateSectionProps {
   date: string;
   isToday: boolean;
   hasContent: boolean;
+  rowCount: number;
   content: string;
   isOpen: boolean;
   onToggle: () => void;
@@ -47,7 +104,7 @@ interface DateSectionProps {
 }
 
 const DateSection = forwardRef<HTMLDivElement, DateSectionProps>(function DateSection(
-  { date, isToday, hasContent, content, isOpen, onToggle, onSave },
+  { date, isToday, hasContent, rowCount, content, isOpen, onToggle, onSave },
   ref,
 ) {
   const [editorKey, setEditorKey] = useState(0);
@@ -57,6 +114,9 @@ const DateSection = forwardRef<HTMLDivElement, DateSectionProps>(function DateSe
     wasOpen.current = isOpen;
   }, [isOpen]);
 
+  // 表示するコンテンツ（空なら最初からデフォルトテーブルを入れる）
+  const displayContent = content || DEFAULT_TABLE_CONTENT;
+
   return (
     <div ref={ref} className="border-b border-gray-100 last:border-0">
       {/* セクションヘッダー */}
@@ -64,8 +124,10 @@ const DateSection = forwardRef<HTMLDivElement, DateSectionProps>(function DateSe
         onClick={onToggle}
         className="flex w-full items-center gap-2 px-4 py-2 text-left transition-colors hover:bg-gray-50"
       >
-        <span className="shrink-0 text-[10px] text-gray-300 transition-transform duration-150"
-          style={{ display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'none' }}>
+        <span
+          className="shrink-0 text-[10px] text-gray-300 transition-transform duration-150"
+          style={{ display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'none' }}
+        >
           ▶
         </span>
         <span className={`shrink-0 text-xs font-semibold ${
@@ -76,6 +138,9 @@ const DateSection = forwardRef<HTMLDivElement, DateSectionProps>(function DateSe
         {isToday && (
           <span className="shrink-0 rounded bg-brand-500 px-1 py-0.5 text-[10px] text-white">今日</span>
         )}
+        {rowCount > 0 && (
+          <span className="shrink-0 text-[10px] text-gray-400">{rowCount}件</span>
+        )}
       </button>
 
       {/* エディタ（展開時のみ） */}
@@ -84,9 +149,10 @@ const DateSection = forwardRef<HTMLDivElement, DateSectionProps>(function DateSe
           <NotionEditor
             key={editorKey}
             initialTitle=""
-            initialContent={content}
+            initialContent={displayContent}
             onSave={onSave}
             hideTitle
+            compact
           />
         </div>
       )}
@@ -173,12 +239,14 @@ export default function QuickMemoPage() {
           {allDates.map((date) => {
             const memo = memos.find((m) => m.id === date);
             const hasContent = !!(memo?.content && memo.content.trim().length > 0);
+            const rowCount = countTableDataRows(memo?.content ?? '');
             return (
               <DateSection
                 key={date}
                 date={date}
                 isToday={date === today}
                 hasContent={hasContent}
+                rowCount={rowCount}
                 content={memo?.content ?? ''}
                 isOpen={openDates.has(date)}
                 onToggle={() => toggleDate(date)}

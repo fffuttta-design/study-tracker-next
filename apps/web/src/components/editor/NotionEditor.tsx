@@ -1119,6 +1119,7 @@ interface NotionEditorProps {
   highlightText?: string;
   onPageNavigate?: (href: string) => void;
   hideTitle?: boolean; // ブック用: タイトル入力を非表示
+  compact?: boolean;   // 最小高さを抑えて内容に合わせて伸縮
 }
 
 interface PastePopup {
@@ -1130,7 +1131,7 @@ interface PastePopup {
 export function NotionEditor({
   initialTitle, initialContent, onSave, onCreateSubPage,
   recordTriggerRef, onRecordText, notionPageId, notionPagePath, highlightText, onPageNavigate,
-  hideTitle,
+  hideTitle, compact,
 }: NotionEditorProps) {
   const notionPlusLayout = useSettingsStore((s) => s.notionPlusLayout);
   const notionPlusParaLineHeight = useSettingsStore((s) => s.notionPlusParaLineHeight);
@@ -1232,7 +1233,7 @@ export function NotionEditor({
       } catch { return initialContent; }
     })(),
     editorProps: {
-      attributes: { class: 'notion-editor' },
+      attributes: { class: compact ? 'notion-editor notion-editor-compact' : 'notion-editor' },
       handlePaste(view, event) {
         const items = event.clipboardData?.items;
         if (items) {

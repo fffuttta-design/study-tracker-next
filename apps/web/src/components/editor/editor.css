@@ -15,6 +15,11 @@
   color: #111;
 }
 
+/* コンパクトモード（学習メモ等） */
+.notion-editor-compact {
+  min-height: 0 !important;
+}
+
 .notion-editor p { margin: calc(0.25rem + var(--offset-p, 0px)) 0; }
 /* Shift+Enter（hardBreak = <br>）を含む段落だけ行間を詰める */
 .notion-editor p:has(br) { line-height: var(--soft-lh, 1.15); }
@@ -118,6 +123,13 @@
 .notion-editor th {
   background: #f9fafb;
   font-weight: 600;
+}
+
+/* チェックボックスがONの行をグレーアウト */
+.notion-editor table tr:has([data-type="taskItem"][data-checked="true"]) td,
+.notion-editor table tr:has([data-type="taskItem"][data-checked="true"]) th {
+  opacity: 0.4;
+  color: #9ca3af;
 }
 .notion-editor .selectedCell::after {
   content: '';
