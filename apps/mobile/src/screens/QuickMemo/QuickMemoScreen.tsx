@@ -16,12 +16,67 @@ import { useDailyMemoStore } from '../../store/dailyMemoStore';
 import { isTipTapContent, extractTextFromTipTap, localDateKey } from '../../types';
 import { TipTapRenderer } from '../../components/TipTapRenderer';
 
+// ── デフォルトテーブルJSON（Web版と共通） ─────────────────────────────
+
+const DEFAULT_TABLE_CONTENT = JSON.stringify({
+  type: 'doc',
+  content: [
+    {
+      type: 'table',
+      content: [
+        {
+          type: 'tableRow',
+          content: [
+            { type: 'tableHeader', attrs: { colspan: 1, rowspan: 1, colwidth: [36] },  content: [{ type: 'paragraph', content: [{ type: 'text', text: 'No' }] }] },
+            { type: 'tableHeader', attrs: { colspan: 1, rowspan: 1, colwidth: null },   content: [{ type: 'paragraph', content: [{ type: 'text', text: 'タイトル' }] }] },
+            { type: 'tableHeader', attrs: { colspan: 1, rowspan: 1, colwidth: null },   content: [{ type: 'paragraph', content: [{ type: 'text', text: '内容' }] }] },
+            { type: 'tableHeader', attrs: { colspan: 1, rowspan: 1, colwidth: [40] },  content: [{ type: 'paragraph', content: [{ type: 'text', text: '✓' }] }] },
+          ],
+        },
+        ...[1, 2, 3, 4, 5].map((n) => ({
+          type: 'tableRow',
+          content: [
+            { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: [36] },  content: [{ type: 'paragraph', content: [{ type: 'text', text: String(n) }] }] },
+            { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: null },  content: [{ type: 'paragraph' }] },
+            { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: null },  content: [{ type: 'paragraph' }] },
+            { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: [40] },  content: [{ type: 'taskList', content: [{ type: 'taskItem', attrs: { checked: false }, content: [{ type: 'paragraph' }] }] }] },
+          ],
+        })),
+      ],
+    },
+  ],
+});
+
 // ── ユーティリティ ────────────────────────────────────────────────────
 
 function formatDateHeading(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00');
   const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
   return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}（${weekdays[d.getDay()]}）`;
+}
+
+/** TipTap JSON からデータ行数を数える */
+function countTableDataRows(content: string): number {
+  if (!content) return 0;
+  try {
+    const doc = JSON.parse(content);
+    if (doc?.type !== 'doc') return 0;
+    let count = 0;
+    const walk = (node: any) => {
+      if (node.type === 'table') {
+        count += (node.content ?? []).filter((r: any) =>
+          r.type === 'tableRow' &&
+          (r.content ?? []).some((c: any) => c.type === 'tableCell'),
+        ).length;
+        return;
+      }
+      (node.content ?? []).forEach(walk);
+    };
+    (doc.content ?? []).forEach(walk);
+    return count;
+  } catch {
+    return 0;
+  }
 }
 
 // ── 日付セクション ────────────────────────────────────────────────────
@@ -34,16 +89,17 @@ interface DateSectionProps {
 }
 
 function DateSection({ date, isToday, rawContent, onSave }: DateSectionProps) {
-  const isTipTap = isTipTapContent(rawContent);
+  // rawContent が空の場合はデフォルトテーブルを使う
+  const displayContent = rawContent || DEFAULT_TABLE_CONTENT;
+  const isTipTap = isTipTapContent(displayContent);
+  const rowCount = countTableDataRows(displayContent);
 
-  // 初期テキストは一度だけ設定（リアルタイム更新中に上書きしない）
   const initialText = useRef(
-    isTipTapContent(rawContent) ? extractTextFromTipTap(rawContent) : rawContent,
+    isTipTapContent(displayContent) ? extractTextFromTipTap(displayContent) : displayContent,
   ).current;
 
   const [text, setText] = useState(initialText);
-  // 今日 or 空セクションは最初から編集モード
-  const [editing, setEditing] = useState(isToday || !rawContent);
+  const [editing, setEditing] = useState(false);
   const dirty = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -80,7 +136,10 @@ function DateSection({ date, isToday, rawContent, onSave }: DateSectionProps) {
             <Text style={s.todayBadgeText}>今日</Text>
           </View>
         )}
-        {!isToday && !editing && rawContent && (
+        {rowCount > 0 && (
+          <Text style={s.rowCount}>{rowCount}件</Text>
+        )}
+        {!editing && (
           <TouchableOpacity onPress={() => setEditing(true)} style={s.editBtn}>
             <Text style={s.editBtnText}>編集</Text>
           </TouchableOpacity>
@@ -95,23 +154,23 @@ function DateSection({ date, isToday, rawContent, onSave }: DateSectionProps) {
           onChangeText={handleChange}
           onBlur={handleBlur}
           multiline
-          placeholder={isToday ? '今日の学習メモを書く...' : 'メモを書く...'}
+          placeholder="メモを入力..."
           placeholderTextColor="#d1d5db"
           textAlignVertical="top"
-          autoFocus={isToday && !rawContent}
+          autoFocus
         />
-      ) : rawContent ? (
+      ) : (
         <TouchableOpacity
           onPress={() => setEditing(true)}
           activeOpacity={0.8}
           style={s.viewArea}>
           {isTipTap ? (
-            <TipTapRenderer content={rawContent} baseTextColor="#374151" />
+            <TipTapRenderer content={displayContent} baseTextColor="#374151" />
           ) : (
             <Text style={s.contentText}>{text}</Text>
           )}
         </TouchableOpacity>
-      ) : null}
+      )}
     </View>
   );
 }
@@ -130,7 +189,6 @@ export default function QuickMemoScreen() {
     return unsub;
   }, [user]);
 
-  // 表示する日付一覧（今日 + 内容のある日、新しい順）
   const allDates = useMemo(() => {
     const withContent = memos
       .filter(m => m.content && m.content.trim().length > 0)
@@ -160,12 +218,10 @@ export default function QuickMemoScreen() {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        {/* ヘッダー */}
         <View style={s.pageHeader}>
           <Text style={s.pageTitle}>📓 学習メモ</Text>
         </View>
 
-        {/* ノート本体 */}
         <ScrollView
           style={s.scroll}
           contentContainerStyle={s.scrollContent}
@@ -204,7 +260,6 @@ const s = StyleSheet.create({
   pageTitle: { fontSize: 16, fontWeight: 'bold', color: '#111827' },
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 40 },
-
   section: {
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
@@ -213,35 +268,24 @@ const s = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#f3f4f6',
     backgroundColor: '#fafafa',
   },
-  headerToday: {
-    backgroundColor: '#fffbeb',
-  },
-  dateText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#6b7280',
-  },
-  dateTextToday: {
-    color: '#d97706',
-  },
+  headerToday: { backgroundColor: '#fffbeb' },
+  dateText: { fontSize: 12, fontWeight: '600', color: '#6b7280' },
+  dateTextToday: { color: '#d97706' },
   todayBadge: {
     backgroundColor: '#F59E0B',
     borderRadius: 4,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
-  todayBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#fff',
-  },
+  todayBadgeText: { fontSize: 10, fontWeight: '700', color: '#fff' },
+  rowCount: { fontSize: 10, color: '#9ca3af' },
   editBtn: {
     marginLeft: 'auto',
     paddingHorizontal: 10,
@@ -250,10 +294,7 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e5e7eb',
   },
-  editBtnText: {
-    fontSize: 11,
-    color: '#6b7280',
-  },
+  editBtnText: { fontSize: 11, color: '#6b7280' },
   input: {
     minHeight: 120,
     paddingHorizontal: 16,
@@ -262,13 +303,6 @@ const s = StyleSheet.create({
     color: '#111827',
     lineHeight: 22,
   },
-  viewArea: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  contentText: {
-    fontSize: 14,
-    color: '#374151',
-    lineHeight: 22,
-  },
+  viewArea: { paddingHorizontal: 16, paddingVertical: 12 },
+  contentText: { fontSize: 14, color: '#374151', lineHeight: 22 },
 });
