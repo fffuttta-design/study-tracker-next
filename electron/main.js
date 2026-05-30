@@ -365,50 +365,52 @@ async function launchPS1(scriptLines) {
   }).unref()
 }
 
-// ── アップデート適用（可視ターミナルでステータス表示）──────────────────
-async function applyUpdate(sourcePath, newVersion, newBuildNum) {
-  const ts     = Date.now()
-  const tmpPs1 = join(app.getPath('temp'), `st-update-${ts}.ps1`)
-  const bom    = '﻿'
-
+// ── アップデート適用（GoalManager と同仕様の進捗ログウィンドウ）──────────
+// パスは環境変数経由で渡す → PS1 内に日本語を含めない → 文字化けなし
+// -EncodedCommand (UTF-16LE + Base64) でファイル書き出し不要
+async function applyUpdate(sourcePath, newVersion, _newBuildNum) {
   const script = [
-    '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
-    '$OutputEncoding = [System.Text.Encoding]::UTF8',
-    `$Host.UI.RawUI.WindowTitle = 'Study Tracker - アップデート'`,
-    `Write-Host ''`,
-    `Write-Host '  Study Tracker アップデート' -ForegroundColor White`,
-    `Write-Host '  ──────────────────────────────' -ForegroundColor DarkGray`,
-    `Write-Host ''`,
-    `Write-Host '  アプリを終了します...' -ForegroundColor Cyan`,
-    `$maxWait = 20; $i = 0`,
-    `while ((Get-Process -Name '学習トラッカー' -ErrorAction SilentlyContinue) -and $i -lt $maxWait) { Start-Sleep -Milliseconds 500; $i++ }`,
-    `Write-Host '  EXEをコピーします...' -ForegroundColor Cyan`,
-    `robocopy "${sourcePath}" "${LOCAL_INSTALL_DIR}" /MIR /R:2 /W:1 /NFL /NDL /NJH /NJS /NC /NS /NP`,
-    `if ($LASTEXITCODE -ge 8) {`,
-    `  Write-Host ''`,
-    `  Write-Host "  ❌ コピーに失敗しました (code: $LASTEXITCODE)" -ForegroundColor Red`,
-    `  Write-Host '  トレイメニューの「最新版を確認」から再試行してください。' -ForegroundColor Gray`,
-    `  Write-Host ''`,
-    `  Write-Host '  何かキーを押して閉じる...' -ForegroundColor DarkGray`,
-    `  $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')`,
-    `} else {`,
-    `  Write-Host "  ✅ v${newVersion} にアップデート完了！" -ForegroundColor Green`,
-    `  Write-Host '  再起動します...' -ForegroundColor Cyan`,
-    `  Start-Sleep -Seconds 2`,
-    `  Start-Process "${LOCAL_EXE}"`,
-    `}`,
-  ].join('\n')
+    '$ErrorActionPreference = "Stop"',
+    'Write-Host ""',
+    'Write-Host "=====================================" -ForegroundColor Cyan',
+    'Write-Host "  Study Tracker  Update" -ForegroundColor Cyan',
+    'Write-Host "=====================================" -ForegroundColor Cyan',
+    'Write-Host ""',
+    'Write-Host "[1/3] アプリを終了しました" -ForegroundColor Green',
+    'Start-Sleep -Seconds 2',
+    `Write-Host "[2/3] v${newVersion} をコピー中..." -ForegroundColor Yellow`,
+    'robocopy $env:ST_SRC $env:ST_DST /MIR /R:2 /W:1 /NFL /NDL /NJH /NJS /NC /NS /NP',
+    'if ($LASTEXITCODE -ge 8) {',
+    '  Write-Host ""',
+    '  Write-Host "  [エラー] コピーに失敗しました (code: $LASTEXITCODE)" -ForegroundColor Red',
+    '  Read-Host "  Enterキーで閉じる"',
+    '  exit 1',
+    '}',
+    'Write-Host "    コピー完了 ✓" -ForegroundColor Green',
+    'Start-Sleep -Seconds 1',
+    'Write-Host "[3/3] アプリを起動します..." -ForegroundColor Cyan',
+    '& cmd.exe /c start "" $env:ST_EXE',
+    'Start-Sleep -Milliseconds 500',
+    'exit',
+  ].join('\r\n')
 
-  await writeFile(tmpPs1, bom + script, 'utf-8')
+  const encoded = Buffer.from(script, 'utf16le').toString('base64')
 
-  // windowsHide を指定しないことで可視コンソールウィンドウを表示
-  spawnChild('powershell.exe', [
+  spawnChild('cmd.exe', [
+    '/c', 'start', 'powershell.exe',
     '-ExecutionPolicy', 'Bypass',
     '-NoProfile',
-    '-File', tmpPs1,
+    '-EncodedCommand', encoded,
   ], {
     detached: true,
     stdio: 'ignore',
+    shell: false,
+    env: {
+      ...process.env,
+      ST_SRC: sourcePath,
+      ST_DST: LOCAL_INSTALL_DIR,
+      ST_EXE: LOCAL_EXE,
+    },
   }).unref()
 
   setTimeout(() => app.exit(0), 300)
