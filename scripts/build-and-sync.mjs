@@ -181,10 +181,12 @@ try {
 }
 
 // ── Step 6: AppData にも同期（開発者が常に最新版を実行するため）────────
+// --test-update フラグを渡すと AppData 同期をスキップ（更新ダイアログのテスト用）
+const TEST_UPDATE     = process.argv.includes('--test-update')
 const localInstallDir = path.join(process.env.LOCALAPPDATA || '', 'StudyTracker')
 const localExePath    = path.join(localInstallDir, '学習トラッカー.exe')
 
-if (existsSync(localInstallDir)) {
+if (!TEST_UPDATE && existsSync(localInstallDir)) {
   console.log(`[build-and-sync] AppData にも同期中...`)
   try {
     execSync(
