@@ -9,7 +9,7 @@ import { type NotionPage } from '@study-tracker/core';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotionPageStore, WORKSPACE_ID } from '@/stores/notionPageStore';
 import { useDailyMemoStore } from '@/stores/dailyMemoStore';
-import { APP_VERSION } from '@/lib/version';
+import { useElectronVersion } from '@/hooks/useElectronVersion';
 import appIcon from '@/app/icon.png';
 
 interface SidebarProps {
@@ -491,6 +491,7 @@ function toLocalDateString(date: Date): string {
 function QuickMemoSidebar({ user }: { user: User }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const version = useElectronVersion();
   const { memos } = useDailyMemoStore();
 
   const today = toLocalDateString(new Date());
@@ -558,7 +559,7 @@ function QuickMemoSidebar({ user }: { user: User }) {
         <div className="border-t border-gray-100 py-1">
           <UserFooter user={user} />
         </div>
-        <p className="px-4 pb-2 text-[10px] text-gray-300">{APP_VERSION}</p>
+        <p className="px-4 pb-2 text-[10px] text-gray-300">{version}</p>
       </div>
     </aside>
   );
@@ -567,6 +568,7 @@ function QuickMemoSidebar({ user }: { user: User }) {
 export function Sidebar({ user }: SidebarProps) {
   const pathname = usePathname();
   const signOut = useAuthStore((s) => s.signOut);
+  const version = useElectronVersion();
 
   // NotionPlus エリアではページサイドバーに切り替え
   if (pathname.startsWith('/notion-plus')) {
@@ -589,7 +591,7 @@ export function Sidebar({ user }: SidebarProps) {
         <Image src={appIcon} alt="" className="h-7 w-7 rounded-lg" />
         <div>
           <p className="text-sm font-semibold text-gray-800">Study Tracker</p>
-          <p className="text-xs text-gray-400">{APP_VERSION}</p>
+          <p className="text-xs text-gray-400">{version}</p>
         </div>
       </div>
 

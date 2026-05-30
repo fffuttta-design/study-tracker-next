@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { APP_VERSION } from '@/lib/version';
+import { useElectronVersion } from '@/hooks/useElectronVersion';
 import { useAuthStore } from '@/stores/authStore';
 import { useSettingsStore, REVIEW_STAGE_LABELS } from '@/stores/settingsStore';
 import type { BackupStatus } from '@/app/(app)/layout';
@@ -332,8 +333,9 @@ function VersionSection({ isElectron }: { isElectron: boolean }) {
   const [checkStatus, setCheckStatus] = useState<CheckStatus>('idle');
   const [latest, setLatest] = useState<VersionInfo | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
-  // Electron では APP_VERSION（Vercelキャッシュ由来）ではなくメインプロセスの build-info.json から取得した版数を使う
-  const [displayVersion, setDisplayVersion] = useState<string>(APP_VERSION);
+  // Electron ではシェルの実際のバージョンを使う（Vercel デプロイ版と一致させる）
+  const shellVersion = useElectronVersion();
+  const [displayVersion, setDisplayVersion] = useState<string>(shellVersion);
 
   const checkVersion = useCallback(async () => {
     setCheckStatus('checking');
@@ -366,6 +368,8 @@ function VersionSection({ isElectron }: { isElectron: boolean }) {
     }
   }, [isElectron]);
 
+  // shellVersion が確定したら displayVersion を同期（チェック実行前の初期値を正確にする）
+  useEffect(() => { setDisplayVersion(shellVersion); }, [shellVersion]);
   // マウント時に自動チェック
   useEffect(() => { checkVersion(); }, [checkVersion]);
 

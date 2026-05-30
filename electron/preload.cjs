@@ -22,6 +22,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 自動起動
   getAutoLaunch:       () => ipcRenderer.invoke('get-auto-launch'),
   setAutoLaunch:       (enable) => ipcRenderer.send('set-auto-launch', enable),
+  // ビルド情報（インストール済みシェルの実際のバージョン）
+  getBuildInfo:        () => ipcRenderer.invoke('get-build-info'),
   // アップデート
   checkForUpdate:      () => ipcRenderer.invoke('check-for-update'),
   applyUpdate:         (arg) => ipcRenderer.send('apply-update', arg),

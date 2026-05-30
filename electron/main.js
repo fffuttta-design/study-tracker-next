@@ -735,6 +735,14 @@ ipcMain.on('backup-time-update', (_, time) => {
   }
 })
 
+// インストール済みシェルのビルド情報を返す（UI のバージョン表示用）
+ipcMain.handle('get-build-info', async () => {
+  try {
+    const raw = await readFile(join(__dirname, 'build-info.json'), 'utf-8')
+    return JSON.parse(raw)
+  } catch { return null }
+})
+
 // 手動アップデートチェック（設定画面から）
 ipcMain.handle('check-for-update', async () => {
   try {
