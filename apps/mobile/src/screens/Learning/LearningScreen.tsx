@@ -19,7 +19,9 @@ import {
   importanceColor,
   importanceLabel,
   REVIEW_STAGE_LABELS,
+  isTipTapContent,
 } from '../../types';
+import { TipTapRenderer } from '../../components/TipTapRenderer';
 
 type Tab = 'today' | 'review' | 'all';
 
@@ -179,7 +181,11 @@ function LearningItemCard({
       {expanded && (
         <>
           {item.content ? (
-            <Markdown style={markdownStyles}>{item.content}</Markdown>
+            isTipTapContent(item.content) ? (
+              <TipTapRenderer content={item.content} baseTextColor="#6b7280" />
+            ) : (
+              <Markdown style={markdownStyles}>{item.content}</Markdown>
+            )
           ) : null}
           {/* 復習ステージ */}
           <View style={styles.reviewRow}>

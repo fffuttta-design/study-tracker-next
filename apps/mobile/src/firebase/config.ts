@@ -13,4 +13,5 @@ export const COLLECTIONS = {
   learningItems: (uid: string) => `users/${uid}/learningItems`,
   categories: (uid: string) => `users/${uid}/learningCategories`,
   notionPages: (uid: string) => `users/${uid}/notionPages`,
+  dailyMemos: (uid: string) => `users/${uid}/dailyMemos`,
 } as const;

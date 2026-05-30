@@ -276,114 +276,125 @@ export function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => vo
               </div>
             </div>
 
-            <nav className="flex-1 overflow-y-auto px-1 py-1">
+            <nav className="flex flex-1 flex-col overflow-hidden">
               {searchResults ? (
-                <div className="space-y-1 px-1 py-1">
-                  {searchResults.titleMatches.length === 0 && searchResults.contentMatches.length === 0 && (
-                    <p className="px-2 py-4 text-center text-xs text-gray-400">一致するノートがありません</p>
-                  )}
-                  {searchResults.titleMatches.length > 0 && (
-                    <>
-                      <p className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">ノート名</p>
-                      {searchResults.titleMatches.map((page) => (
-                        <button
-                          key={page.id}
-                          onClick={() => { setSelectedPageId(page.id); setSearchQuery(''); }}
-                          className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors ${selectedPageId === page.id ? 'bg-white font-semibold text-gray-900 shadow-sm' : 'text-gray-600 hover:bg-white hover:text-gray-900'}`}
-                        >
-                          <PagePickerIcon icon={page.icon} />
-                          <span className="min-w-0 flex-1 truncate text-left">
-                            <HighlightText text={page.title || 'Untitled'} query={searchQuery} />
-                          </span>
-                        </button>
-                      ))}
-                    </>
-                  )}
-                  {searchResults.contentMatches.length > 0 && (
-                    <>
-                      <p className="px-2 pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">テキスト</p>
-                      {searchResults.contentMatches.map(({ page, snippet }) => (
-                        <button
-                          key={page.id}
-                          onClick={() => { setSelectedPageId(page.id); setSearchQuery(''); }}
-                          className={`flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-xs transition-colors ${selectedPageId === page.id ? 'bg-white shadow-sm' : 'text-gray-600 hover:bg-white hover:text-gray-900'}`}
-                        >
-                          <div className="flex items-center gap-1.5">
+                // ── 検索結果 ──────────────────────────────────────────
+                <div className="flex-1 overflow-y-auto px-1 py-1">
+                  <div className="space-y-1 px-1 py-1">
+                    {searchResults.titleMatches.length === 0 && searchResults.contentMatches.length === 0 && (
+                      <p className="px-2 py-4 text-center text-xs text-gray-400">一致するノートがありません</p>
+                    )}
+                    {searchResults.titleMatches.length > 0 && (
+                      <>
+                        <p className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">ノート名</p>
+                        {searchResults.titleMatches.map((page) => (
+                          <button
+                            key={page.id}
+                            onClick={() => { setSelectedPageId(page.id); setSearchQuery(''); }}
+                            className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors ${selectedPageId === page.id ? 'bg-white font-semibold text-gray-900 shadow-sm' : 'text-gray-600 hover:bg-white hover:text-gray-900'}`}
+                          >
                             <PagePickerIcon icon={page.icon} />
-                            <span className="font-medium text-gray-800">{page.title || 'Untitled'}</span>
-                          </div>
-                          <p className="line-clamp-2 pl-5 text-left text-[10px] leading-relaxed text-gray-400">
-                            <HighlightText text={snippet} query={searchQuery} />
-                          </p>
-                        </button>
-                      ))}
-                    </>
-                  )}
+                            <span className="min-w-0 flex-1 truncate text-left">
+                              <HighlightText text={page.title || 'Untitled'} query={searchQuery} />
+                            </span>
+                          </button>
+                        ))}
+                      </>
+                    )}
+                    {searchResults.contentMatches.length > 0 && (
+                      <>
+                        <p className="px-2 pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">テキスト</p>
+                        {searchResults.contentMatches.map(({ page, snippet }) => (
+                          <button
+                            key={page.id}
+                            onClick={() => { setSelectedPageId(page.id); setSearchQuery(''); }}
+                            className={`flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-xs transition-colors ${selectedPageId === page.id ? 'bg-white shadow-sm' : 'text-gray-600 hover:bg-white hover:text-gray-900'}`}
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <PagePickerIcon icon={page.icon} />
+                              <span className="font-medium text-gray-800">{page.title || 'Untitled'}</span>
+                            </div>
+                            <p className="line-clamp-2 pl-5 text-left text-[10px] leading-relaxed text-gray-400">
+                              <HighlightText text={snippet} query={searchQuery} />
+                            </p>
+                          </button>
+                        ))}
+                      </>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <>
+                  {/* ── 上セクション: お気に入り ──────────────────── */}
                   {roots.some((p) => p.isFavorite) && (
-                    <div className="mb-1">
-                      <p className="px-2 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-yellow-500">★ お気に入り</p>
-                      {roots.filter((p) => p.isFavorite).map((page) => (
-                        <button
-                          key={`fav-${page.id}`}
-                          onClick={() => setSelectedPageId(page.id)}
-                          className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 pl-4 text-xs transition-colors ${selectedPageId === page.id ? 'bg-white font-semibold text-gray-900 shadow-sm' : 'text-gray-600 hover:bg-white hover:text-gray-900'}`}
-                        >
-                          <PagePickerIcon icon={page.icon} />
-                          <span className="min-w-0 flex-1 truncate text-left">{page.title || 'Untitled'}</span>
-                        </button>
-                      ))}
-                      <div className="mx-2 mb-1 mt-1 border-b border-gray-200" />
+                    <div className="shrink-0 border-b border-gray-100">
+                      <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-yellow-500">★ お気に入り</p>
+                      <div className="px-1 pb-2">
+                        {roots.filter((p) => p.isFavorite).map((page) => (
+                          <button
+                            key={`fav-${page.id}`}
+                            onClick={() => setSelectedPageId(page.id)}
+                            className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors ${selectedPageId === page.id ? 'bg-white font-semibold text-gray-900 shadow-sm' : 'text-gray-600 hover:bg-white hover:text-gray-900'}`}
+                          >
+                            <PagePickerIcon icon={page.icon} />
+                            <span className="min-w-0 flex-1 truncate text-left">{page.title || 'Untitled'}</span>
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
-                  <div className="space-y-0.5">
-                    {roots.map((page) => {
-                      const children = pages.filter((p) => p.parentId === page.id).sort((a, b) => a.order - b.order);
-                      const isExpanded = expandedIds.has(page.id);
-                      const toggle = (e: React.MouseEvent) => {
-                        e.stopPropagation();
-                        setExpandedIds((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(page.id)) next.delete(page.id); else next.add(page.id);
-                          return next;
-                        });
-                      };
-                      return (
-                        <div key={page.id}>
-                          <div className="flex items-center gap-0.5">
-                            <button
-                              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-[9px] text-gray-400 hover:bg-gray-200 ${children.length === 0 ? 'invisible' : ''}`}
-                              style={{ transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}
-                              onClick={toggle}
-                            >▶</button>
-                            <button
-                              onClick={() => setSelectedPageId(page.id)}
-                              className={`flex flex-1 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors ${selectedPageId === page.id ? 'bg-white font-semibold text-gray-900 shadow-sm' : 'text-gray-600 hover:bg-white hover:text-gray-900'}`}
-                            >
-                              <PagePickerIcon icon={page.icon} />
-                              <span className="min-w-0 flex-1 truncate text-left">{page.title || 'Untitled'}</span>
-                              {page.isFavorite && <span className="shrink-0 text-[10px] text-yellow-400">★</span>}
-                            </button>
-                          </div>
-                          {isExpanded && children.length > 0 && (
-                            <div className="ml-5 border-l border-gray-200 pl-2 pt-0.5">
-                              {children.map((child) => (
+
+                  {/* ── 下セクション: 親ページ ────────────────────── */}
+                  <div className="flex min-h-0 flex-1 flex-col">
+                    <p className="shrink-0 px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">ページ</p>
+                    <div className="flex-1 overflow-y-auto px-1 pb-2">
+                      <div className="space-y-0.5">
+                        {roots.filter((p) => !p.isFavorite).map((page) => {
+                          const children = pages.filter((p) => p.parentId === page.id).sort((a, b) => a.order - b.order);
+                          const isExpanded = expandedIds.has(page.id);
+                          const toggle = (e: React.MouseEvent) => {
+                            e.stopPropagation();
+                            setExpandedIds((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(page.id)) next.delete(page.id); else next.add(page.id);
+                              return next;
+                            });
+                          };
+                          return (
+                            <div key={page.id}>
+                              <div className="flex items-center gap-0.5">
                                 <button
-                                  key={child.id}
-                                  onClick={() => setSelectedPageId(child.id)}
-                                  className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors ${selectedPageId === child.id ? 'bg-white font-semibold text-gray-800 shadow-sm' : 'text-gray-500 hover:bg-white hover:text-gray-700'}`}
+                                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-[9px] text-gray-400 hover:bg-gray-200 ${children.length === 0 ? 'invisible' : ''}`}
+                                  style={{ transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}
+                                  onClick={toggle}
+                                >▶</button>
+                                <button
+                                  onClick={() => setSelectedPageId(page.id)}
+                                  className={`flex flex-1 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors ${selectedPageId === page.id ? 'bg-white font-semibold text-gray-900 shadow-sm' : 'text-gray-600 hover:bg-white hover:text-gray-900'}`}
                                 >
-                                  <PagePickerIcon icon={child.icon} />
-                                  <span className="min-w-0 flex-1 truncate text-left">{child.title || 'Untitled'}</span>
+                                  <PagePickerIcon icon={page.icon} />
+                                  <span className="min-w-0 flex-1 truncate text-left">{page.title || 'Untitled'}</span>
                                 </button>
-                              ))}
+                              </div>
+                              {isExpanded && children.length > 0 && (
+                                <div className="ml-5 border-l border-gray-200 pl-2 pt-0.5">
+                                  {children.map((child) => (
+                                    <button
+                                      key={child.id}
+                                      onClick={() => setSelectedPageId(child.id)}
+                                      className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors ${selectedPageId === child.id ? 'bg-white font-semibold text-gray-800 shadow-sm' : 'text-gray-500 hover:bg-white hover:text-gray-700'}`}
+                                    >
+                                      <PagePickerIcon icon={child.icon} />
+                                      <span className="min-w-0 flex-1 truncate text-left">{child.title || 'Untitled'}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 </>
               )}
