@@ -34,85 +34,44 @@ function formatDateHeading(dateStr: string): string {
   return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}（${weekdays[d.getDay()]}）`;
 }
 
-/** TipTap JSON / HTML / Markdown から平文プレビューを生成 */
-function getPreview(content: string): string {
-  if (!content) return '';
-  return content
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/[{}":\\[\]]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 100);
-}
-
 // ── 日付セクション ────────────────────────────────────────────────────
 
 interface DateSectionProps {
   date: string;
   isToday: boolean;
   content: string;
-  isOpen: boolean;
-  onToggle: () => void;
   onSave: (_title: string, content: string) => Promise<void>;
 }
 
 const DateSection = forwardRef<HTMLDivElement, DateSectionProps>(function DateSection(
-  { date, isToday, content, isOpen, onToggle, onSave },
+  { date, isToday, content, onSave },
   ref,
 ) {
-  const [saving, setSaving] = useState(false);
-  // isOpen になったタイミングでエディタをリセット（最新内容を読み込む）
-  const [editorKey, setEditorKey] = useState(0);
-  const wasOpen = useRef(false);
-  useEffect(() => {
-    if (isOpen && !wasOpen.current) setEditorKey((k) => k + 1);
-    wasOpen.current = isOpen;
-  }, [isOpen]);
-
-  const handleSave = useCallback(
-    async (title: string, c: string) => {
-      setSaving(true);
-      try { await onSave(title, c); }
-      finally { setSaving(false); }
-    },
-    [onSave],
-  );
-
-  const preview = getPreview(content);
-
   return (
-    <div ref={ref} className="border-b border-gray-100 last:border-0">
-      {/* セクションヘッダー（クリックで開閉） */}
-      <button
-        onClick={onToggle}
-        className="flex w-full items-center gap-1.5 px-4 py-1.5 text-left transition-colors hover:bg-gray-50"
-      >
-        <span className="shrink-0 text-[10px] text-gray-300">{isOpen ? '▼' : '▶'}</span>
-        <span className={`shrink-0 text-xs font-semibold ${isToday ? 'text-brand-600' : 'text-gray-600'}`}>
+    <div ref={ref}>
+      {/* 日付ヘッダー */}
+      <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-gray-100 bg-white/95 px-4 py-2 backdrop-blur-sm">
+        <span
+          className={`text-xs font-semibold ${isToday ? 'text-brand-600' : 'text-gray-500'}`}
+        >
           {formatDateHeading(date)}
         </span>
         {isToday && (
-          <span className="shrink-0 rounded bg-brand-500 px-1 py-0.5 text-[10px] text-white">今日</span>
+          <span className="rounded bg-brand-500 px-1.5 py-0.5 text-[10px] font-medium text-white">
+            今日
+          </span>
         )}
-        {!isOpen && (
-          <span className="min-w-0 flex-1 truncate text-xs text-gray-400">{preview}</span>
-        )}
-        {saving && <span className="ml-auto shrink-0 text-xs text-gray-400">保存中...</span>}
-        {!saving && isOpen && <span className="ml-auto shrink-0 text-[10px] text-gray-300">自動保存</span>}
-      </button>
+      </div>
 
-      {/* エディタ（展開時のみ） */}
-      {isOpen && (
-        <div className="px-2 pb-4">
-          <NotionEditor
-            key={editorKey}
-            initialTitle=""
-            initialContent={content}
-            onSave={handleSave}
-            hideTitle
-          />
-        </div>
-      )}
+      {/* エディタ */}
+      <div className="px-2 pb-10">
+        <NotionEditor
+          initialTitle=""
+          initialContent={content}
+          onSave={onSave}
+          hideTitle
+        />
+      </div>
     </div>
   );
 });
@@ -139,32 +98,18 @@ export default function QuickMemoPage() {
     return Array.from(set).sort((a, b) => b.localeCompare(a));
   }, [memos, today]);
 
-  // 展開中の日付セット（デフォルトは今日のみ）
-  const [openDates, setOpenDates] = useState<Set<string>>(() => new Set([today]));
-
   // セクションへのスクロール用 refs
   const sectionRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
-  // サイドバー日付クリック → 該当セクションを開いてスクロール
+  // サイドバー日付クリック → 該当セクションにスクロール
   useEffect(() => {
     if (!jumpDate) return;
-    setOpenDates((prev) => new Set([...prev, jumpDate]));
-    // DOM 更新後にスクロール
     requestAnimationFrame(() => {
       setTimeout(() => {
         sectionRefs.current.get(jumpDate)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 50);
     });
   }, [jumpDate]);
-
-  const toggleDate = useCallback((date: string) => {
-    setOpenDates((prev) => {
-      const next = new Set(prev);
-      if (next.has(date)) next.delete(date);
-      else next.add(date);
-      return next;
-    });
-  }, []);
 
   const makeSaveHandler = useCallback(
     (date: string) =>
@@ -201,7 +146,7 @@ export default function QuickMemoPage() {
           </button>
         </div>
 
-        {/* 全日付セクション（スクロール可能） */}
+        {/* ノート本体（連続スクロール） */}
         <div className="flex-1 overflow-y-auto">
           {allDates.map((date) => {
             const memo = memos.find((m) => m.id === date);
@@ -215,8 +160,6 @@ export default function QuickMemoPage() {
                 date={date}
                 isToday={date === today}
                 content={memo?.content ?? ''}
-                isOpen={openDates.has(date)}
-                onToggle={() => toggleDate(date)}
                 onSave={makeSaveHandler(date)}
               />
             );
