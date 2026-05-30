@@ -373,7 +373,7 @@ async function applyUpdate(sourcePath, newVersion, _newBuildNum) {
     '$ErrorActionPreference = "Stop"',
     'Write-Host ""',
     'Write-Host "=====================================" -ForegroundColor Cyan',
-    'Write-Host "  Study Tracker  Update" -ForegroundColor Cyan',
+    'Write-Host "  Study Tracker  アップデート" -ForegroundColor Cyan',
     'Write-Host "=====================================" -ForegroundColor Cyan',
     'Write-Host ""',
     'Write-Host "[1/3] アプリを終了しました" -ForegroundColor Green',
@@ -387,10 +387,11 @@ async function applyUpdate(sourcePath, newVersion, _newBuildNum) {
     '  exit 1',
     '}',
     'Write-Host "    コピー完了 ✓" -ForegroundColor Green',
-    'Start-Sleep -Seconds 1',
+    'Start-Sleep -Seconds 2',
     'Write-Host "[3/3] アプリを起動します..." -ForegroundColor Cyan',
+    'Start-Sleep -Seconds 1',
     '& cmd.exe /c start "" $env:ST_EXE',
-    'Start-Sleep -Milliseconds 500',
+    'Start-Sleep -Seconds 1',
     'exit',
   ].join('\r\n')
 
