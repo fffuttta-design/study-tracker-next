@@ -586,13 +586,24 @@ export function Sidebar({ user }: SidebarProps) {
 
   return (
     <aside className="flex h-full w-56 flex-col border-r border-gray-100 bg-gray-50">
-      {/* アプリ名 */}
+      {/* アプリ名 + 設定ボタン（右上） */}
       <div className="flex items-center gap-2 px-4 py-5">
         <Image src={appIcon} alt="" className="h-7 w-7 rounded-lg" />
-        <div>
+        <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-gray-800">Study Tracker</p>
           <p className="text-xs text-gray-400">{version}</p>
         </div>
+        <Link
+          href="/settings"
+          title="設定"
+          className={`shrink-0 rounded-md p-1.5 text-base transition-colors ${
+            pathname.startsWith('/settings')
+              ? 'bg-gray-200 text-gray-700'
+              : 'text-gray-400 hover:bg-gray-200 hover:text-gray-700'
+          }`}
+        >
+          ⚙️
+        </Link>
       </div>
 
       {/* ナビゲーション */}
@@ -616,20 +627,6 @@ export function Sidebar({ user }: SidebarProps) {
         })}
       </nav>
 
-      {/* 設定 */}
-      <div className="border-t border-gray-100 p-3">
-        <Link
-          href="/settings"
-          className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors ${
-            pathname.startsWith('/settings')
-              ? 'bg-white font-medium text-gray-900 shadow-sm'
-              : 'text-gray-600 hover:bg-white hover:text-gray-900'
-          }`}
-        >
-          <span>⚙️</span>
-          <span>設定</span>
-        </Link>
-      </div>
     </aside>
   );
 }
