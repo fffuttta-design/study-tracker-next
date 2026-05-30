@@ -30,19 +30,19 @@ const DEFAULT_TABLE_CONTENT = JSON.stringify({
         {
           type: 'tableRow',
           content: [
-            { type: 'tableHeader', attrs: { colspan: 1, rowspan: 1, colwidth: null }, content: [{ type: 'paragraph', content: [{ type: 'text', text: 'No' }] }] },
-            { type: 'tableHeader', attrs: { colspan: 1, rowspan: 1, colwidth: null }, content: [{ type: 'paragraph', content: [{ type: 'text', text: 'タイトル' }] }] },
-            { type: 'tableHeader', attrs: { colspan: 1, rowspan: 1, colwidth: null }, content: [{ type: 'paragraph', content: [{ type: 'text', text: '内容' }] }] },
-            { type: 'tableHeader', attrs: { colspan: 1, rowspan: 1, colwidth: null }, content: [{ type: 'paragraph', content: [{ type: 'text', text: '✓' }] }] },
+            { type: 'tableHeader', attrs: { colspan: 1, rowspan: 1, colwidth: [36] },  content: [{ type: 'paragraph', content: [{ type: 'text', text: 'No' }] }] },
+            { type: 'tableHeader', attrs: { colspan: 1, rowspan: 1, colwidth: null },  content: [{ type: 'paragraph', content: [{ type: 'text', text: 'タイトル' }] }] },
+            { type: 'tableHeader', attrs: { colspan: 1, rowspan: 1, colwidth: null },  content: [{ type: 'paragraph', content: [{ type: 'text', text: '内容' }] }] },
+            { type: 'tableHeader', attrs: { colspan: 1, rowspan: 1, colwidth: [40] },  content: [{ type: 'paragraph', content: [{ type: 'text', text: '✓' }] }] },
           ],
         },
         {
           type: 'tableRow',
           content: [
-            { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: null }, content: [{ type: 'paragraph', content: [{ type: 'text', text: '1' }] }] },
-            { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: null }, content: [{ type: 'paragraph' }] },
-            { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: null }, content: [{ type: 'paragraph' }] },
-            { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: null }, content: [{ type: 'taskList', content: [{ type: 'taskItem', attrs: { checked: false }, content: [{ type: 'paragraph' }] }] }] },
+            { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: [36] },  content: [{ type: 'paragraph', content: [{ type: 'text', text: '1' }] }] },
+            { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: null },  content: [{ type: 'paragraph' }] },
+            { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: null },  content: [{ type: 'paragraph' }] },
+            { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: [40] },  content: [{ type: 'taskList', content: [{ type: 'taskItem', attrs: { checked: false }, content: [{ type: 'paragraph' }] }] }] },
           ],
         },
       ],

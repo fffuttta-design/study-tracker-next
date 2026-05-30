@@ -131,6 +131,51 @@
   opacity: 0.4;
   color: #9ca3af;
 }
+
+/* ── コンパクトテーブル（学習メモ用）────────────────────────── */
+
+/* ヘッダー行をコンパクトに */
+.notion-editor-compact table th {
+  padding: 0.1rem 0.4rem;
+  font-size: 0.78em;
+  line-height: 1.4;
+}
+
+/* No列（第1列）: システム列 */
+.notion-editor-compact table td:first-child,
+.notion-editor-compact table th:first-child {
+  width: 36px;
+  max-width: 36px;
+  min-width: 0;
+  text-align: center;
+  background: #f3f4f6;
+  color: #9ca3af;
+  font-size: 0.78em;
+  pointer-events: none;
+  user-select: none;
+}
+/* No列のリサイズハンドルを非表示 */
+.notion-editor-compact table th:first-child .column-resize-handle {
+  display: none;
+}
+
+/* チェックボックス列（最終列）をコンパクトに */
+.notion-editor-compact table td:last-child,
+.notion-editor-compact table th:last-child {
+  width: 40px;
+  max-width: 40px;
+  min-width: 0;
+  text-align: center;
+}
+/* チェックリストのマージン除去 */
+.notion-editor-compact table td:last-child ul[data-type="taskList"] {
+  margin: 0;
+  padding: 0;
+}
+.notion-editor-compact table td:last-child ul[data-type="taskList"] li {
+  justify-content: center;
+  margin: 0;
+}
 .notion-editor .selectedCell::after {
   content: '';
   position: absolute;
