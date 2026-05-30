@@ -180,30 +180,12 @@ try {
   console.warn('[build-and-sync] version.json 直接コピー失敗:', e.message)
 }
 
-// ── Step 6: AppData にも同期（開発者が常に最新版を実行するため）────────
+// ── Step 7: アプリを再起動（AppData 優先）────────────────────────────
+// AppData は更新ダイアログ経由で全PCと同じフローで更新する（開発機も例外なし）
 const localInstallDir = path.join(process.env.LOCALAPPDATA || '', 'StudyTracker')
 const localExePath    = path.join(localInstallDir, '学習トラッカー.exe')
-
-if (existsSync(localInstallDir)) {
-  console.log(`[build-and-sync] AppData にも同期中...`)
-  try {
-    execSync(
-      `robocopy "${srcDir}" "${localInstallDir}" /MIR /R:1 /W:1 /NFL /NDL /NJH /NJS /NC /NS /NP`,
-      { stdio: 'pipe' }
-    )
-    console.log(`[build-and-sync] AppData 同期完了 ✓ (${localInstallDir})`)
-  } catch (e) {
-    if ((e.status ?? 0) >= 8) {
-      console.warn(`[build-and-sync] AppData 同期失敗 (exit code ${e.status}) → スキップ`)
-    } else {
-      console.log(`[build-and-sync] AppData 同期完了 ✓`)
-    }
-  }
-}
-
-// ── Step 7: アプリを再起動（AppData 優先）────────────────────────────
-const driveExePath = path.join(destDir, '学習トラッカー.exe')
-const exeLaunchPath = existsSync(localExePath) ? localExePath : driveExePath
+const driveExePath    = path.join(destDir, '学習トラッカー.exe')
+const exeLaunchPath   = existsSync(localExePath) ? localExePath : driveExePath
 
 if (existsSync(exeLaunchPath)) {
   const launchFrom = existsSync(localExePath) ? 'ローカル (AppData)' : 'Drive (初回)'
