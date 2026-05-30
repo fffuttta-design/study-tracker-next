@@ -570,6 +570,32 @@ export function Sidebar({ user }: SidebarProps) {
   const signOut = useAuthStore((s) => s.signOut);
   const version = useElectronVersion();
 
+  // ── サイドバー幅のドラッグリサイズ ──────────────────────────────
+  const [sidebarWidth, setSidebarWidth] = useState(224); // デフォルト w-56
+  const isDragging = useRef(false);
+
+  const handleDragStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isDragging.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMove = (ev: MouseEvent) => {
+      if (!isDragging.current) return;
+      const newWidth = Math.min(400, Math.max(160, ev.clientX));
+      setSidebarWidth(newWidth);
+    };
+    const onUp = () => {
+      isDragging.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
+
   // NotionPlus エリアではページサイドバーに切り替え
   if (pathname.startsWith('/notion-plus')) {
     return <NotionPageSidebar user={user} />;
@@ -585,7 +611,15 @@ export function Sidebar({ user }: SidebarProps) {
   }
 
   return (
-    <aside className="flex h-full w-56 flex-col border-r border-gray-100 bg-gray-50">
+    <aside
+      className="relative flex h-full flex-col border-r border-gray-100 bg-gray-50 shrink-0"
+      style={{ width: sidebarWidth }}
+    >
+      {/* ドラッグハンドル */}
+      <div
+        onMouseDown={handleDragStart}
+        className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-brand-300 transition-colors z-10"
+      />
       {/* アプリ名 */}
       <div className="flex items-center gap-2 px-4 py-5">
         <Image src={appIcon} alt="" className="h-7 w-7 rounded-lg" />
