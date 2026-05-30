@@ -586,24 +586,13 @@ export function Sidebar({ user }: SidebarProps) {
 
   return (
     <aside className="flex h-full w-56 flex-col border-r border-gray-100 bg-gray-50">
-      {/* アプリ名 + 設定ボタン（右上） */}
+      {/* アプリ名 */}
       <div className="flex items-center gap-2 px-4 py-5">
         <Image src={appIcon} alt="" className="h-7 w-7 rounded-lg" />
-        <div className="flex-1 min-w-0">
+        <div>
           <p className="text-sm font-semibold text-gray-800">Study Tracker</p>
           <p className="text-xs text-gray-400">{version}</p>
         </div>
-        <Link
-          href="/settings"
-          title="設定"
-          className={`shrink-0 rounded-md p-1.5 text-base transition-colors ${
-            pathname.startsWith('/settings')
-              ? 'bg-gray-200 text-gray-700'
-              : 'text-gray-400 hover:bg-gray-200 hover:text-gray-700'
-          }`}
-        >
-          ⚙️
-        </Link>
       </div>
 
       {/* ナビゲーション */}
