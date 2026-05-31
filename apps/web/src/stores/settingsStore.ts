@@ -38,6 +38,9 @@ interface SettingsState {
   // 復習通知時刻 "HH:MM" 形式
   reviewNotificationTime: string;
   setReviewNotificationTime: (time: string) => void;
+  // 学習メモ設定
+  quickMemoDefaultRows: number;
+  setQuickMemoDefaultRows: (n: number) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -57,6 +60,8 @@ export const useSettingsStore = create<SettingsState>()(
       resetNotionPlusBlockOffsets: () => set({ notionPlusBlockOffsets: { ...DEFAULT_BLOCK_OFFSETS } }),
       reviewNotificationTime: '08:00',
       setReviewNotificationTime: (time) => set({ reviewNotificationTime: time }),
+      quickMemoDefaultRows: 5,
+      setQuickMemoDefaultRows: (n) => set({ quickMemoDefaultRows: n }),
     }),
     { name: 'study-tracker-settings' }
   )

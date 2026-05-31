@@ -1402,7 +1402,7 @@ export function NotionEditor({
       const tableEl = target.closest('table');
       if (!tableEl) {
         if (tableButtonTimeoutRef.current) clearTimeout(tableButtonTimeoutRef.current);
-        tableButtonTimeoutRef.current = setTimeout(() => setTableButtonInfo(null), 600);
+        tableButtonTimeoutRef.current = setTimeout(() => setTableButtonInfo(null), 1500);
         return;
       }
       if (tableButtonTimeoutRef.current) clearTimeout(tableButtonTimeoutRef.current);
@@ -1417,7 +1417,7 @@ export function NotionEditor({
 
     const handleMouseLeave = () => {
       if (tableButtonTimeoutRef.current) clearTimeout(tableButtonTimeoutRef.current);
-      tableButtonTimeoutRef.current = setTimeout(() => setTableButtonInfo(null), 600);
+      tableButtonTimeoutRef.current = setTimeout(() => setTableButtonInfo(null), 1500);
     };
 
     editorEl.addEventListener('mousemove', handleMouseMove);
@@ -1904,9 +1904,9 @@ export function NotionEditor({
           {/* 行追加ボタン（テーブル下） - 大きめのpadding で hit area を確保 */}
           <div
             className="fixed z-40"
-            style={{ top: tableButtonInfo.rowY, left: tableButtonInfo.centerX - 20, padding: '4px 20px 12px' }}
+            style={{ top: tableButtonInfo.rowY, left: tableButtonInfo.centerX - 20, padding: '8px 32px 20px' }}
             onMouseEnter={() => { if (tableButtonTimeoutRef.current) clearTimeout(tableButtonTimeoutRef.current); }}
-            onMouseLeave={() => { tableButtonTimeoutRef.current = setTimeout(() => setTableButtonInfo(null), 600); }}
+            onMouseLeave={() => { tableButtonTimeoutRef.current = setTimeout(() => setTableButtonInfo(null), 1500); }}
           >
             <button
               className="flex h-5 w-5 items-center justify-center rounded-full border border-gray-300 bg-white text-xs text-gray-500 shadow-sm hover:border-brand-400 hover:text-brand-500"
@@ -1917,9 +1917,9 @@ export function NotionEditor({
           {/* 列追加ボタン（テーブル右） */}
           <div
             className="fixed z-40"
-            style={{ top: tableButtonInfo.centerY - 20, left: tableButtonInfo.colX, padding: '20px 12px 20px 4px' }}
+            style={{ top: tableButtonInfo.centerY - 20, left: tableButtonInfo.colX, padding: '20px 20px 20px 8px' }}
             onMouseEnter={() => { if (tableButtonTimeoutRef.current) clearTimeout(tableButtonTimeoutRef.current); }}
-            onMouseLeave={() => { tableButtonTimeoutRef.current = setTimeout(() => setTableButtonInfo(null), 600); }}
+            onMouseLeave={() => { tableButtonTimeoutRef.current = setTimeout(() => setTableButtonInfo(null), 1500); }}
           >
             <button
               className="flex h-5 w-5 items-center justify-center rounded-full border border-gray-300 bg-white text-xs text-gray-500 shadow-sm hover:border-brand-400 hover:text-brand-500"

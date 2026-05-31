@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { subscribeCol, upsertDoc } from '@study-tracker/firebase';
+import { subscribeCol, upsertDoc, deleteDocById } from '@study-tracker/firebase';
 import { type DailyMemo } from '@study-tracker/core';
 
 interface DailyMemoState {
@@ -8,6 +8,7 @@ interface DailyMemoState {
   subscribe: (uid: string) => () => void;
   getOrCreate: (uid: string, date: string) => Promise<DailyMemo>;
   update: (uid: string, date: string, content: string) => Promise<void>;
+  remove: (uid: string, date: string) => Promise<void>;
 }
 
 export const useDailyMemoStore = create<DailyMemoState>((set, get) => ({
@@ -35,5 +36,9 @@ export const useDailyMemoStore = create<DailyMemoState>((set, get) => ({
       content,
       updatedAt: new Date().toISOString(),
     } as Record<string, unknown>);
+  },
+
+  remove: async (uid, date) => {
+    await deleteDocById(uid, 'dailyMemos', date);
   },
 }));

@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { useDailyMemoStore } from '@/stores/dailyMemoStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { AddItemDialog } from '@/components/notion/AddItemDialog';
 
 const NotionEditor = dynamic(
@@ -21,34 +22,36 @@ const NotionEditor = dynamic(
 
 // ── デフォルトテーブルJSON ────────────────────────────────────────────
 
-const DEFAULT_TABLE_CONTENT = JSON.stringify({
-  type: 'doc',
-  content: [
-    {
-      type: 'table',
-      content: [
-        {
-          type: 'tableRow',
-          content: [
-            { type: 'tableHeader', attrs: { colspan: 1, rowspan: 1, colwidth: [36] },  content: [{ type: 'paragraph', content: [{ type: 'text', text: 'No' }] }] },
-            { type: 'tableHeader', attrs: { colspan: 1, rowspan: 1, colwidth: null },  content: [{ type: 'paragraph', content: [{ type: 'text', text: 'タイトル' }] }] },
-            { type: 'tableHeader', attrs: { colspan: 1, rowspan: 1, colwidth: null },  content: [{ type: 'paragraph', content: [{ type: 'text', text: '内容' }] }] },
-            { type: 'tableHeader', attrs: { colspan: 1, rowspan: 1, colwidth: [40] },  content: [{ type: 'paragraph', content: [{ type: 'text', text: '✓' }] }] },
-          ],
-        },
-        ...[1, 2, 3, 4, 5].map((n) => ({
-          type: 'tableRow',
-          content: [
-            { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: [36] },  content: [{ type: 'paragraph', content: [{ type: 'text', text: String(n) }] }] },
-            { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: null },  content: [{ type: 'paragraph' }] },
-            { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: null },  content: [{ type: 'paragraph' }] },
-            { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: [40] },  content: [{ type: 'taskList', content: [{ type: 'taskItem', attrs: { checked: false }, content: [{ type: 'paragraph' }] }] }] },
-          ],
-        })),
-      ],
-    },
-  ],
-});
+function buildDefaultTableContent(rows: number): string {
+  return JSON.stringify({
+    type: 'doc',
+    content: [
+      {
+        type: 'table',
+        content: [
+          {
+            type: 'tableRow',
+            content: [
+              { type: 'tableHeader', attrs: { colspan: 1, rowspan: 1, colwidth: [36] },  content: [{ type: 'paragraph', content: [{ type: 'text', text: 'No' }] }] },
+              { type: 'tableHeader', attrs: { colspan: 1, rowspan: 1, colwidth: null },  content: [{ type: 'paragraph', content: [{ type: 'text', text: 'タイトル' }] }] },
+              { type: 'tableHeader', attrs: { colspan: 1, rowspan: 1, colwidth: null },  content: [{ type: 'paragraph', content: [{ type: 'text', text: '内容' }] }] },
+              { type: 'tableHeader', attrs: { colspan: 1, rowspan: 1, colwidth: [40] },  content: [{ type: 'paragraph', content: [{ type: 'text', text: '✓' }] }] },
+            ],
+          },
+          ...Array.from({ length: rows }, (_, i) => ({
+            type: 'tableRow',
+            content: [
+              { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: [36] },  content: [{ type: 'paragraph', content: [{ type: 'text', text: String(i + 1) }] }] },
+              { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: null },  content: [{ type: 'paragraph' }] },
+              { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: null },  content: [{ type: 'paragraph' }] },
+              { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: [40] },  content: [{ type: 'taskList', content: [{ type: 'taskItem', attrs: { checked: false }, content: [{ type: 'paragraph' }] }] }] },
+            ],
+          })),
+        ],
+      },
+    ],
+  });
+}
 
 // ── ユーティリティ ────────────────────────────────────────────────────
 
@@ -74,9 +77,8 @@ function countTableDataRows(content: string): number {
     let count = 0;
     const walk = (node: { type: string; content?: typeof node[] }) => {
       if (node.type === 'table') {
-        const rows = (node.content ?? []).filter((r) => r.type === 'tableRow');
-        // ヘッダー行（tableHeader を含む行）を除いた数
-        count += rows.filter((r) =>
+        count += (node.content ?? []).filter((r) =>
+          r.type === 'tableRow' &&
           (r.content ?? []).some((cell) => cell.type === 'tableCell'),
         ).length;
         return;
@@ -90,38 +92,106 @@ function countTableDataRows(content: string): number {
   }
 }
 
+// ── 設定モーダル ──────────────────────────────────────────────────────
+
+function SettingsModal({ onClose }: { onClose: () => void }) {
+  const { quickMemoDefaultRows, setQuickMemoDefaultRows } = useSettingsStore();
+  const [rows, setRows] = useState(quickMemoDefaultRows);
+
+  const handleSave = () => {
+    setQuickMemoDefaultRows(Math.max(1, Math.min(20, rows)));
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
+      <div
+        className="w-80 rounded-xl bg-white p-5 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="mb-4 text-sm font-semibold text-gray-800">⚙️ 学習メモ設定</h3>
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-gray-600">
+              デフォルト行数（新規作成時のテーブル行数）
+            </label>
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                min={1}
+                max={20}
+                value={rows}
+                onChange={(e) => setRows(Number(e.target.value))}
+                className="flex-1 accent-brand-500"
+              />
+              <span className="w-8 text-center text-sm font-semibold text-gray-700">{rows}</span>
+            </div>
+          </div>
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-lg px-4 py-1.5 text-xs text-gray-500 hover:bg-gray-100">
+            キャンセル
+          </button>
+          <button
+            onClick={handleSave}
+            className="rounded-lg bg-brand-500 px-4 py-1.5 text-xs font-medium text-white hover:bg-brand-600"
+          >
+            保存
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── 日付セクション ────────────────────────────────────────────────────
 
 interface DateSectionProps {
   date: string;
   isToday: boolean;
-  hasContent: boolean;
   rowCount: number;
   content: string;
   isOpen: boolean;
+  defaultTableContent: string;
   onToggle: () => void;
   onSave: (_title: string, content: string) => Promise<void>;
+  onDelete: () => void;
 }
 
 const DateSection = forwardRef<HTMLDivElement, DateSectionProps>(function DateSection(
-  { date, isToday, hasContent, rowCount, content, isOpen, onToggle, onSave },
+  { date, isToday, rowCount, content, isOpen, defaultTableContent, onToggle, onSave, onDelete },
   ref,
 ) {
   const [editorKey, setEditorKey] = useState(0);
   const wasOpen = useRef(false);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+
   useEffect(() => {
     if (isOpen && !wasOpen.current) setEditorKey((k) => k + 1);
     wasOpen.current = isOpen;
   }, [isOpen]);
 
-  // 表示するコンテンツ（空なら最初からデフォルトテーブルを入れる）
-  const displayContent = content || DEFAULT_TABLE_CONTENT;
+  // 右クリックメニューを閉じる
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const close = () => setCtxMenu(null);
+    window.addEventListener('click', close);
+    return () => window.removeEventListener('click', close);
+  }, [ctxMenu]);
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setCtxMenu({ x: e.clientX, y: e.clientY });
+  };
+
+  const displayContent = content || defaultTableContent;
 
   return (
     <div ref={ref} className="border-b border-gray-100 last:border-0">
       {/* セクションヘッダー */}
       <button
         onClick={onToggle}
+        onContextMenu={handleContextMenu}
         className="flex w-full items-center gap-2 px-4 py-2 text-left transition-colors hover:bg-gray-50"
       >
         <span
@@ -130,18 +200,32 @@ const DateSection = forwardRef<HTMLDivElement, DateSectionProps>(function DateSe
         >
           ▶
         </span>
-        <span className={`shrink-0 text-xs font-semibold ${
-          hasContent ? 'text-red-500' : isToday ? 'text-brand-500' : 'text-gray-400'
-        }`}>
+        <span className={`shrink-0 text-xs font-semibold ${isToday ? 'text-brand-500' : 'text-gray-500'}`}>
           {formatDateHeading(date)}
         </span>
         {isToday && (
           <span className="shrink-0 rounded bg-brand-500 px-1 py-0.5 text-[10px] text-white">今日</span>
         )}
         {rowCount > 0 && (
-          <span className="shrink-0 text-[10px] text-gray-400">{rowCount}件</span>
+          <span className="shrink-0 text-[10px] font-medium text-brand-500">{rowCount}件あり!</span>
         )}
       </button>
+
+      {/* 右クリックメニュー */}
+      {ctxMenu && (
+        <div
+          className="fixed z-50 min-w-[120px] overflow-hidden rounded-lg border border-gray-100 bg-white py-1 shadow-xl"
+          style={{ top: ctxMenu.y, left: ctxMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => { onDelete(); setCtxMenu(null); }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-xs text-red-500 hover:bg-red-50"
+          >
+            🗑 このメモを削除
+          </button>
+        </div>
+      )}
 
       {/* エディタ（展開時のみ） */}
       {isOpen && (
@@ -164,11 +248,19 @@ const DateSection = forwardRef<HTMLDivElement, DateSectionProps>(function DateSe
 
 export default function QuickMemoPage() {
   const { user } = useAuthStore();
-  const { memos, loading, update } = useDailyMemoStore();
+  const { memos, loading, update, remove } = useDailyMemoStore();
+  const { quickMemoDefaultRows } = useSettingsStore();
   const router = useRouter();
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const today = toLocalDateString(new Date());
+
+  // デフォルトテーブル（設定値に基づく）
+  const defaultTableContent = useMemo(
+    () => buildDefaultTableContent(quickMemoDefaultRows),
+    [quickMemoDefaultRows],
+  );
 
   // 表示する日付一覧（今日 + 内容のある日のみ、新しい順）
   const allDates = useMemo(() => {
@@ -200,6 +292,20 @@ export default function QuickMemoPage() {
     [user, update],
   );
 
+  const handleDelete = useCallback(
+    (date: string) => {
+      if (!user) return;
+      if (!window.confirm(`${formatDateHeading(date)} のメモを削除しますか？`)) return;
+      remove(user.uid, date);
+      setOpenDates((prev) => {
+        const next = new Set(prev);
+        next.delete(date);
+        return next;
+      });
+    },
+    [user, remove],
+  );
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -218,6 +324,13 @@ export default function QuickMemoPage() {
             <h1 className="text-sm font-semibold text-gray-800">学習メモ</h1>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSettingsOpen(true)}
+              className="rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-500 hover:bg-gray-50"
+              title="設定"
+            >
+              ⚙️
+            </button>
             <button
               onClick={() => router.push('/notion-plus')}
               className="rounded-lg border border-gray-200 px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
@@ -238,19 +351,19 @@ export default function QuickMemoPage() {
         <div className="flex-1 overflow-y-auto">
           {allDates.map((date) => {
             const memo = memos.find((m) => m.id === date);
-            const hasContent = !!(memo?.content && memo.content.trim().length > 0);
             const rowCount = countTableDataRows(memo?.content ?? '');
             return (
               <DateSection
                 key={date}
                 date={date}
                 isToday={date === today}
-                hasContent={hasContent}
                 rowCount={rowCount}
                 content={memo?.content ?? ''}
+                defaultTableContent={defaultTableContent}
                 isOpen={openDates.has(date)}
                 onToggle={() => toggleDate(date)}
                 onSave={makeSaveHandler(date)}
+                onDelete={() => handleDelete(date)}
               />
             );
           })}
@@ -260,6 +373,8 @@ export default function QuickMemoPage() {
       {addDialogOpen && user && (
         <AddItemDialog uid={user.uid} onClose={() => setAddDialogOpen(false)} />
       )}
+
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
     </>
   );
 }
