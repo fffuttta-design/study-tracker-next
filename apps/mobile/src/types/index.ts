@@ -140,3 +140,25 @@ export function importanceLabel(v: Importance): string {
 export function importanceColor(v?: Importance): string {
   return v === 'high' ? '#ef4444' : v === 'medium' ? '#f59e0b' : '#6b7280';
 }
+
+/** TipTap JSON 内の指定インデックスの taskItem の checked を反転して返す */
+export function toggleTipTapTask(content: string, taskIndex: number): string {
+  try {
+    const doc = JSON.parse(content);
+    let idx = 0;
+    const toggle = (node: any): any => {
+      if (node.type === 'taskItem') {
+        if (idx === taskIndex) {
+          idx++;
+          return { ...node, attrs: { ...(node.attrs ?? {}), checked: !(node.attrs?.checked ?? false) } };
+        }
+        idx++;
+      }
+      if (node.content) return { ...node, content: node.content.map(toggle) };
+      return node;
+    };
+    return JSON.stringify({ ...doc, content: doc.content.map(toggle) });
+  } catch {
+    return content;
+  }
+}

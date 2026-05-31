@@ -10,12 +10,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Markdown from 'react-native-markdown-display';
 import { useAuthStore } from '../../store/authStore';
 import { useLearningStore } from '../../store/learningStore';
-import { LearningItem, hasDueReview, isFullyCompleted, localDateKey, REVIEW_STAGE_LABELS, isTipTapContent } from '../../types';
+import { LearningItem, hasDueReview, isFullyCompleted, localDateKey, REVIEW_STAGE_LABELS, isTipTapContent, toggleTipTapTask } from '../../types';
 import { TipTapRenderer } from '../../components/TipTapRenderer';
 
 export default function HomeScreen({ navigation }: any) {
   const { user } = useAuthStore();
-  const { items, subscribeItems, subscribeCategories, completeReview } = useLearningStore();
+  const { items, subscribeItems, subscribeCategories, completeReview, updateItemContent } = useLearningStore();
 
   useEffect(() => {
     if (!user) return;
@@ -48,6 +48,12 @@ export default function HomeScreen({ navigation }: any) {
 
   // 今日の復習: 展開中カードID
   const [expandedDueId, setExpandedDueId] = useState<string | null>(null);
+
+  const handleToggleTask = async (item: LearningItem, taskIndex: number) => {
+    if (!user) return;
+    const newContent = toggleTipTapTask(item.content, taskIndex);
+    await updateItemContent(user.uid, item.id, newContent);
+  };
 
   const handleCompleteReview = async (item: LearningItem, stageIndex: number) => {
     if (!user) return;
@@ -116,6 +122,7 @@ export default function HomeScreen({ navigation }: any) {
                   expanded={expandedDueId === item.id}
                   onToggle={() => setExpandedDueId(prev => prev === item.id ? null : item.id)}
                   onCompleteReview={handleCompleteReview}
+                  onToggleTask={(taskIndex) => handleToggleTask(item, taskIndex)}
                 />
               ))
           }
@@ -139,11 +146,12 @@ function HomeItemChip({ item, onPress }: { item: LearningItem; onPress: () => vo
 
 // ── 今日の復習カード（タップでその場に展開） ────────────────────────────────
 
-function DueItemCard({ item, expanded, onToggle, onCompleteReview }: {
+function DueItemCard({ item, expanded, onToggle, onCompleteReview, onToggleTask }: {
   item: LearningItem;
   expanded: boolean;
   onToggle: () => void;
   onCompleteReview: (item: LearningItem, stageIndex: number) => void;
+  onToggleTask?: (taskIndex: number) => void;
 }) {
   const nextReview = item.reviews?.find(r => !r.completed);
 
@@ -171,7 +179,7 @@ function DueItemCard({ item, expanded, onToggle, onCompleteReview }: {
           {item.content ? (
             <View style={styles.dueCardContent}>
               {isTipTapContent(item.content) ? (
-                <TipTapRenderer content={item.content} baseTextColor="#6b7280" />
+                <TipTapRenderer content={item.content} baseTextColor="#6b7280" onToggleTask={onToggleTask} />
               ) : (
                 <Markdown style={markdownStyles}>{item.content}</Markdown>
               )}

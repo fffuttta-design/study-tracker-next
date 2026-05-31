@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TextStyle } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, TextStyle } from 'react-native';
 
 interface TipTapNode {
   type: string;
@@ -9,18 +9,26 @@ interface TipTapNode {
   attrs?: Record<string, any>;
 }
 
+// レンダリング時の共有コンテキスト（taskItem のグローバルインデックス追跡）
+interface RenderCtx {
+  taskCounter: number;
+  onToggleTask?: (index: number) => void;
+}
+
 function extractText(node: TipTapNode): string {
   if (node.type === 'text') return node.text ?? '';
   return (node.content ?? []).map(extractText).join('');
 }
 
-function renderInline(nodes: TipTapNode[]): React.ReactNode {
+// ① baseColor を引数で受け取り、全テキストに明示的な色を設定
+//    → 親 <Text> の色に飲み込まれず、マーク色が確実に上書きされる
+function renderInline(nodes: TipTapNode[], baseColor: string): React.ReactNode {
   return nodes.map((node, i) => {
     if (node.type === 'hardBreak') return <Text key={i}>{'\n'}</Text>;
     if (node.type !== 'text') return null;
 
     const marks = node.marks ?? [];
-    const style: TextStyle = {};
+    const style: TextStyle = { color: baseColor }; // 明示的なベース色
 
     for (const mark of marks) {
       switch (mark.type) {
@@ -37,7 +45,7 @@ function renderInline(nodes: TipTapNode[]): React.ReactNode {
           style.textDecorationLine = 'underline';
           break;
         case 'textStyle':
-          if (mark.attrs?.color) style.color = mark.attrs.color;
+          if (mark.attrs?.color) style.color = mark.attrs.color; // ベース色を上書き
           break;
         case 'highlight':
           if (mark.attrs?.color) style.backgroundColor = mark.attrs.color;
@@ -50,11 +58,7 @@ function renderInline(nodes: TipTapNode[]): React.ReactNode {
       }
     }
 
-    return (
-      <Text key={i} style={style}>
-        {node.text}
-      </Text>
-    );
+    return <Text key={i} style={style}>{node.text}</Text>;
   });
 }
 
@@ -62,14 +66,15 @@ function renderBlock(
   node: TipTapNode,
   key: number,
   baseColor: string,
+  ctx: RenderCtx,
 ): React.ReactNode {
   switch (node.type) {
     case 'paragraph': {
       const children = node.content ?? [];
       if (children.length === 0) return <Text key={key} style={s.paragraph}>{' '}</Text>;
       return (
-        <Text key={key} style={[s.paragraph, { color: baseColor }]}>
-          {renderInline(children)}
+        <Text key={key} style={s.paragraph}>
+          {renderInline(children, baseColor)}
         </Text>
       );
     }
@@ -79,7 +84,7 @@ function renderBlock(
       const hs = level === 1 ? s.h1 : level === 2 ? s.h2 : s.h3;
       return (
         <Text key={key} style={hs}>
-          {renderInline(node.content ?? [])}
+          {renderInline(node.content ?? [], baseColor)}
         </Text>
       );
     }
@@ -91,7 +96,7 @@ function renderBlock(
             <View key={i} style={s.listItem}>
               <Text style={[s.bullet, { color: baseColor }]}>{'•'}</Text>
               <Text style={[s.listItemText, { color: baseColor }]}>
-                {renderInline(item.content?.[0]?.content ?? [])}
+                {renderInline(item.content?.[0]?.content ?? [], baseColor)}
               </Text>
             </View>
           ))}
@@ -105,21 +110,29 @@ function renderBlock(
             <View key={i} style={s.listItem}>
               <Text style={[s.bullet, { color: baseColor }]}>{i + 1}{'.'}</Text>
               <Text style={[s.listItemText, { color: baseColor }]}>
-                {renderInline(item.content?.[0]?.content ?? [])}
+                {renderInline(item.content?.[0]?.content ?? [], baseColor)}
               </Text>
             </View>
           ))}
         </View>
       );
 
+    // ② taskList: onToggleTask があればタップ可能にする
     case 'taskList':
       return (
         <View key={key} style={s.list}>
           {(node.content ?? []).map((item, i) => {
             const checked = item.attrs?.checked ?? false;
+            const currentIndex = ctx.taskCounter++;
             return (
-              <View key={i} style={s.listItem}>
-                <Text style={[s.bullet, { color: baseColor }]}>
+              <TouchableOpacity
+                key={i}
+                style={s.listItem}
+                onPress={() => ctx.onToggleTask?.(currentIndex)}
+                activeOpacity={ctx.onToggleTask ? 0.6 : 1}
+                disabled={!ctx.onToggleTask}
+              >
+                <Text style={[s.bullet, { color: checked ? '#10b981' : '#9ca3af' }]}>
                   {checked ? '☑' : '☐'}
                 </Text>
                 <Text
@@ -128,9 +141,9 @@ function renderBlock(
                     { color: baseColor },
                     checked && s.strikethrough,
                   ]}>
-                  {renderInline(item.content?.[0]?.content ?? [])}
+                  {renderInline(item.content?.[0]?.content ?? [], baseColor)}
                 </Text>
-              </View>
+              </TouchableOpacity>
             );
           })}
         </View>
@@ -140,7 +153,7 @@ function renderBlock(
       return (
         <View key={key} style={s.blockquote}>
           {(node.content ?? []).map((child, i) =>
-            renderBlock(child, i, '#6b7280'),
+            renderBlock(child, i, '#6b7280', ctx),
           )}
         </View>
       );
@@ -159,7 +172,7 @@ function renderBlock(
       if (node.content) {
         return (
           <View key={key}>
-            {node.content.map((child, i) => renderBlock(child, i, baseColor))}
+            {node.content.map((child, i) => renderBlock(child, i, baseColor, ctx))}
           </View>
         );
       }
@@ -170,9 +183,10 @@ function renderBlock(
 interface Props {
   content: string;
   baseTextColor?: string;
+  onToggleTask?: (taskIndex: number) => void;
 }
 
-export function TipTapRenderer({ content, baseTextColor = '#374151' }: Props) {
+export function TipTapRenderer({ content, baseTextColor = '#374151', onToggleTask }: Props) {
   let doc: TipTapNode;
   try {
     doc = JSON.parse(content);
@@ -181,10 +195,12 @@ export function TipTapRenderer({ content, baseTextColor = '#374151' }: Props) {
     return <Text style={{ color: baseTextColor, fontSize: 13 }}>{content}</Text>;
   }
 
+  const ctx: RenderCtx = { taskCounter: 0, onToggleTask };
+
   return (
     <View>
       {(doc.content ?? []).map((node, i) =>
-        renderBlock(node, i, baseTextColor),
+        renderBlock(node, i, baseTextColor, ctx),
       )}
     </View>
   );

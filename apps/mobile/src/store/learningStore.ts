@@ -20,6 +20,7 @@ interface LearningState {
   addItem: (uid: string, item: Omit<LearningItem, 'id' | 'reviews' | 'sortOrder' | 'createdAt'>) => Promise<void>;
   completeReview: (uid: string, itemId: string, stageIndex: number) => Promise<void>;
   deleteItem: (uid: string, itemId: string) => Promise<void>;
+  updateItemContent: (uid: string, itemId: string, content: string) => Promise<void>;
 }
 
 export const useLearningStore = create<LearningState>(set => ({
@@ -101,5 +102,12 @@ export const useLearningStore = create<LearningState>(set => ({
       .collection(COLLECTIONS.learningItems(uid))
       .doc(itemId)
       .delete();
+  },
+
+  updateItemContent: async (uid, itemId, content) => {
+    await firestore()
+      .collection(COLLECTIONS.learningItems(uid))
+      .doc(itemId)
+      .update({ content });
   },
 }));
