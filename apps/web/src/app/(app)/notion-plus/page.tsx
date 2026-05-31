@@ -145,10 +145,8 @@ export default function NotionPlusPage() {
   const configRef = useRef(config);
   useEffect(() => { configRef.current = config; }, [config]);
 
-  // Firestore からの確認が来たら optimistic override を解除
-  useEffect(() => {
-    setOptimisticConfig(null);
-  }, [workspacePage?.content]);
+  // ※ optimisticConfig はコンポーネントのアンマウント時（ページ離脱）に自然にリセットされる。
+  // Firestore onSnapshot のたびに null にしてしまうと編集中のグループが消えるため useEffect は不要。
 
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editingLabel, setEditingLabel] = useState('');
