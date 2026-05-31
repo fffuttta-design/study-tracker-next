@@ -766,7 +766,7 @@ function InlineDatabaseEmbed({ node }: NodeViewProps) {
         </div>
         {/* テーブル */}
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
+          <table className="min-w-max border-collapse">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50">
                 {schema.properties.map((prop) => (
@@ -796,7 +796,7 @@ function InlineDatabaseEmbed({ node }: NodeViewProps) {
                         display = opt?.name ?? '';
                       } else display = String(val);
                       return (
-                        <td key={prop.id} className="px-2 py-1 border-r border-gray-50 last:border-r-0 truncate max-w-[120px] text-gray-700">
+                        <td key={prop.id} className="px-2 py-1 border-r border-gray-50 last:border-r-0 min-w-[80px] whitespace-nowrap text-gray-700">
                           {display}
                         </td>
                       );
