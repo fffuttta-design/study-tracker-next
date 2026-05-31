@@ -246,8 +246,8 @@ export function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => vo
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
-        <div className="flex w-full overflow-hidden rounded-2xl shadow-2xl bg-white" style={{ height: 'calc(100% - 3rem)' }}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2">
+        <div className="flex w-full overflow-hidden rounded-2xl shadow-2xl bg-white" style={{ height: 'calc(100% - 1rem)' }}>
           {/* 左パネル: ページリスト */}
           <div className="flex w-60 flex-col border-r border-gray-100 bg-gray-50">
             <div className="flex items-center justify-between border-b border-gray-100 px-3 py-3">

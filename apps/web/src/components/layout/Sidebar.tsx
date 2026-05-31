@@ -50,6 +50,9 @@ function PageTreeEntry({
   currentId: string | undefined;
   onCtxMenu: (e: React.MouseEvent, page: NotionPage) => void;
 }) {
+  // ブックはサイドバーツリーに表示しない
+  if (page.type === 'book') return null;
+
   const isActive = page.id === currentId;
   const activeChildId = currentId && currentId !== page.id
     ? findActiveChild(pages, page.id, currentId)

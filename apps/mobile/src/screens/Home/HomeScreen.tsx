@@ -7,11 +7,10 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Markdown from 'react-native-markdown-display';
 import { useAuthStore } from '../../store/authStore';
 import { useLearningStore } from '../../store/learningStore';
-import { LearningItem, hasDueReview, isFullyCompleted, localDateKey, REVIEW_STAGE_LABELS, isTipTapContent, toggleTipTapTask } from '../../types';
-import { TipTapRenderer } from '../../components/TipTapRenderer';
+import { LearningItem, hasDueReview, isFullyCompleted, localDateKey, REVIEW_STAGE_LABELS, toggleTipTapTask } from '../../types';
+import { ContentRenderer } from '../../components/ContentRenderer';
 
 export default function HomeScreen({ navigation }: any) {
   const { user } = useAuthStore();
@@ -178,18 +177,30 @@ function DueItemCard({ item, expanded, onToggle, onCompleteReview, onToggleTask 
           {/* 本文 */}
           {item.content ? (
             <View style={styles.dueCardContent}>
-              {isTipTapContent(item.content) ? (
-                <TipTapRenderer content={item.content} baseTextColor="#6b7280" onToggleTask={onToggleTask} />
-              ) : (
-                <Markdown style={markdownStyles}>{item.content}</Markdown>
-              )}
+              <ContentRenderer
+                content={item.content}
+                baseTextColor="#374151"
+                onToggleTask={onToggleTask}
+              />
             </View>
           ) : null}
 
-          {/* 復習ステージボタン */}
+          {/* 大きな復習完了ボタン（次の未完了ステージを1タップで完了） */}
+          {nextReview && (
+            <TouchableOpacity
+              style={styles.completeBtn}
+              onPress={() => onCompleteReview(item, nextReview.stageIndex)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.completeBtnText}>✓ 復習完了</Text>
+              <Text style={styles.completeBtnStage}>{REVIEW_STAGE_LABELS[nextReview.stageIndex]}</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* 復習ステージ進捗 */}
           <View style={styles.reviewRow}>
             {(item.reviews ?? []).map((r, i) => (
-              <TouchableOpacity
+              <View
                 key={i}
                 style={[
                   styles.reviewDot,
@@ -199,12 +210,10 @@ function DueItemCard({ item, expanded, onToggle, onCompleteReview, onToggleTask 
                         ? styles.reviewDotDue
                         : styles.reviewDotFuture),
                 ]}
-                onPress={() => !r.completed && onCompleteReview(item, r.stageIndex)}
-                disabled={r.completed}
               >
                 <Text style={styles.reviewDotText}>{REVIEW_STAGE_LABELS[i] ?? ''}</Text>
-                {r.completed && <Text style={styles.reviewDotCheck}>✓</Text>}
-              </TouchableOpacity>
+                {r.completed && <Text style={styles.reviewDotCheck}> ✓</Text>}
+              </View>
             ))}
           </View>
         </>
@@ -224,15 +233,6 @@ function StatMini({ label, value, color }: { label: string; value: number; color
   );
 }
 
-const markdownStyles = {
-  body:        { fontSize: 13, color: '#6b7280', marginBottom: 4 },
-  strong:      { fontWeight: '700' as const, color: '#374151' },
-  em:          { fontStyle: 'italic' as const },
-  code_inline: { backgroundColor: '#f3f4f6', borderRadius: 3, paddingHorizontal: 4, fontFamily: 'monospace', fontSize: 12 },
-  code_block:  { backgroundColor: '#f3f4f6', borderRadius: 6, padding: 8, fontFamily: 'monospace', fontSize: 12 },
-  bullet_list: { marginVertical: 2 },
-  list_item:   { marginVertical: 1 },
-};
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f9fafb' },
@@ -324,22 +324,36 @@ const styles = StyleSheet.create({
     borderTopColor: '#fecaca',
   },
 
+  // 大きな復習完了ボタン
+  completeBtn: {
+    margin: 10,
+    marginBottom: 6,
+    backgroundColor: '#10b981',
+    borderRadius: 10,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  completeBtnText: { fontSize: 17, fontWeight: '700', color: '#fff' },
+  completeBtnStage: { fontSize: 12, color: 'rgba(255,255,255,0.8)', fontWeight: '500' },
+
+  // 復習ステージ進捗（非タップ・視覚表示のみ）
   reviewRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 5,
     paddingHorizontal: 10,
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#fecaca',
+    paddingBottom: 10,
+    paddingTop: 4,
   },
   reviewDot: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 14,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   reviewDotDone:   { backgroundColor: '#10b981' },
   reviewDotDue:    { backgroundColor: '#ef4444' },

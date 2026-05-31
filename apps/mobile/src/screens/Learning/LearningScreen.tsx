@@ -8,7 +8,6 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Markdown from 'react-native-markdown-display';
 import { useAuthStore } from '../../store/authStore';
 import { useLearningStore } from '../../store/learningStore';
 import {
@@ -19,9 +18,8 @@ import {
   importanceColor,
   importanceLabel,
   REVIEW_STAGE_LABELS,
-  isTipTapContent,
 } from '../../types';
-import { TipTapRenderer } from '../../components/TipTapRenderer';
+import { ContentRenderer } from '../../components/ContentRenderer';
 
 type Tab = 'today' | 'review' | 'all';
 
@@ -187,11 +185,7 @@ function LearningItemCard({
       {expanded && (
         <>
           {item.content ? (
-            isTipTapContent(item.content) ? (
-              <TipTapRenderer content={item.content} baseTextColor="#6b7280" />
-            ) : (
-              <Markdown style={markdownStyles}>{item.content}</Markdown>
-            )
+            <ContentRenderer content={item.content} baseTextColor="#6b7280" />
           ) : null}
           {/* 復習ステージ */}
           <View style={styles.reviewRow}>
@@ -214,20 +208,6 @@ function LearningItemCard({
   );
 }
 
-const markdownStyles = {
-  body:        { fontSize: 13, color: '#6b7280', marginBottom: 8 },
-  strong:      { fontWeight: '700' as const, color: '#374151' },
-  em:          { fontStyle: 'italic' as const },
-  code_inline: { backgroundColor: '#f3f4f6', borderRadius: 3, paddingHorizontal: 4, fontFamily: 'monospace', fontSize: 12 },
-  code_block:  { backgroundColor: '#f3f4f6', borderRadius: 6, padding: 8, fontFamily: 'monospace', fontSize: 12 },
-  bullet_list: { marginVertical: 2 },
-  ordered_list:{ marginVertical: 2 },
-  list_item:   { marginVertical: 1 },
-  heading1:    { fontSize: 16, fontWeight: '700' as const, color: '#111827', marginVertical: 4 },
-  heading2:    { fontSize: 14, fontWeight: '700' as const, color: '#111827', marginVertical: 3 },
-  heading3:    { fontSize: 13, fontWeight: '700' as const, color: '#374151', marginVertical: 2 },
-  blockquote:  { borderLeftWidth: 3, borderLeftColor: '#d1d5db', paddingLeft: 8, marginLeft: 4 },
-};
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f9fafb' },
