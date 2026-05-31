@@ -5,7 +5,8 @@ import Image from 'next/image';
 import { Suspense, useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type User } from 'firebase/auth';
-import { type NotionPage } from '@study-tracker/core';
+import { type NotionPage, serializeBookChapters, createBookChapter } from '@study-tracker/core';
+import { deleteField } from 'firebase/firestore';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotionPageStore, WORKSPACE_ID } from '@/stores/notionPageStore';
 import { useElectronVersion } from '@/hooks/useElectronVersion';
@@ -28,6 +29,116 @@ function PageIcon({ icon }: { icon: string }) {
     return <img src={icon} alt="" className="h-4 w-4 shrink-0 rounded object-cover" style={{ aspectRatio: '1/1' }} />;
   }
   return <span className="shrink-0 text-sm leading-none">{icon}</span>;
+}
+
+// ページの祖先タイトルを "A › B" 形式で返す
+function getAncestorPath(pages: NotionPage[], page: NotionPage): string {
+  const parts: string[] = [];
+  let current: NotionPage | undefined = page;
+  while (current?.parentId && current.parentId !== WORKSPACE_ID) {
+    const parent = pages.find((p) => p.id === current!.parentId);
+    if (!parent) break;
+    parts.unshift(parent.title || 'Untitled');
+    current = parent;
+  }
+  return parts.join(' › ');
+}
+
+// ── W4: ページ移動モーダル ───────────────────────────────────────────
+function MovePageModal({
+  target, pages, uid, onClose,
+}: {
+  target: NotionPage;
+  pages: NotionPage[];
+  uid: string;
+  onClose: () => void;
+}) {
+  const { update } = useNotionPageStore();
+  const router = useRouter();
+
+  const getDescendantIds = (id: string): string[] => {
+    const children = pages.filter((p) => p.parentId === id);
+    return children.flatMap((c) => [c.id, ...getDescendantIds(c.id)]);
+  };
+
+  const excludeIds = new Set([target.id, WORKSPACE_ID, ...getDescendantIds(target.id)]);
+  const validTargets = pages
+    .filter((p) => !excludeIds.has(p.id) && p.type !== 'database')
+    .sort((a, b) => a.order - b.order);
+
+  const getMaxOrder = (parentId: string | undefined) => {
+    const siblings = pages.filter((p) =>
+      p.id !== WORKSPACE_ID && p.id !== target.id &&
+      (parentId ? p.parentId === parentId : !p.parentId)
+    );
+    return siblings.reduce((max, p) => Math.max(max, p.order ?? 0), -1) + 1;
+  };
+
+  const handleMove = async (parentId: string | undefined) => {
+    const data: Record<string, unknown> = { order: getMaxOrder(parentId), updatedAt: new Date().toISOString() };
+    if (parentId !== undefined) {
+      data.parentId = parentId;
+    } else {
+      data.parentId = deleteField(); // フィールドを削除してルートに昇格
+    }
+    await update(uid, target.id, data as Partial<NotionPage>);
+    onClose();
+    router.push(`/notion-plus/${target.id}`);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div
+        className="flex w-96 max-h-[70vh] flex-col rounded-xl bg-white shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4 py-3">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-800">📁 移動先を選択</h3>
+            <p className="mt-0.5 text-[11px] text-gray-400">「{target.title || 'Untitled'}」の移動先</p>
+          </div>
+          <button onClick={onClose} className="rounded p-1 text-gray-400 hover:bg-gray-100">✕</button>
+        </div>
+        <div className="flex-1 overflow-y-auto py-1">
+          {/* ルートに移動 */}
+          <button
+            onClick={() => handleMove(undefined)}
+            className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-brand-50"
+          >
+            <span>🏠</span>
+            <span className="font-medium">ルートに移動（最上位）</span>
+            {!target.parentId && <span className="ml-auto text-[10px] text-brand-400">現在</span>}
+          </button>
+          <div className="mx-4 my-1 border-t border-gray-100" />
+          {/* ページ一覧 */}
+          {validTargets.map((p) => {
+            const path = getAncestorPath(pages, p);
+            return (
+              <button
+                key={p.id}
+                onClick={() => handleMove(p.id)}
+                className={`flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-brand-50 ${
+                  p.id === target.parentId ? 'bg-brand-50 text-brand-600' : 'text-gray-700'
+                }`}
+              >
+                <span className="shrink-0 text-base leading-none">{p.icon}</span>
+                <div className="flex-1 min-w-0 text-left">
+                  <div className="truncate font-medium">{p.title || 'Untitled'}</div>
+                  {path && <div className="truncate text-[10px] text-gray-400">{path}</div>}
+                </div>
+                {p.id === target.parentId && (
+                  <span className="ml-auto shrink-0 text-[10px] text-brand-400">現在の親</span>
+                )}
+              </button>
+            );
+          })}
+          {validTargets.length === 0 && (
+            <p className="px-4 py-4 text-center text-xs text-gray-400">移動可能なページがありません</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // currentId が parentId の子孫かどうかを確認し、直接の子ページIDを返す（BOOKは除外）
@@ -308,6 +419,22 @@ function NotionPageSidebar({ user }: { user: User }) {
   const currentId = pathname.match(/\/notion-plus\/([^/?#]+)/)?.[1];
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const addMenuRef = useRef<HTMLDivElement>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [moveModalPage, setMoveModalPage] = useState<NotionPage | null>(null);
+
+  // W3: 検索結果（query があるときのみ非 null）
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return null;
+    const q = searchQuery.toLowerCase();
+    return pages
+      .filter((p) => p.id !== WORKSPACE_ID && p.title.toLowerCase().includes(q))
+      .slice(0, 40);
+  }, [pages, searchQuery]);
+
+  const getPagePath = useCallback(
+    (page: NotionPage) => getAncestorPath(pages, page),
+    [pages],
+  );
 
   // お気に入りのみ表示（BOOKは除外）
   const roots = pages
@@ -337,6 +464,21 @@ function NotionPageSidebar({ user }: { user: User }) {
     router.push(`/notion-plus/${page.id}`);
   };
 
+
+  // W2: ノートをブックに変換
+  const convertToBook = useCallback(async () => {
+    const target = ctxMenu?.page;
+    setCtxMenu(null);
+    if (!target) return;
+    if (!window.confirm(`「${target.title || 'Untitled'}」をブックに変換しますか？\n現在の内容は第1章になります。`)) return;
+    const firstChapter = { ...createBookChapter(0), content: target.content };
+    await update(user.uid, target.id, {
+      type: 'book' as const,
+      icon: target.icon === '📄' ? '📖' : target.icon,
+      content: serializeBookChapters([firstChapter]),
+    });
+    router.push(`/notion-plus/${target.id}`);
+  }, [ctxMenu, update, user.uid, router]);
 
   const handleCtxMenu = (e: React.MouseEvent, page: NotionPage) => {
     setCtxMenu({ x: e.clientX, y: e.clientY, page });
@@ -425,33 +567,109 @@ function NotionPageSidebar({ user }: { user: User }) {
         </div>
       </div>
 
-      {/* ページリスト（お気に入りのみ） */}
+      {/* W3: 検索バー */}
+      <div className="shrink-0 border-b border-gray-100 px-2 py-1.5">
+        <div className="relative">
+          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-gray-400">🔍</span>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="ノートを検索..."
+            className="w-full rounded-md border border-gray-200 bg-white py-1.5 pl-6 pr-6 text-xs outline-none focus:border-brand-400"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500 text-[11px]"
+            >✕</button>
+          )}
+        </div>
+      </div>
+
+      {/* ページリスト（お気に入りのみ） or 検索結果 */}
       <nav className="flex-1 overflow-y-auto px-1 py-1">
         {loading && <p className="px-3 py-2 text-xs text-gray-400">読込中...</p>}
 
-        {!loading && roots.length === 0 && (
-          <p className="px-3 py-4 text-center text-[11px] text-gray-400">
-            ★ をつけたノートが<br />ここに表示されます
-          </p>
+        {/* 検索結果 */}
+        {searchResults && (
+          <div className="space-y-0.5">
+            {searchResults.length === 0 ? (
+              <p className="px-3 py-4 text-center text-[11px] text-gray-400">
+                「{searchQuery}」に一致するページがありません
+              </p>
+            ) : (
+              searchResults.map((p) => {
+                const path = getPagePath(p);
+                return (
+                  <Link
+                    key={p.id}
+                    href={`/notion-plus/${p.id}`}
+                    onClick={() => setSearchQuery('')}
+                    onContextMenu={(e) => { e.preventDefault(); handleCtxMenu(e, p); }}
+                    className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors ${
+                      p.id === currentId
+                        ? 'bg-white font-semibold text-gray-900 shadow-sm'
+                        : 'text-gray-600 hover:bg-white hover:text-gray-900'
+                    }`}
+                  >
+                    <PageIcon icon={p.icon} />
+                    <div className="flex-1 min-w-0">
+                      <div className="truncate">{p.title || 'Untitled'}</div>
+                      {path && <div className="truncate text-[9px] text-gray-400">{path}</div>}
+                    </div>
+                  </Link>
+                );
+              })
+            )}
+          </div>
         )}
 
-        {/* お気に入りページ一覧（ドラッグで並び替え可能） */}
-        <RootPageList
-          roots={roots}
-          pages={pages}
-          currentId={currentId}
-          onCtxMenu={handleCtxMenu}
-          uid={user.uid}
-        />
+        {/* 通常ページリスト（検索なし時） */}
+        {!searchResults && (
+          <>
+            {!loading && roots.length === 0 && (
+              <p className="px-3 py-4 text-center text-[11px] text-gray-400">
+                ★ をつけたノートが<br />ここに表示されます
+              </p>
+            )}
+            {/* お気に入りページ一覧（ドラッグで並び替え可能） */}
+            <RootPageList
+              roots={roots}
+              pages={pages}
+              currentId={currentId}
+              onCtxMenu={handleCtxMenu}
+              uid={user.uid}
+            />
+          </>
+        )}
 
         {/* コンテキストメニュー */}
         {ctxMenu && (
           <>
             <div className="fixed inset-0 z-[80]" onClick={() => setCtxMenu(null)} />
             <div
-              className="fixed z-[90] w-44 rounded-xl border border-gray-100 bg-white py-1 shadow-2xl"
+              className="fixed z-[90] w-48 rounded-xl border border-gray-100 bg-white py-1 shadow-2xl"
               style={{ top: ctxMenu.y, left: ctxMenu.x }}
             >
+              {/* W2: ブックに変換（page のみ） */}
+              {ctxMenu.page.type !== 'database' && ctxMenu.page.type !== 'book' && (
+                <button
+                  onClick={convertToBook}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <span>📖</span><span>ブックに変換</span>
+                </button>
+              )}
+              {/* W4: ページを移動 */}
+              <button
+                onClick={() => { setMoveModalPage(ctxMenu.page); setCtxMenu(null); }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+              >
+                <span>📁</span><span>ページを移動</span>
+              </button>
+              <div className="mx-2 my-1 border-t border-gray-100" />
+              {/* 削除 */}
               <button
                 onClick={async () => {
                   const target = ctxMenu.page;
@@ -468,6 +686,16 @@ function NotionPageSidebar({ user }: { user: User }) {
           </>
         )}
       </nav>
+
+      {/* W4: ページ移動モーダル */}
+      {moveModalPage && (
+        <MovePageModal
+          target={moveModalPage}
+          pages={pages}
+          uid={user.uid}
+          onClose={() => setMoveModalPage(null)}
+        />
+      )}
 
       {/* フッター: 学習リストに戻るのみ */}
       <div className="border-t border-gray-100">
