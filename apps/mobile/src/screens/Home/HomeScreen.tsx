@@ -119,7 +119,7 @@ function HomeItemChip({ item, isDue, onPress }: {
   isDue?: boolean;
   onPress: () => void;
 }) {
-  const nextReview = isDue ? item.reviews.find(r => !r.completed) : undefined;
+  const nextReview = isDue ? item.reviews?.find(r => !r.completed) : undefined;
   return (
     <TouchableOpacity style={styles.chip} onPress={onPress} activeOpacity={0.7}>
       <Text style={styles.chipTitle} numberOfLines={2}>

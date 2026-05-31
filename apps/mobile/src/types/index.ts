@@ -83,11 +83,13 @@ export function localDateKey(d: Date = new Date()): string {
 }
 
 export function hasDueReview(item: LearningItem): boolean {
+  if (!item.reviews?.length) return false;
   const today = localDateKey();
-  return item.reviews.some(r => !r.completed && r.scheduledDate.slice(0, 10) <= today);
+  return item.reviews.some(r => !r.completed && (r.scheduledDate ?? '').slice(0, 10) <= today);
 }
 
 export function isFullyCompleted(item: LearningItem): boolean {
+  if (!item.reviews?.length) return true;
   return item.reviews.every(r => r.completed);
 }
 

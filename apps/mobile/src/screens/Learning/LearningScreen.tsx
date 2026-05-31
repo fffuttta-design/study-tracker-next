@@ -123,6 +123,12 @@ export default function LearningScreen({ navigation, route }: any) {
           const idx = filtered.findIndex(i => i.id === focusedItemId);
           if (idx >= 0) flatListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.1 });
         }}
+        onScrollToIndexFailed={({ index }) => {
+          // 未描画アイテム（古いデータ等、リスト末尾）へのスクロール失敗を安全にリトライ
+          setTimeout(() => {
+            flatListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.1 });
+          }, 300);
+        }}
         ListEmptyComponent={
           <Text style={styles.empty}>
             {tab === 'today' ? '今日の記録はまだありません' : tab === 'review' ? '復習の必要なアイテムはありません 🎉' : 'アイテムがありません'}
@@ -147,7 +153,7 @@ function LearningItemCard({
   const due = hasDueReview(item);
 
   // 次の未完了ステージ
-  const nextReview = item.reviews.find(r => !r.completed);
+  const nextReview = item.reviews?.find(r => !r.completed);
 
   return (
     <TouchableOpacity
@@ -189,16 +195,16 @@ function LearningItemCard({
           ) : null}
           {/* 復習ステージ */}
           <View style={styles.reviewRow}>
-            {item.reviews.map((r, i) => (
+            {(item.reviews ?? []).map((r, i) => (
               <TouchableOpacity
                 key={i}
                 style={[
                   styles.reviewDot,
-                  r.completed ? styles.reviewDotDone : (r.scheduledDate <= localDateKey() ? styles.reviewDotDue : styles.reviewDotFuture),
+                  r.completed ? styles.reviewDotDone : ((r.scheduledDate ?? '') <= localDateKey() ? styles.reviewDotDue : styles.reviewDotFuture),
                 ]}
                 onPress={() => !r.completed && onCompleteReview(item, r.stageIndex)}
                 disabled={r.completed}>
-                <Text style={styles.reviewDotText}>{REVIEW_STAGE_LABELS[i]}</Text>
+                <Text style={styles.reviewDotText}>{REVIEW_STAGE_LABELS[i] ?? ''}</Text>
               </TouchableOpacity>
             ))}
           </View>
