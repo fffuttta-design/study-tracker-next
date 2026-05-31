@@ -19,6 +19,19 @@
 .notion-editor-compact {
   min-height: 0 !important;
 }
+/* コンパクト: テーブル下の余白を詰める */
+.notion-editor-compact .tableWrapper {
+  margin-bottom: 2px;
+}
+/* コンパクト: テーブル後の空段落を最小化 */
+.notion-editor-compact > p:last-child {
+  margin: 0;
+  min-height: 0;
+  line-height: 1;
+}
+.notion-editor-compact > p.is-editor-empty:last-child::before {
+  display: none;
+}
 
 .notion-editor p { margin: calc(0.25rem + var(--offset-p, 0px)) 0; }
 /* Shift+Enter（hardBreak = <br>）を含む段落だけ行間を詰める */
@@ -125,11 +138,11 @@
   font-weight: 600;
 }
 
-/* チェックボックスがONの行をグレーアウト */
-.notion-editor table tr:has([data-type="taskItem"][data-checked="true"]) td,
-.notion-editor table tr:has([data-type="taskItem"][data-checked="true"]) th {
+/* チェックボックスがONの行をグレーアウト（JS側でクラス付与） */
+.notion-editor table tr.memo-row-checked td,
+.notion-editor table tr.memo-row-checked th {
   opacity: 0.4;
-  color: #9ca3af;
+  color: #9ca3af !important;
 }
 
 /* ── コンパクトテーブル（学習メモ用）────────────────────────── */

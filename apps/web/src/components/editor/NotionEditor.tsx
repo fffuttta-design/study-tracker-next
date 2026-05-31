@@ -1392,6 +1392,20 @@ export function NotionEditor({
     return () => clearTimeout(timer);
   }, [editor, highlightText]);
 
+  // コンパクトモード: チェック済み行にクラスを付与してグレーアウト
+  useEffect(() => {
+    if (!compact || !editor) return;
+    const updateRowClasses = () => {
+      editor.view.dom.querySelectorAll('tr').forEach((tr) => {
+        const checked = tr.querySelector('[data-type="taskItem"][data-checked="true"]');
+        tr.classList.toggle('memo-row-checked', !!checked);
+      });
+    };
+    editor.on('transaction', updateRowClasses);
+    updateRowClasses();
+    return () => { editor.off('transaction', updateRowClasses); };
+  }, [compact, editor]);
+
   // テーブルホバーで + ボタン表示
   useEffect(() => {
     if (!editor) return;
