@@ -124,29 +124,45 @@ function MovePageModal({
   );
 }
 
+// ── グループ設定の localStorage ヘルパー ──────────────────────────────
+function getLocalKey(uid: string) { return `notion-group-config-${uid}`; }
+function loadLocalConfig(uid: string): GroupConfig {
+  try {
+    const raw = localStorage.getItem(getLocalKey(uid));
+    if (raw) return parseGroupConfig(raw);
+  } catch { /* ignore */ }
+  return { groups: [], assignments: {} };
+}
+function saveLocalConfig(uid: string, config: GroupConfig) {
+  try { localStorage.setItem(getLocalKey(uid), JSON.stringify(config)); } catch { /* ignore */ }
+}
+
 // ── メインページ ──────────────────────────────────────────────────────
 export default function NotionPlusPage() {
   const { user } = useAuthStore();
   const { pages, loading, ensureWorkspace, add, update } = useNotionPageStore();
   const router = useRouter();
 
-  // workspacePage を最初に宣言（以降のフックが参照するため）
   const workspacePage = pages.find((p) => p.id === WORKSPACE_ID);
 
-  // config は store の workspacePage.content から常に派生（ローカル state 不使用）
-  // → ページ再訪問・Firestore sync 後も自動的に最新値を反映
-  const [optimisticConfig, setOptimisticConfig] = useState<GroupConfig | null>(null);
-  const storedConfig = useMemo(
-    () => parseGroupConfig(workspacePage?.content ?? ''),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [workspacePage?.content],
+  // config は localStorage を一次保存先とする（Firestore の timing に依存しない）
+  const [config, setConfig] = useState<GroupConfig>(() =>
+    user ? loadLocalConfig(user.uid) : { groups: [], assignments: {} }
   );
-  const config = optimisticConfig ?? storedConfig;
   const configRef = useRef(config);
   useEffect(() => { configRef.current = config; }, [config]);
 
-  // ※ optimisticConfig はコンポーネントのアンマウント時（ページ離脱）に自然にリセットされる。
-  // Firestore onSnapshot のたびに null にしてしまうと編集中のグループが消えるため useEffect は不要。
+  // Firestore からデータが来たら localStorage と config を更新（マルチデバイス同期）
+  useEffect(() => {
+    if (!workspacePage?.content || !user) return;
+    const firestoreConfig = parseGroupConfig(workspacePage.content);
+    // Firestore の方がグループが多い場合のみ上書き（初回ロードや別端末から）
+    if (firestoreConfig.groups.length > 0 || Object.keys(firestoreConfig.assignments).length > 0) {
+      setConfig(firestoreConfig);
+      saveLocalConfig(user.uid, firestoreConfig);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspacePage?.content]);
 
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editingLabel, setEditingLabel] = useState('');
@@ -173,13 +189,13 @@ export default function NotionPlusPage() {
     if (editingGroupId) editRef.current?.focus();
   }, [editingGroupId]);
 
-  // グループ設定の保存（optimistic update: UI を先に更新、Firestore 確認後に解除）
+  // グループ設定の保存（localStorage に即時保存 → Firestore にバックグラウンド同期）
   const saveConfig = useCallback(async (newConfig: GroupConfig) => {
     if (!user) return;
-    setOptimisticConfig(newConfig); // 即時反映
+    setConfig(newConfig);            // UI 即時反映
     configRef.current = newConfig;
-    await update(user.uid, WORKSPACE_ID, { content: JSON.stringify(newConfig) });
-    // Firestore onSnapshot が来たら useEffect で setOptimisticConfig(null) される
+    saveLocalConfig(user.uid, newConfig); // localStorage に即保存（ページ遷移でも消えない）
+    update(user.uid, WORKSPACE_ID, { content: JSON.stringify(newConfig) }).catch(console.error);
   }, [user, update]);
 
   // ① Enter / blur でグループ名確定（configRef で最新値を参照）
