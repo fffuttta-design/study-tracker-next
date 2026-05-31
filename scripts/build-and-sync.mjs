@@ -146,6 +146,31 @@ try {
 }
 console.log('\n[build-and-sync] ビルド完了 ✓')
 
+// ── Step 3.5: rcedit でカスタムアイコンを明示的に埋め込む ──────────
+// electron-builder の rcedit 呼び出しが symlink エラーで失敗する場合に備え、
+// winCodeSign キャッシュ内の rcedit を直接実行してアイコンを上書きする
+const exePath = path.join(srcDir, '学習トラッカー.exe')
+const iconSrc = path.join(ROOT, 'build', 'icon.ico')
+const rceditCacheDir = path.join(process.env.LOCALAPPDATA || '', 'electron-builder', 'Cache', 'winCodeSign')
+let rceditPath = null
+if (existsSync(rceditCacheDir)) {
+  const { readdirSync } = await import('fs')
+  for (const dir of readdirSync(rceditCacheDir)) {
+    const candidate = path.join(rceditCacheDir, dir, 'rcedit-x64.exe')
+    if (existsSync(candidate)) { rceditPath = candidate; break }
+  }
+}
+if (rceditPath && existsSync(iconSrc)) {
+  try {
+    execSync(`"${rceditPath}" "${exePath}" --set-icon "${iconSrc}"`, { stdio: 'pipe' })
+    console.log('[build-and-sync] アイコン埋め込み完了 ✓ (rcedit)')
+  } catch (e) {
+    console.warn('[build-and-sync] アイコン埋め込み失敗（スキップ）:', e.message)
+  }
+} else {
+  console.warn('[build-and-sync] rcedit が見つからないためアイコン埋め込みをスキップ')
+}
+
 // ── Step 4: version.json を win-unpacked に書き込む ───────────────
 writeFileSync(
   path.join(srcDir, 'version.json'),
