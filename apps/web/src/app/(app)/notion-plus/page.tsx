@@ -130,6 +130,9 @@ export default function NotionPlusPage() {
   const { pages, loading, ensureWorkspace, add, update } = useNotionPageStore();
   const router = useRouter();
 
+  // workspacePage を最初に宣言（以降のフックが参照するため）
+  const workspacePage = pages.find((p) => p.id === WORKSPACE_ID);
+
   // config は store の workspacePage.content から常に派生（ローカル state 不使用）
   // → ページ再訪問・Firestore sync 後も自動的に最新値を反映
   const [optimisticConfig, setOptimisticConfig] = useState<GroupConfig | null>(null);
@@ -152,8 +155,6 @@ export default function NotionPlusPage() {
   const editRef = useRef<HTMLInputElement>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; pageId: string } | null>(null);
   const [moveModalPage, setMoveModalPage] = useState<NotionPage | null>(null);
-
-  const workspacePage = pages.find((p) => p.id === WORKSPACE_ID);
 
   useEffect(() => {
     if (!user || loading) return;
