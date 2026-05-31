@@ -7,6 +7,8 @@ import { useAuthStore } from '@/stores/authStore';
 import { useDailyMemoStore } from '@/stores/dailyMemoStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { AddItemDialog } from '@/components/notion/AddItemDialog';
+import { Toolbar } from '@/components/editor/NotionEditor';
+import type { Editor } from '@tiptap/core';
 
 const NotionEditor = dynamic(
   () => import('@/components/editor/NotionEditor').then((m) => ({ default: m.NotionEditor })),
@@ -154,10 +156,11 @@ interface DateSectionProps {
   onToggle: () => void;
   onSave: (_title: string, content: string) => Promise<void>;
   onDelete: () => void;
+  onEditorFocus?: (editor: Editor) => void;
 }
 
 const DateSection = forwardRef<HTMLDivElement, DateSectionProps>(function DateSection(
-  { date, isToday, rowCount, content, isOpen, defaultTableContent, onToggle, onSave, onDelete },
+  { date, isToday, rowCount, content, isOpen, defaultTableContent, onToggle, onSave, onDelete, onEditorFocus },
   ref,
 ) {
   const [editorKey, setEditorKey] = useState(0);
@@ -235,6 +238,8 @@ const DateSection = forwardRef<HTMLDivElement, DateSectionProps>(function DateSe
             onSave={onSave}
             hideTitle
             compact
+            hideToolbar
+            onEditorFocus={onEditorFocus}
           />
         </div>
       )}
@@ -251,6 +256,8 @@ export default function QuickMemoPage() {
   const router = useRouter();
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [activeEditor, setActiveEditor] = useState<Editor | null>(null);
+  const [activeDate, setActiveDate] = useState<string | null>(null);
 
   const today = toLocalDateString(new Date());
 
@@ -315,6 +322,14 @@ export default function QuickMemoPage() {
   return (
     <>
       <div className="flex h-full flex-col overflow-hidden">
+        {/* 書式バー（常に最上部） */}
+        <div className="shrink-0 border-b border-gray-100 bg-white px-2 py-1">
+          {activeEditor
+            ? <Toolbar key={activeDate ?? 'toolbar'} editor={activeEditor} className="" />
+            : <div className="flex h-7 items-center px-1 text-xs text-gray-300">テーブルをクリックして書式を変更</div>
+          }
+        </div>
+
         {/* ページヘッダー */}
         <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-6 py-2">
           <div className="flex items-center gap-2">
@@ -362,6 +377,7 @@ export default function QuickMemoPage() {
                 onToggle={() => toggleDate(date)}
                 onSave={makeSaveHandler(date)}
                 onDelete={() => handleDelete(date)}
+                onEditorFocus={(editor) => { setActiveEditor(editor); setActiveDate(date); }}
               />
             );
           })}

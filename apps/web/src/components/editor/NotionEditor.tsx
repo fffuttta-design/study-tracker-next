@@ -1120,6 +1120,8 @@ interface NotionEditorProps {
   onPageNavigate?: (href: string) => void;
   hideTitle?: boolean; // ブック用: タイトル入力を非表示
   compact?: boolean;   // 最小高さを抑えて内容に合わせて伸縮
+  onEditorFocus?: (editor: NonNullable<ReturnType<typeof useEditor>>) => void;
+  hideToolbar?: boolean;
 }
 
 interface PastePopup {
@@ -1131,7 +1133,7 @@ interface PastePopup {
 export function NotionEditor({
   initialTitle, initialContent, onSave, onCreateSubPage,
   recordTriggerRef, onRecordText, notionPageId, notionPagePath, highlightText, onPageNavigate,
-  hideTitle, compact,
+  hideTitle, compact, onEditorFocus, hideToolbar,
 }: NotionEditorProps) {
   const notionPlusLayout = useSettingsStore((s) => s.notionPlusLayout);
   const notionPlusParaLineHeight = useSettingsStore((s) => s.notionPlusParaLineHeight);
@@ -1644,6 +1646,13 @@ export function NotionEditor({
     editor.chain().focus().setYoutubeVideo({ src: url }).run();
   }, [pastePopup, editor]);
 
+  useEffect(() => {
+    if (!editor || !onEditorFocus) return;
+    const handleFocus = () => onEditorFocus(editor);
+    editor.on('focus', handleFocus);
+    return () => { editor.off('focus', handleFocus); };
+  }, [editor, onEditorFocus]);
+
   const outerClass = `relative flex flex-1 overflow-y-auto py-8 ${notionPlusLayout === 'center' ? 'justify-center px-6' : 'pl-16 pr-8'}`;
 
   return (
@@ -1677,7 +1686,7 @@ export function NotionEditor({
             className="mb-6 w-full border-none text-3xl font-bold text-gray-900 outline-none placeholder:text-gray-200"
           />
         )}
-        {editor && <Toolbar editor={editor} />}
+        {!hideToolbar && editor && <Toolbar editor={editor} />}
         <EditorContent editor={editor} />
       </div>
 
@@ -1976,7 +1985,7 @@ export function NotionEditor({
 
 // ── ツールバー ────────────────────────────────────────────────────────
 
-function Toolbar({ editor }: { editor: NonNullable<ReturnType<typeof useEditor>> }) {
+export function Toolbar({ editor, className }: { editor: NonNullable<ReturnType<typeof useEditor>>; className?: string }) {
   const [colorOpen, setColorOpen] = useState(false);
   const [bgColorOpen, setBgColorOpen] = useState(false);
   const [cellColorOpen, setCellColorOpen] = useState(false);
@@ -1998,7 +2007,7 @@ function Toolbar({ editor }: { editor: NonNullable<ReturnType<typeof useEditor>>
   };
 
   return (
-    <div className="mb-4 flex flex-wrap gap-0.5 rounded-lg border border-gray-100 bg-gray-50 p-1">
+    <div className={`flex flex-wrap gap-0.5 rounded-lg border border-gray-100 bg-gray-50 p-1 ${className ?? 'mb-4'}`}>
       <button onClick={() => editor.chain().focus().toggleBold().run()} className={btn(editor.isActive('bold'))}>B</button>
       <button onClick={() => editor.chain().focus().toggleItalic().run()} className={btn(editor.isActive('italic'))}><i>I</i></button>
       <button onClick={() => editor.chain().focus().toggleUnderline().run()} className={btn(editor.isActive('underline'))}><u>U</u></button>
