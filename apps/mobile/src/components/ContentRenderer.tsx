@@ -11,32 +11,39 @@ import Markdown from 'react-native-markdown-display';
 import { TipTapRenderer } from './TipTapRenderer';
 import { isTipTapContent } from '../types';
 
-// <span style="color:#EF4444">text</span> → [text](color:#EF4444)
+// <span style="color:#EF4444">text</span> → [text](colorhex:EF4444)
 // に変換してから Markdown パーサーに渡す。
-// custom link rule で色を適用する。
+//
+// ⚠️ 注意: markdown-it は URL 内の "#" をフラグメントとして除去するため、
+//   `color:#EF4444` と書くと href が `color:` になってしまいカラーが消える。
+//   そのため "#" を除去して `colorhex:EF4444` という独自スキームで保持する。
 function preprocessMarkdown(content: string): string {
   return content
-    // カラースパンをMarkdownリンク記法に変換（color:X を href として使用）
     .replace(
       /<span[^>]*style=["'][^"']*color:\s*([^;'">\s]+)[^>]*>([\s\S]*?)<\/span>/gi,
-      (_, color: string, text: string) => `[${text}](color:${color.trim()})`,
+      (_, color: string, text: string) => {
+        // # を除去して独自スキーム colorhex: に格納（markdown-it のフラグメント除去対策）
+        const safeColor = color.trim().replace(/^#/, '');
+        return `[${text}](colorhex:${safeColor})`;
+      },
     )
-    // 残った HTML タグを除去
     .replace(/<[^>]+>/g, '');
 }
 
-// color: プレフィックスの href を持つリンクを colored Text として描画
+// colorhex: スキームのリンクを colored Text として描画
 const colorLinkRule = {
   link: (node: any, children: any) => {
     const href = (node.attributes?.href ?? '') as string;
-    if (href.startsWith('color:')) {
+    if (href.startsWith('colorhex:')) {
+      const raw = href.slice(9); // "#" 除去済みの hex または色名
+      // hex 6桁・3桁なら # を補完、それ以外（red等）はそのまま使用
+      const color = /^[0-9A-Fa-f]{3}$|^[0-9A-Fa-f]{6}$/.test(raw) ? `#${raw}` : raw;
       return (
-        <Text key={node.key} style={{ color: href.slice(6) }}>
+        <Text key={node.key} style={{ color }}>
           {children}
         </Text>
       );
     }
-    // 通常リンクはテキストのみ（URLへの遷移は不要）
     return (
       <Text key={node.key} style={{ color: '#3b82f6', textDecorationLine: 'underline' }}>
         {children}
