@@ -130,10 +130,22 @@ export default function NotionPlusPage() {
   const { pages, loading, ensureWorkspace, add, update } = useNotionPageStore();
   const router = useRouter();
 
-  const [config, setConfig] = useState<GroupConfig>({ groups: [], assignments: {} });
-  // ① stale closure 対策: 常に最新の config を ref でも保持
+  // config は store の workspacePage.content から常に派生（ローカル state 不使用）
+  // → ページ再訪問・Firestore sync 後も自動的に最新値を反映
+  const [optimisticConfig, setOptimisticConfig] = useState<GroupConfig | null>(null);
+  const storedConfig = useMemo(
+    () => parseGroupConfig(workspacePage?.content ?? ''),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [workspacePage?.content],
+  );
+  const config = optimisticConfig ?? storedConfig;
   const configRef = useRef(config);
   useEffect(() => { configRef.current = config; }, [config]);
+
+  // Firestore からの確認が来たら optimistic override を解除
+  useEffect(() => {
+    setOptimisticConfig(null);
+  }, [workspacePage?.content]);
 
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editingLabel, setEditingLabel] = useState('');
@@ -148,15 +160,6 @@ export default function NotionPlusPage() {
     ensureWorkspace(user.uid).catch(() => {});
   }, [user, loading, ensureWorkspace]);
 
-  // Firestore からグループ設定を読み込む（外部変更・初回のみ）
-  const loadedRef = useRef(false);
-  useEffect(() => {
-    if (workspacePage && !loadedRef.current) {
-      loadedRef.current = true;
-      const parsed = parseGroupConfig(workspacePage.content);
-      setConfig(parsed);
-    }
-  }, [workspacePage]);
 
   // コンテキストメニュー外クリックで閉じる
   useEffect(() => {
@@ -171,12 +174,13 @@ export default function NotionPlusPage() {
     if (editingGroupId) editRef.current?.focus();
   }, [editingGroupId]);
 
-  // グループ設定の保存（configRef から最新値を取る）
+  // グループ設定の保存（optimistic update: UI を先に更新、Firestore 確認後に解除）
   const saveConfig = useCallback(async (newConfig: GroupConfig) => {
     if (!user) return;
-    setConfig(newConfig);
+    setOptimisticConfig(newConfig); // 即時反映
     configRef.current = newConfig;
     await update(user.uid, WORKSPACE_ID, { content: JSON.stringify(newConfig) });
+    // Firestore onSnapshot が来たら useEffect で setOptimisticConfig(null) される
   }, [user, update]);
 
   // ① Enter / blur でグループ名確定（configRef で最新値を参照）
