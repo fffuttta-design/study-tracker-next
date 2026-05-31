@@ -6,6 +6,22 @@ import { useLearningStore } from '@/stores/learningStore';
 import { useNotionPageStore } from '@/stores/notionPageStore';
 import { NotionEditor } from '@/components/editor/NotionEditor';
 
+function isImageSrc(s: string) {
+  return s.startsWith('http://') || s.startsWith('https://') || s.startsWith('data:');
+}
+
+const ICON_PRESETS = [
+  '📄','📝','📚','📖','📓','📔','📒','📕','📗','📘','📙','📋','📊','📈','💡',
+  '🔖','📌','📍','🗂️','📁','📂','💼','🖥️','💻','📱','🎓','🏫','✏️','📏','📐',
+  '🗒️','🗓️','📆','📅','⏰','🔐','🔑','🛠️','⚙️','🔧','🔬','🔭','🧪','🧬',
+  '⭐','🌟','✨','🔥','💯','🎉','🏆','🥇','👑','💎','🎯','✅','⚡','💪',
+  '❤️','🧡','💛','💚','💙','💜','🤍','💔','🌈','😀','😊','🥳','😎','🤓',
+  '🌱','🌿','🍀','🌸','🌺','🌻','🦋','🐉','🦁','🐯','🦊','🐺','🦅','🦉',
+  '💰','💴','💸','🤝','🏢','📊','📈','💹','🌍','🗺️','🏔️','🌊','🎨','🎵',
+  '🎮','⚽','🏀','🎾','⚾','🏈','🎸','🎹','🎺','🎻','🎤','🎬','📷','🎠',
+];
+
+
 // ── ユーティリティ ────────────────────────────────────────────────────
 
 export function extractTextFromTipTap(content: string): string {
@@ -151,6 +167,21 @@ export function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => vo
   const [pageHistory, setPageHistory] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const recordTriggerRef = useRef<(() => void) | null>(null);
+  const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  const [iconUrlDraft, setIconUrlDraft] = useState('');
+  const iconPickerRef = useRef<HTMLDivElement>(null);
+
+  // アイコンピッカーの外クリックで閉じる
+  useEffect(() => {
+    if (!iconPickerOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (iconPickerRef.current && !iconPickerRef.current.contains(e.target as Node)) {
+        setIconPickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [iconPickerOpen]);
 
   const searchResults = useMemo(() => {
     const q = searchQuery.trim();
@@ -210,6 +241,13 @@ export function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => vo
   const handleSave = useCallback(async (title: string, content: string) => {
     if (!user || !selectedPageId) return;
     await update(user.uid, selectedPageId, { title, content });
+  }, [user, selectedPageId, update]);
+
+  const handleIconChange = useCallback(async (icon: string) => {
+    if (!user || !selectedPageId) return;
+    await update(user.uid, selectedPageId, { icon });
+    setIconPickerOpen(false);
+    setIconUrlDraft('');
   }, [user, selectedPageId, update]);
 
   const handleRecord = (text: string) => {
@@ -412,8 +450,55 @@ export function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => vo
 
           {/* 右パネル: エディタ */}
           <div className="flex flex-1 flex-col">
-            <div className="flex items-center justify-between border-b border-amber-100 bg-amber-50 px-6 py-2.5">
-              <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between border-b border-amber-100 bg-amber-50 px-4 py-2.5">
+              <div className="flex items-center gap-2">
+                {/* アイコン設定ボタン */}
+                {selectedPage && (
+                  <div className="relative" ref={iconPickerRef}>
+                    <button
+                      onClick={() => setIconPickerOpen((v) => !v)}
+                      className="flex items-center justify-center rounded p-1 hover:bg-amber-100"
+                      title="アイコンを変更"
+                    >
+                      {isImageSrc(selectedPage.icon) ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={selectedPage.icon} alt="" className="h-6 w-6 rounded object-cover" />
+                      ) : (
+                        <span className="text-lg leading-none">{selectedPage.icon}</span>
+                      )}
+                    </button>
+                    {iconPickerOpen && (
+                      <div className="absolute left-0 top-full z-50 w-64 rounded-xl border border-gray-200 bg-white p-3 shadow-xl">
+                        <p className="mb-1 text-xs font-medium text-gray-400">画像URL</p>
+                        <div className="flex gap-1">
+                          <input
+                            type="text"
+                            value={iconUrlDraft}
+                            onChange={(e) => setIconUrlDraft(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && iconUrlDraft && handleIconChange(iconUrlDraft)}
+                            placeholder="https://..."
+                            className="min-w-0 flex-1 rounded border border-gray-200 px-2 py-1 text-xs outline-none focus:border-brand-400"
+                          />
+                          <button
+                            onClick={() => iconUrlDraft && handleIconChange(iconUrlDraft)}
+                            disabled={!iconUrlDraft}
+                            className="rounded bg-brand-500 px-2 py-1 text-xs text-white hover:bg-brand-600 disabled:opacity-40"
+                          >設定</button>
+                        </div>
+                        <p className="mb-1 mt-3 text-xs font-medium text-gray-400">絵文字</p>
+                        <div className="grid max-h-40 grid-cols-8 gap-0.5 overflow-y-auto">
+                          {ICON_PRESETS.map((icon) => (
+                            <button
+                              key={icon}
+                              onClick={() => handleIconChange(icon)}
+                              className={`rounded p-1 text-base hover:bg-gray-100 ${selectedPage.icon === icon ? 'bg-brand-50 ring-1 ring-brand-400' : ''}`}
+                            >{icon}</button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {pageHistory.length > 0 && (
                   <button onClick={handleBack} className="flex items-center gap-1 rounded px-2 py-1 text-xs text-amber-700 hover:bg-amber-100">
                     ← 戻る
