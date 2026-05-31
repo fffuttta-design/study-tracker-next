@@ -31,13 +31,20 @@ export default function NotionPlusPage() {
   // ──────────────────────────────────────────────────────────────────
 
   const [editorOpen, setEditorOpen] = useState(true);
+  // __workspace__ ページが Firestore から届いたことを確認してからエディタを表示
+  const [wsReady, setWsReady] = useState(false);
+
+  const workspacePage = pages.find((p) => p.id === WORKSPACE_ID);
 
   useEffect(() => {
     if (!user || loading) return;
     ensureWorkspace(user.uid).catch(() => {});
   }, [user, loading, ensureWorkspace]);
 
-  const workspacePage = pages.find((p) => p.id === WORKSPACE_ID);
+  // workspacePage が store に現れたら ready フラグを立てる（以降は永続）
+  useEffect(() => {
+    if (workspacePage && !wsReady) setWsReady(true);
+  }, [workspacePage, wsReady]);
 
   const roots = pages
     .filter((p) => !p.parentId && p.id !== WORKSPACE_ID)
@@ -97,7 +104,8 @@ export default function NotionPlusPage() {
         {/* ── ▼ ワークスペースエディタ ─────────────────────────────── */}
         {WORKSPACE_EDITOR && editorOpen && (
           <div className="border-b border-gray-100">
-            {workspacePage ? (
+            {wsReady && workspacePage ? (
+              // workspacePage が Firestore から確実に届いてから NotionEditor を mount
               <NotionEditor
                 key={WORKSPACE_ID}
                 initialTitle={workspacePage.title}
@@ -114,12 +122,11 @@ export default function NotionPlusPage() {
                 }}
               />
             ) : (
-              // ワークスペース読み込み中
-              !loading && (
-                <div className="flex min-h-[80px] items-center justify-center text-xs text-gray-400">
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
-                </div>
-              )
+              // 準備中（短時間のみ、workspacePage が届けば自動解除）
+              <div className="flex min-h-[60px] items-center gap-2 px-6 py-3 text-xs text-gray-400">
+                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-brand-300 border-t-transparent" />
+                <span>読み込み中...</span>
+              </div>
             )}
           </div>
         )}
