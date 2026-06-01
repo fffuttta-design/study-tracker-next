@@ -512,10 +512,18 @@ function NotionPageSidebar({ user }: { user: User }) {
       />
       {/* ヘッダー */}
       <div className="flex items-center justify-between border-b border-gray-100 px-3 py-3">
-        <Link href="/notion-plus" className="flex items-center gap-1.5 rounded px-1 hover:bg-gray-100">
-          <span className="text-base">📝</span>
-          <span className="text-sm font-semibold text-gray-800">NotionPlus</span>
-        </Link>
+        <div className="flex items-center gap-1">
+          {/* 🏠 ホームボタン（学習リストへ戻る） */}
+          <Link
+            href="/learning"
+            title="学習リストへ戻る"
+            className="rounded p-1 text-base leading-none text-gray-400 hover:bg-gray-200 hover:text-gray-700"
+          >🏠</Link>
+          <Link href="/notion-plus" className="flex items-center gap-1.5 rounded px-1 hover:bg-gray-100">
+            <span className="text-base">📝</span>
+            <span className="text-sm font-semibold text-gray-800">NotionPlus</span>
+          </Link>
+        </div>
         <div className="flex items-center gap-0.5">
           {/* 設定ボタン */}
           <Link

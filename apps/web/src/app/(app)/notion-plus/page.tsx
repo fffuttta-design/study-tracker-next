@@ -152,7 +152,7 @@ function MovePageModal({
                 onClick={() => handleMove(p.id)}
                 className={`flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-brand-50 ${p.id === target.parentId ? 'bg-brand-50 text-brand-600' : 'text-gray-700'}`}
               >
-                <span className="shrink-0 text-base leading-none">{p.icon}</span>
+                <PageIcon icon={p.icon} />
                 <div className="flex-1 min-w-0 text-left">
                   <div className="truncate font-medium">{p.title || 'Untitled'}</div>
                   {path && <div className="truncate text-[10px] text-gray-400">{path}</div>}
