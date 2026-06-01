@@ -34,6 +34,48 @@ function PageIcon({ icon }: { icon: string }) {
   return <span className="shrink-0 text-base leading-none">{icon || '📄'}</span>;
 }
 
+// ── ページ行コンポーネント（最上位定義：内部定義するとフック数不整合でクラッシュするため）────
+interface PageRowProps {
+  page: NotionPage;
+  groupKey: string;
+  isDragging: boolean;
+  dragOverItem: { pageId: string; position: 'before' | 'after' } | null;
+  sourceGroupKey: (pageId: string) => string; // そのページが属するgroupKey
+  onDragStart: (e: React.DragEvent, pageId: string) => void;
+  onDragEnd: () => void;
+  onDragOver: (e: React.DragEvent, pageId: string, el: HTMLLIElement | null) => void;
+  onDragLeave: (pageId: string) => void;
+  onDrop: (e: React.DragEvent, pageId: string, sameGroup: boolean) => void;
+  onContextMenu: (e: React.MouseEvent, pageId: string) => void;
+}
+function PageRow({ page, groupKey, isDragging, dragOverItem, sourceGroupKey, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop, onContextMenu }: PageRowProps) {
+  const rowRef = useRef<HTMLLIElement>(null);
+  const isSameGroup = sourceGroupKey(page.id) === groupKey;
+  const dropLine = dragOverItem?.pageId === page.id ? dragOverItem.position : null;
+  return (
+    <li
+      ref={rowRef}
+      draggable
+      onDragStart={(e) => onDragStart(e, page.id)}
+      onDragEnd={onDragEnd}
+      onDragOver={(e) => onDragOver(e, page.id, rowRef.current)}
+      onDragLeave={() => onDragLeave(page.id)}
+      onDrop={(e) => onDrop(e, page.id, isSameGroup)}
+      onContextMenu={(e) => onContextMenu(e, page.id)}
+      className={`relative transition-opacity ${isDragging ? 'opacity-40' : ''}`}
+    >
+      {dropLine === 'before' && <div className="pointer-events-none absolute -top-px left-0 right-0 h-0.5 rounded bg-brand-400" />}
+      <Link href={`/notion-plus/${page.id}`} className="flex cursor-grab items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 active:cursor-grabbing">
+        <span className="shrink-0 text-[10px] text-gray-300">⠿</span>
+        <PageIcon icon={page.icon} />
+        <span className="flex-1 truncate">{page.title || '無題'}</span>
+        {page.isFavorite && <span className="text-xs text-yellow-500">★</span>}
+      </Link>
+      {dropLine === 'after' && <div className="pointer-events-none absolute -bottom-px left-0 right-0 h-0.5 rounded bg-brand-400" />}
+    </li>
+  );
+}
+
 // ── ③ ページ移動モーダル ──────────────────────────────────────────────
 function MovePageModal({
   target, pages, uid, onClose,
@@ -245,9 +287,10 @@ export default function NotionPlusPage() {
     setContextMenu(null);
   };
 
-  // ドラッグ中のページID
+  // ドラッグ状態
   const [draggingPageId, setDraggingPageId] = useState<string | null>(null);
-  const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null); // null = 未割当ゾーン
+  const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
+  const [dragOverItem, setDragOverItem] = useState<{ pageId: string; position: 'before' | 'after' } | null>(null);
 
   // グループ内並び替え
   const handleReorder = useCallback(async (
@@ -315,57 +358,50 @@ export default function NotionPlusPage() {
     };
   }, [roots, config, applyOrder]);
 
-  // ページ行（ドラッグ対応 + グループ内並び替えドロップターゲット）
-  const PageRow = ({ page, groupKey }: { page: NotionPage; groupKey: string }) => {
-    const rowRef = useRef<HTMLLIElement>(null);
-    const [dropLine, setDropLine] = useState<'before' | 'after' | null>(null);
+  // PageRow 用ハンドラ（最上位コンポーネントに渡す）
+  const handleRowDragStart = useCallback((e: React.DragEvent, pageId: string) => {
+    setDraggingPageId(pageId);
+    e.dataTransfer.setData('text/plain', pageId);
+    e.dataTransfer.effectAllowed = 'move';
+  }, []);
 
-    const isSameGroup = draggingPageId
-      ? (config.assignments[draggingPageId] ?? '__ungrouped__') === (config.assignments[page.id] ?? '__ungrouped__')
-      : false;
+  const handleRowDragEnd = useCallback(() => {
+    setDraggingPageId(null); setDragOverGroupId(null); setDragOverItem(null);
+  }, []);
 
-    return (
-      <li
-        ref={rowRef}
-        draggable
-        onDragStart={(e) => {
-          setDraggingPageId(page.id);
-          e.dataTransfer.setData('text/plain', page.id);
-          e.dataTransfer.effectAllowed = 'move';
-        }}
-        onDragEnd={() => { setDraggingPageId(null); setDragOverGroupId(null); setDropLine(null); }}
-        onDragOver={(e) => {
-          if (!draggingPageId || draggingPageId === page.id) return;
-          if (isSameGroup) {
-            e.preventDefault();
-            e.stopPropagation(); // グループ全体のハイライトを抑制
-            const rect = rowRef.current?.getBoundingClientRect();
-            setDropLine(rect && e.clientY < rect.top + rect.height / 2 ? 'before' : 'after');
-          }
-        }}
-        onDragLeave={() => setDropLine(null)}
-        onDrop={(e) => {
-          if (!draggingPageId || !isSameGroup) return;
-          e.preventDefault();
-          e.stopPropagation();
-          handleReorder(draggingPageId, page.id, groupKey, dropLine === 'before');
-          setDropLine(null);
-          setDraggingPageId(null);
-        }}
-        onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY, pageId: page.id }); }}
-        className={`relative transition-opacity ${draggingPageId === page.id ? 'opacity-40' : ''}`}
-      >
-        {dropLine === 'before' && <div className="pointer-events-none absolute -top-px left-0 right-0 h-0.5 rounded bg-brand-400" />}
-        <Link href={`/notion-plus/${page.id}`} className="flex cursor-grab items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 active:cursor-grabbing">
-          <span className="shrink-0 text-[10px] text-gray-300">⠿</span>
-          <PageIcon icon={page.icon} />
-          <span className="flex-1 truncate">{page.title || '無題'}</span>
-          {page.isFavorite && <span className="text-xs text-yellow-500">★</span>}
-        </Link>
-        {dropLine === 'after' && <div className="pointer-events-none absolute -bottom-px left-0 right-0 h-0.5 rounded bg-brand-400" />}
-      </li>
-    );
-  };
+  const handleRowDragOver = useCallback((e: React.DragEvent, pageId: string, el: HTMLLIElement | null) => {
+    if (!draggingPageId || draggingPageId === pageId) return;
+    const srcKey = config.assignments[draggingPageId] ?? '__ungrouped__';
+    const tgtKey = config.assignments[pageId] ?? '__ungrouped__';
+    if (srcKey === tgtKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      const rect = el?.getBoundingClientRect();
+      const position = rect && e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+      setDragOverItem({ pageId, position });
+    }
+  }, [draggingPageId, config.assignments]);
+
+  const handleRowDragLeave = useCallback((pageId: string) => {
+    setDragOverItem((prev) => prev?.pageId === pageId ? null : prev);
+  }, []);
+
+  const handleRowDrop = useCallback((e: React.DragEvent, targetPageId: string, sameGroup: boolean) => {
+    if (!draggingPageId || !sameGroup) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const tgtKey = config.assignments[targetPageId] ?? '__ungrouped__';
+    handleReorder(draggingPageId, targetPageId, tgtKey, dragOverItem?.position === 'before');
+    setDragOverItem(null); setDraggingPageId(null);
+  }, [draggingPageId, config.assignments, handleReorder, dragOverItem]);
+
+  const handleRowContextMenu = useCallback((e: React.MouseEvent, pageId: string) => {
+    e.preventDefault(); e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY, pageId });
+  }, []);
+
+  const getSourceGroupKey = useCallback((pageId: string) =>
+    config.assignments[pageId] ?? '__ungrouped__', [config.assignments]);
 
   if (loading) {
     return <div className="flex h-full items-center justify-center"><div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" /></div>;
@@ -444,7 +480,14 @@ export default function NotionPlusPage() {
                     {dragOverGroupId === group.id ? '↓ ここにドロップ' : '（ページをドラッグ or 右クリックして追加）'}
                   </p>
                 ) : (
-                  <ul className="space-y-0.5">{gpages.map((p) => <PageRow key={p.id} page={p} groupKey={group.id} />)}</ul>
+                  <ul className="space-y-0.5">{gpages.map((p) => (
+                    <PageRow key={p.id} page={p} groupKey={group.id}
+                      isDragging={draggingPageId === p.id} dragOverItem={dragOverItem}
+                      sourceGroupKey={getSourceGroupKey}
+                      onDragStart={handleRowDragStart} onDragEnd={handleRowDragEnd}
+                      onDragOver={handleRowDragOver} onDragLeave={handleRowDragLeave}
+                      onDrop={handleRowDrop} onContextMenu={handleRowContextMenu} />
+                  ))}</ul>
                 )}
               </div>
             ))}
@@ -472,7 +515,14 @@ export default function NotionPlusPage() {
                   </div>
                 )}
                 {ungrouped.length > 0 && (
-                  <ul className="space-y-0.5">{ungrouped.map((p) => <PageRow key={p.id} page={p} groupKey="__ungrouped__" />)}</ul>
+                  <ul className="space-y-0.5">{ungrouped.map((p) => (
+                    <PageRow key={p.id} page={p} groupKey="__ungrouped__"
+                      isDragging={draggingPageId === p.id} dragOverItem={dragOverItem}
+                      sourceGroupKey={getSourceGroupKey}
+                      onDragStart={handleRowDragStart} onDragEnd={handleRowDragEnd}
+                      onDragOver={handleRowDragOver} onDragLeave={handleRowDragLeave}
+                      onDrop={handleRowDrop} onContextMenu={handleRowContextMenu} />
+                  ))}</ul>
                 )}
               </div>
             )}
