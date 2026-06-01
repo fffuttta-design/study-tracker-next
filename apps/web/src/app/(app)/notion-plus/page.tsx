@@ -227,14 +227,23 @@ export default function NotionPlusPage() {
     await saveConfig({ groups: current.groups.filter((g) => g.id !== groupId), assignments: newAssignments });
   };
 
-  // ページをグループに割り当て
-  const handleAssign = async (pageId: string, groupId: string | null) => {
+  // ページをグループに割り当て（内部共通ロジック）
+  const assignPage = useCallback(async (pageId: string, groupId: string | null) => {
     const current = configRef.current;
     const newAssignments = { ...current.assignments };
     if (groupId === null) { delete newAssignments[pageId]; } else { newAssignments[pageId] = groupId; }
     await saveConfig({ ...current, assignments: newAssignments });
+  }, [saveConfig]);
+
+  // 右クリックメニュー用（メニューを閉じる付き）
+  const handleAssign = async (pageId: string, groupId: string | null) => {
+    await assignPage(pageId, groupId);
     setContextMenu(null);
   };
+
+  // ドラッグ中のページID
+  const [draggingPageId, setDraggingPageId] = useState<string | null>(null);
+  const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null); // null = 未割当ゾーン
 
   // 新規ページ
   const handleAdd = async () => {
@@ -259,10 +268,21 @@ export default function NotionPlusPage() {
     return { groupedResult: result, ungrouped: roots.filter((p) => !config.assignments[p.id]) };
   }, [roots, config]);
 
-  // ページ行
+  // ページ行（ドラッグ対応）
   const PageRow = ({ page }: { page: NotionPage }) => (
-    <li onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY, pageId: page.id }); }}>
-      <Link href={`/notion-plus/${page.id}`} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100">
+    <li
+      draggable
+      onDragStart={(e) => {
+        setDraggingPageId(page.id);
+        e.dataTransfer.setData('text/plain', page.id);
+        e.dataTransfer.effectAllowed = 'move';
+      }}
+      onDragEnd={() => { setDraggingPageId(null); setDragOverGroupId(undefined as any); }}
+      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY, pageId: page.id }); }}
+      className={`transition-opacity ${draggingPageId === page.id ? 'opacity-40' : ''}`}
+    >
+      <Link href={`/notion-plus/${page.id}`} className="flex cursor-grab items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 active:cursor-grabbing">
+        <span className="shrink-0 text-[10px] text-gray-300">⠿</span>
         <PageIcon icon={page.icon} />
         <span className="flex-1 truncate">{page.title || '無題'}</span>
         {page.isFavorite && <span className="text-xs text-yellow-500">★</span>}
@@ -300,7 +320,19 @@ export default function NotionPlusPage() {
           <div className="space-y-5">
             {/* グループあり */}
             {groupedResult.map(({ group, pages: gpages }) => (
-              <div key={group.id}>
+              <div
+                key={group.id}
+                onDragOver={(e) => { if (draggingPageId) { e.preventDefault(); setDragOverGroupId(group.id); } }}
+                onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverGroupId(null); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const pid = e.dataTransfer.getData('text/plain');
+                  if (pid) assignPage(pid, group.id);
+                  setDragOverGroupId(null);
+                  setDraggingPageId(null);
+                }}
+                className={`rounded-lg p-2 transition-colors ${dragOverGroupId === group.id ? 'bg-brand-50 ring-1 ring-brand-300' : ''}`}
+              >
                 <div className="group mb-1 flex items-center gap-1">
                   {editingGroupId === group.id ? (
                     <input
@@ -331,23 +363,40 @@ export default function NotionPlusPage() {
                   >✕</button>
                 </div>
                 {gpages.length === 0 ? (
-                  <p className="py-1 pl-3 text-[11px] text-gray-300">（ページを右クリックして追加）</p>
+                  <p className={`py-2 pl-3 text-[11px] ${dragOverGroupId === group.id ? 'text-brand-400' : 'text-gray-300'}`}>
+                    {dragOverGroupId === group.id ? '↓ ここにドロップ' : '（ページをドラッグ or 右クリックして追加）'}
+                  </p>
                 ) : (
                   <ul className="space-y-0.5">{gpages.map((p) => <PageRow key={p.id} page={p} />)}</ul>
                 )}
               </div>
             ))}
 
-            {/* 未割当 */}
-            {ungrouped.length > 0 && (
-              <div>
+            {/* 未割当（ドロップでグループ解除） */}
+            {(ungrouped.length > 0 || draggingPageId) && (
+              <div
+                onDragOver={(e) => { if (draggingPageId) { e.preventDefault(); setDragOverGroupId('__ungrouped__'); } }}
+                onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverGroupId(null); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const pid = e.dataTransfer.getData('text/plain');
+                  if (pid) assignPage(pid, null);
+                  setDragOverGroupId(null);
+                  setDraggingPageId(null);
+                }}
+                className={`rounded-lg p-2 transition-colors ${dragOverGroupId === '__ungrouped__' ? 'bg-gray-50 ring-1 ring-gray-300' : ''}`}
+              >
                 {config.groups.length > 0 && (
                   <div className="mb-1 flex items-center gap-1">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-gray-300">未割当</span>
-                    <span className="text-[10px] text-gray-300">{ungrouped.length}件</span>
+                    <span className={`text-xs font-semibold uppercase tracking-wide ${dragOverGroupId === '__ungrouped__' ? 'text-gray-500' : 'text-gray-300'}`}>
+                      {dragOverGroupId === '__ungrouped__' ? '↓ グループから外す' : '未割当'}
+                    </span>
+                    {ungrouped.length > 0 && <span className="text-[10px] text-gray-300">{ungrouped.length}件</span>}
                   </div>
                 )}
-                <ul className="space-y-0.5">{ungrouped.map((p) => <PageRow key={p.id} page={p} />)}</ul>
+                {ungrouped.length > 0 && (
+                  <ul className="space-y-0.5">{ungrouped.map((p) => <PageRow key={p.id} page={p} />)}</ul>
+                )}
               </div>
             )}
           </div>
@@ -362,7 +411,14 @@ export default function NotionPlusPage() {
             <div className="fixed inset-0 z-40" />
             <div
               className="fixed z-50 w-52 rounded-xl border border-gray-100 bg-white py-1 shadow-2xl"
-              style={{ top: contextMenu.y, left: contextMenu.x }}
+              style={{
+                top: contextMenu.y + 240 > (typeof window !== 'undefined' ? window.innerHeight : 800)
+                  ? contextMenu.y - 240
+                  : contextMenu.y,
+                left: contextMenu.x + 220 > (typeof window !== 'undefined' ? window.innerWidth : 1200)
+                  ? contextMenu.x - 220
+                  : contextMenu.x,
+              }}
               onClick={(e) => e.stopPropagation()}
             >
               {/* ③ ページを移動 */}
