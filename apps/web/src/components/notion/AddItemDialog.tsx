@@ -153,7 +153,11 @@ function ConfirmDialog({ text, pageId, onConfirm, onCancel }: {
 
 // ── AddItemDialog（左右分割ビュー）────────────────────────────────────
 
-export function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
+export function AddItemDialog({ uid, onClose, onAfterRecord }: {
+  uid: string;
+  onClose: () => void;
+  onAfterRecord?: () => void; // 特急メモ消化時：記録完了後に呼ばれる
+}) {
   const { add: addItem } = useLearningStore();
   const { pages, add: addPage, update } = useNotionPageStore();
   const { user } = useAuthStore();
@@ -270,6 +274,7 @@ export function AddItemDialog({ uid, onClose }: { uid: string; onClose: () => vo
     if (savedToastTimerRef.current) clearTimeout(savedToastTimerRef.current);
     setSavedToast(true);
     savedToastTimerRef.current = setTimeout(() => setSavedToast(false), 2500);
+    onAfterRecord?.(); // 特急メモ消化時：元アイテムの削除などを実行
   };
 
   const handleCreate = async () => {

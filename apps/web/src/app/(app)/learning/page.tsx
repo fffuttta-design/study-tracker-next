@@ -101,14 +101,16 @@ export default function LearningPage() {
 
 function LearningPageContent() {
   const { user } = useAuthStore();
-  const { items, loading } = useLearningStore();
+  const { items, loading, remove } = useLearningStore();
   const searchParams = useSearchParams();
   const [tab, setTab] = useState(() => {
     const t = Number(searchParams.get('tab') ?? '0');
-    return isNaN(t) ? 0 : Math.min(Math.max(t, 0), 5);
+    return isNaN(t) ? 0 : Math.min(Math.max(t, 0), 6);
   });
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [quickInboxOpen, setQuickInboxOpen] = useState(false);
+  const [digestItem, setDigestItem] = useState<LearningItem | null>(null);
   const dateKey = toDateKey(selectedDate);
 
   const todayItems = useMemo(
@@ -116,6 +118,23 @@ function LearningPageContent() {
     [items, dateKey]
   );
   const dueItems = useMemo(() => items.filter(hasDueReview), [items]);
+  // 特急メモ = notionPageId が未設定のアイテム（インボックス）
+  const inboxItems = useMemo(
+    () => items.filter((i) => !i.notionPageId).sort((a, b) =>
+      new Date(b.createdAt ?? b.dateKey).getTime() - new Date(a.createdAt ?? a.dateKey).getTime()
+    ),
+    [items]
+  );
+
+  const handleDigest = useCallback((item: LearningItem) => {
+    setDigestItem(item);
+  }, []);
+
+  const handleAfterRecord = useCallback(async () => {
+    if (!digestItem || !user) return;
+    await remove(user.uid, digestItem.id);
+    setDigestItem(null);
+  }, [digestItem, user, remove]);
 
   if (loading) {
     return <div className="flex h-full items-center justify-center"><Spinner /></div>;
@@ -150,7 +169,7 @@ function LearningPageContent() {
 
       {/* タブ */}
       <div className="flex border-b border-gray-100 px-6">
-        {['ダッシュボード', '本日の学習', '今日の復習', '達成リスト', '全学習リスト', '通知ログ'].map((label, i) => (
+        {['ダッシュボード', '本日の学習', '今日の復習', '達成リスト', '全学習リスト', '通知ログ', '⚡ 特急'].map((label, i) => (
           <button
             key={i}
             onClick={() => setTab(i)}
@@ -160,23 +179,36 @@ function LearningPageContent() {
             {i === 2 && dueItems.length > 0 && (
               <span className="ml-1.5 rounded-full bg-red-500 px-1.5 py-0.5 text-xs text-white">{dueItems.length}</span>
             )}
+            {i === 6 && inboxItems.length > 0 && (
+              <span className="ml-1.5 rounded-full bg-amber-500 px-1.5 py-0.5 text-xs text-white">{inboxItems.length}</span>
+            )}
           </button>
         ))}
       </div>
 
       {/* タブコンテンツ */}
       <div className="flex-1 overflow-y-auto bg-white">
-        {tab === 0 && <DashboardTab todayItems={todayItems} dueItems={dueItems} uid={user?.uid ?? ''} onAdd={() => setAddDialogOpen(true)} />}
+        {tab === 0 && <DashboardTab todayItems={todayItems} dueItems={dueItems} inboxItems={inboxItems} uid={user?.uid ?? ''} onAdd={() => setAddDialogOpen(true)} onQuickAdd={() => setQuickInboxOpen(true)} onDigest={handleDigest} />}
         {tab === 1 && <TodayTab items={todayItems} uid={user?.uid ?? ''} onAdd={() => setAddDialogOpen(true)} />}
         {tab === 2 && <ReviewTab dueItems={dueItems} uid={user?.uid ?? ''} />}
         {tab === 3 && <AchievementTab items={items} uid={user?.uid ?? ''} />}
         {tab === 4 && <AllItemsTab items={items} uid={user?.uid ?? ''} />}
         {tab === 5 && <LogTab />}
+        {tab === 6 && <QuickTab inboxItems={inboxItems} uid={user?.uid ?? ''} onDigest={handleDigest} />}
       </div>
 
-      {/* AddItemDialog */}
-      {addDialogOpen && user && (
-        <AddItemDialog uid={user.uid} onClose={() => setAddDialogOpen(false)} />
+      {/* AddItemDialog（通常 or 特急消化） */}
+      {(addDialogOpen || digestItem !== null) && user && (
+        <AddItemDialog
+          uid={user.uid}
+          onClose={() => { setAddDialogOpen(false); setDigestItem(null); }}
+          onAfterRecord={digestItem ? handleAfterRecord : undefined}
+        />
+      )}
+
+      {/* 特急クイック追加モーダル */}
+      {quickInboxOpen && user && (
+        <QuickInboxModal uid={user.uid} onClose={() => setQuickInboxOpen(false)} />
       )}
     </div>
   );
@@ -185,11 +217,14 @@ function LearningPageContent() {
 
 // ── ダッシュボードタブ ───────────────────────────────────────────────
 
-function DashboardTab({ todayItems, dueItems, uid, onAdd }: {
+function DashboardTab({ todayItems, dueItems, inboxItems, uid, onAdd, onQuickAdd, onDigest }: {
   todayItems: LearningItem[];
   dueItems: LearningItem[];
+  inboxItems: LearningItem[];
   uid: string;
   onAdd: () => void;
+  onQuickAdd: () => void;
+  onDigest: (item: LearningItem) => void;
 }) {
   const [reviewSortDir, setReviewSortDir] = useState<'asc' | 'desc'>('asc');
   // 今日の登録を時間帯でグループ化
@@ -225,11 +260,39 @@ function DashboardTab({ todayItems, dueItems, uid, onAdd }: {
             <span className="text-sm font-semibold text-gray-800">今日の登録</span>
             <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500">{todayItems.length}</span>
           </div>
-          <button onClick={onAdd} className="shrink-0 rounded-lg bg-brand-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-600">
-            + 追加
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={onQuickAdd} className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-600" title="NotionPlus不要でサクッと記録">
+              ⚡ 特急
+            </button>
+            <button onClick={onAdd} className="shrink-0 rounded-lg bg-brand-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-600">
+              + 追加
+            </button>
+          </div>
         </div>
         <div className="p-6">
+          {/* 特急インボックス（未消化のみ、最新3件） */}
+          {inboxItems.length > 0 && (
+            <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-semibold text-amber-700">⚡ 特急メモ（未消化）</span>
+                <span className="rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{inboxItems.length}</span>
+              </div>
+              <div className="space-y-1.5">
+                {inboxItems.slice(0, 3).map((item) => (
+                  <div key={item.id} className="flex items-center gap-2">
+                    <span className="flex-1 truncate text-xs text-gray-700">{item.title}</span>
+                    <button
+                      onClick={() => onDigest(item)}
+                      className="shrink-0 rounded px-2 py-0.5 text-[10px] font-medium text-brand-500 hover:bg-brand-50"
+                    >消化</button>
+                  </div>
+                ))}
+                {inboxItems.length > 3 && (
+                  <p className="text-[10px] text-amber-600">他 {inboxItems.length - 3} 件 → 「⚡ 特急」タブへ</p>
+                )}
+              </div>
+            </div>
+          )}
           {todayItems.length === 0 ? (
             <Empty text="今日の学習はまだありません" />
           ) : todayGrouped ? (
@@ -831,6 +894,126 @@ function AchievementTab({ items }: { items: LearningItem[]; uid: string }) {
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// ── ⚡ 特急クイック追加モーダル ────────────────────────────────────────
+
+function QuickInboxModal({ uid, onClose }: { uid: string; onClose: () => void }) {
+  const { add } = useLearningStore();
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!title.trim()) return;
+    setSaving(true);
+    try {
+      await add(uid, {
+        dateKey: localDateKey(),
+        title: title.trim(),
+        content: content.trim(),
+        sortOrder: Date.now(),
+      });
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-gray-800">⚡ 特急メモ</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
+        </div>
+        <input
+          autoFocus
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) handleSave(); }}
+          placeholder="タイトルを入力... (Enter で保存)"
+          className="mb-3 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-amber-400"
+        />
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          placeholder="メモ（任意）"
+          rows={3}
+          className="mb-4 w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-amber-400"
+        />
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-gray-500 hover:bg-gray-100">
+            キャンセル
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!title.trim() || saving}
+            className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50"
+          >
+            {saving ? '保存中...' : '⚡ 特急で保存'}
+          </button>
+        </div>
+        <p className="mt-2 text-center text-[10px] text-gray-400">NotionPlus への紐づけは「⚡ 特急」タブから消化できます</p>
+      </div>
+    </div>
+  );
+}
+
+// ── ⚡ 特急タブ ─────────────────────────────────────────────────────────
+
+function QuickTab({ inboxItems, uid, onDigest }: {
+  inboxItems: LearningItem[];
+  uid: string;
+  onDigest: (item: LearningItem) => void;
+}) {
+  const { remove } = useLearningStore();
+
+  if (inboxItems.length === 0) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 text-gray-400">
+        <span className="text-4xl">⚡</span>
+        <p className="text-sm">特急メモはありません 🎉</p>
+        <p className="text-xs text-gray-300">ダッシュボードの「⚡ 特急」ボタンで素早く記録</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6">
+      <p className="mb-4 text-xs text-gray-400">
+        NotionPlus に紐づけていないメモです。「消化する」を押してページに関連付けましょう。
+      </p>
+      <div className="space-y-3">
+        {inboxItems.map((item) => (
+          <div key={item.id} className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium text-gray-800">{item.title}</p>
+                {item.content && (
+                  <p className="mt-1 line-clamp-2 text-xs text-gray-500">{item.content}</p>
+                )}
+                <p className="mt-1 text-[11px] text-gray-400">{item.dateKey}</p>
+              </div>
+              <div className="flex shrink-0 gap-2">
+                <button
+                  onClick={() => onDigest(item)}
+                  className="rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-600"
+                >
+                  消化する →
+                </button>
+                <button
+                  onClick={() => remove(uid, item.id)}
+                  className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-400 hover:border-red-200 hover:text-red-400"
+                  title="削除"
+                >🗑</button>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
