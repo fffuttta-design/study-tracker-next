@@ -11,7 +11,11 @@ import { useNotionPageStore, WORKSPACE_ID } from '@/stores/notionPageStore';
 
 // ── グループ設定の型 ───────────────────────────────────────────────────
 interface PageGroup { id: string; label: string; order: number; }
-interface GroupConfig { groups: PageGroup[]; assignments: Record<string, string>; }
+interface GroupConfig {
+  groups: PageGroup[];
+  assignments: Record<string, string>;  // pageId → groupId
+  pageOrder?: Record<string, string[]>; // groupKey → ordered pageIds ('__ungrouped__' for ungrouped)
+}
 
 function parseGroupConfig(content: string): GroupConfig {
   try {
@@ -245,6 +249,34 @@ export default function NotionPlusPage() {
   const [draggingPageId, setDraggingPageId] = useState<string | null>(null);
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null); // null = 未割当ゾーン
 
+  // グループ内並び替え
+  const handleReorder = useCallback(async (
+    dragId: string, targetId: string, groupKey: string, insertBefore: boolean,
+  ) => {
+    const current = configRef.current;
+    const groupId = groupKey === '__ungrouped__' ? null : groupKey;
+    const groupPages = groupId
+      ? roots.filter((p) => current.assignments[p.id] === groupId)
+      : roots.filter((p) => !current.assignments[p.id]);
+
+    // 既存の順序 + グループ内ページを統合してフル順序リストを構築
+    const existingOrder = current.pageOrder?.[groupKey] ?? [];
+    const baseOrder: string[] = [];
+    existingOrder.forEach((id) => { if (groupPages.some((p) => p.id === id)) baseOrder.push(id); });
+    groupPages.forEach((p) => { if (!baseOrder.includes(p.id)) baseOrder.push(p.id); });
+
+    const fromIdx = baseOrder.indexOf(dragId);
+    if (fromIdx === -1) return;
+
+    const newOrder = [...baseOrder];
+    newOrder.splice(fromIdx, 1);
+    const targetIdx = newOrder.indexOf(targetId);
+    if (targetIdx === -1) return;
+    newOrder.splice(insertBefore ? targetIdx : targetIdx + 1, 0, dragId);
+
+    await saveConfig({ ...current, pageOrder: { ...(current.pageOrder ?? {}), [groupKey]: newOrder } });
+  }, [roots, saveConfig]);
+
   // 新規ページ
   const handleAdd = async () => {
     if (!user) return;
@@ -260,35 +292,80 @@ export default function NotionPlusPage() {
     [pages],
   );
 
-  // グループ別分類
+  // pageOrder に従ってページを並び替えるヘルパー
+  const applyOrder = useCallback((pages: NotionPage[], groupKey: string): NotionPage[] => {
+    const order = config.pageOrder?.[groupKey];
+    if (!order) return pages;
+    const ordered = order.map((id) => pages.find((p) => p.id === id)).filter(Boolean) as NotionPage[];
+    const rest = pages.filter((p) => !order.includes(p.id));
+    return [...ordered, ...rest];
+  }, [config.pageOrder]);
+
+  // グループ別分類（pageOrder 反映）
   const { groupedResult, ungrouped } = useMemo(() => {
     const result = config.groups
       .sort((a, b) => a.order - b.order)
-      .map((g) => ({ group: g, pages: roots.filter((p) => config.assignments[p.id] === g.id) }));
-    return { groupedResult: result, ungrouped: roots.filter((p) => !config.assignments[p.id]) };
-  }, [roots, config]);
+      .map((g) => ({
+        group: g,
+        pages: applyOrder(roots.filter((p) => config.assignments[p.id] === g.id), g.id),
+      }));
+    return {
+      groupedResult: result,
+      ungrouped: applyOrder(roots.filter((p) => !config.assignments[p.id]), '__ungrouped__'),
+    };
+  }, [roots, config, applyOrder]);
 
-  // ページ行（ドラッグ対応）
-  const PageRow = ({ page }: { page: NotionPage }) => (
-    <li
-      draggable
-      onDragStart={(e) => {
-        setDraggingPageId(page.id);
-        e.dataTransfer.setData('text/plain', page.id);
-        e.dataTransfer.effectAllowed = 'move';
-      }}
-      onDragEnd={() => { setDraggingPageId(null); setDragOverGroupId(undefined as any); }}
-      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY, pageId: page.id }); }}
-      className={`transition-opacity ${draggingPageId === page.id ? 'opacity-40' : ''}`}
-    >
-      <Link href={`/notion-plus/${page.id}`} className="flex cursor-grab items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 active:cursor-grabbing">
-        <span className="shrink-0 text-[10px] text-gray-300">⠿</span>
-        <PageIcon icon={page.icon} />
-        <span className="flex-1 truncate">{page.title || '無題'}</span>
-        {page.isFavorite && <span className="text-xs text-yellow-500">★</span>}
-      </Link>
-    </li>
-  );
+  // ページ行（ドラッグ対応 + グループ内並び替えドロップターゲット）
+  const PageRow = ({ page, groupKey }: { page: NotionPage; groupKey: string }) => {
+    const rowRef = useRef<HTMLLIElement>(null);
+    const [dropLine, setDropLine] = useState<'before' | 'after' | null>(null);
+
+    const isSameGroup = draggingPageId
+      ? (config.assignments[draggingPageId] ?? '__ungrouped__') === (config.assignments[page.id] ?? '__ungrouped__')
+      : false;
+
+    return (
+      <li
+        ref={rowRef}
+        draggable
+        onDragStart={(e) => {
+          setDraggingPageId(page.id);
+          e.dataTransfer.setData('text/plain', page.id);
+          e.dataTransfer.effectAllowed = 'move';
+        }}
+        onDragEnd={() => { setDraggingPageId(null); setDragOverGroupId(null); setDropLine(null); }}
+        onDragOver={(e) => {
+          if (!draggingPageId || draggingPageId === page.id) return;
+          if (isSameGroup) {
+            e.preventDefault();
+            e.stopPropagation(); // グループ全体のハイライトを抑制
+            const rect = rowRef.current?.getBoundingClientRect();
+            setDropLine(rect && e.clientY < rect.top + rect.height / 2 ? 'before' : 'after');
+          }
+        }}
+        onDragLeave={() => setDropLine(null)}
+        onDrop={(e) => {
+          if (!draggingPageId || !isSameGroup) return;
+          e.preventDefault();
+          e.stopPropagation();
+          handleReorder(draggingPageId, page.id, groupKey, dropLine === 'before');
+          setDropLine(null);
+          setDraggingPageId(null);
+        }}
+        onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY, pageId: page.id }); }}
+        className={`relative transition-opacity ${draggingPageId === page.id ? 'opacity-40' : ''}`}
+      >
+        {dropLine === 'before' && <div className="pointer-events-none absolute -top-px left-0 right-0 h-0.5 rounded bg-brand-400" />}
+        <Link href={`/notion-plus/${page.id}`} className="flex cursor-grab items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 active:cursor-grabbing">
+          <span className="shrink-0 text-[10px] text-gray-300">⠿</span>
+          <PageIcon icon={page.icon} />
+          <span className="flex-1 truncate">{page.title || '無題'}</span>
+          {page.isFavorite && <span className="text-xs text-yellow-500">★</span>}
+        </Link>
+        {dropLine === 'after' && <div className="pointer-events-none absolute -bottom-px left-0 right-0 h-0.5 rounded bg-brand-400" />}
+      </li>
+    );
+  };
 
   if (loading) {
     return <div className="flex h-full items-center justify-center"><div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" /></div>;
@@ -367,7 +444,7 @@ export default function NotionPlusPage() {
                     {dragOverGroupId === group.id ? '↓ ここにドロップ' : '（ページをドラッグ or 右クリックして追加）'}
                   </p>
                 ) : (
-                  <ul className="space-y-0.5">{gpages.map((p) => <PageRow key={p.id} page={p} />)}</ul>
+                  <ul className="space-y-0.5">{gpages.map((p) => <PageRow key={p.id} page={p} groupKey={group.id} />)}</ul>
                 )}
               </div>
             ))}
@@ -395,7 +472,7 @@ export default function NotionPlusPage() {
                   </div>
                 )}
                 {ungrouped.length > 0 && (
-                  <ul className="space-y-0.5">{ungrouped.map((p) => <PageRow key={p.id} page={p} />)}</ul>
+                  <ul className="space-y-0.5">{ungrouped.map((p) => <PageRow key={p.id} page={p} groupKey="__ungrouped__" />)}</ul>
                 )}
               </div>
             )}
