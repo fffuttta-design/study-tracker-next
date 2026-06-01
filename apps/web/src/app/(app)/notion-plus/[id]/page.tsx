@@ -172,12 +172,12 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
     return () => document.removeEventListener('mousedown', handler);
   }, [iconPickerOpen, settingsOpen]);
 
-  // タブ右クリックメニューの外クリックで閉じる
+  // タブ右クリックメニューの外クリックで閉じる（click イベントで猶予を確保）
   useEffect(() => {
     if (!tabCtxMenu) return;
     const handler = () => setTabCtxMenu(null);
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
   }, [tabCtxMenu]);
 
   const handleSave = useCallback(

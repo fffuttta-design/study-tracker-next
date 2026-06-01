@@ -83,28 +83,49 @@ function MovePageModal({
   const { update } = useNotionPageStore();
   const router = useRouter();
 
+  // ── ナビゲーション状態 ─────────────────────────────────────────────
+  // currentParentId: 現在表示している階層の親ID（undefined = ルート）
+  const [currentParentId, setCurrentParentId] = useState<string | undefined>(undefined);
+  const [navStack, setNavStack] = useState<Array<{ id: string | undefined; title: string }>>([]);
+
+  // 移動不可のID（自分自身と子孫）
   const getDescendantIds = (id: string): string[] => {
     const children = pages.filter((p) => p.parentId === id);
     return children.flatMap((c) => [c.id, ...getDescendantIds(c.id)]);
   };
-
-  const getAncestorPath = (page: NotionPage): string => {
-    const parts: string[] = [];
-    let cur: NotionPage | undefined = page;
-    while (cur?.parentId && cur.parentId !== WORKSPACE_ID) {
-      const parent = pages.find((p) => p.id === cur!.parentId);
-      if (!parent) break;
-      parts.unshift(parent.title || 'Untitled');
-      cur = parent;
-    }
-    return parts.join(' › ');
-  };
-
   const excludeIds = new Set([target.id, WORKSPACE_ID, ...getDescendantIds(target.id)]);
-  const validTargets = pages
-    .filter((p) => !excludeIds.has(p.id) && p.type !== 'database')
+
+  // 現在の階層の子ページ一覧
+  const currentChildren = pages
+    .filter((p) =>
+      (currentParentId ? p.parentId === currentParentId : !p.parentId) &&
+      !excludeIds.has(p.id) &&
+      p.type !== 'database'
+    )
     .sort((a, b) => a.order - b.order);
 
+  // 現在の階層ページ（currentParentId）を取得
+  const currentPage = currentParentId ? pages.find((p) => p.id === currentParentId) : null;
+
+  // 子ページを持つか
+  const hasChildren = (pageId: string) =>
+    pages.some((p) => p.parentId === pageId && !excludeIds.has(p.id) && p.type !== 'database');
+
+  // 下の階層へ進む
+  const drillInto = (page: NotionPage) => {
+    setNavStack((prev) => [...prev, { id: currentParentId, title: currentPage?.title || 'ルート' }]);
+    setCurrentParentId(page.id);
+  };
+
+  // 上の階層に戻る
+  const goBack = () => {
+    const prev = navStack[navStack.length - 1];
+    if (!prev) return;
+    setCurrentParentId(prev.id);
+    setNavStack((s) => s.slice(0, -1));
+  };
+
+  // 移動実行
   const getMaxOrder = (parentId: string | undefined) => {
     const siblings = pages.filter((p) =>
       p.id !== WORKSPACE_ID && p.id !== target.id &&
@@ -127,6 +148,7 @@ function MovePageModal({
         className="flex w-96 max-h-[70vh] flex-col rounded-xl bg-white shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* ヘッダー */}
         <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4 py-3">
           <div>
             <h3 className="text-sm font-semibold text-gray-800">📁 移動先を選択</h3>
@@ -134,35 +156,73 @@ function MovePageModal({
           </div>
           <button onClick={onClose} className="rounded p-1 text-gray-400 hover:bg-gray-100">✕</button>
         </div>
-        <div className="flex-1 overflow-y-auto py-1">
+
+        {/* パンくず・戻るボタン */}
+        <div className="flex shrink-0 items-center gap-1 border-b border-gray-100 px-3 py-2 text-xs text-gray-500">
+          {navStack.length > 0 && (
+            <button
+              onClick={goBack}
+              className="flex items-center gap-1 rounded px-1.5 py-1 hover:bg-gray-100 text-gray-600"
+            >
+              ← 戻る
+            </button>
+          )}
+          <span className="text-gray-300">/</span>
+          {navStack.map((s, i) => (
+            <span key={i} className="flex items-center gap-1 text-gray-400">
+              <button onClick={() => {
+                setCurrentParentId(s.id);
+                setNavStack((prev) => prev.slice(0, i));
+              }} className="hover:underline truncate max-w-[80px]">{s.title}</button>
+              <span className="text-gray-300">›</span>
+            </span>
+          ))}
+          <span className="font-medium text-gray-700 truncate max-w-[120px]">
+            {currentPage?.title || 'ルート'}
+          </span>
+        </div>
+
+        {/* ページリスト */}
+        <div className="flex-1 overflow-y-auto">
+          {/* 現在の階層に移動ボタン */}
           <button
-            onClick={() => handleMove(undefined)}
-            className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-brand-50"
+            onClick={() => handleMove(currentParentId)}
+            className={`flex w-full items-center gap-2 px-4 py-2.5 text-sm font-medium border-b border-gray-100 hover:bg-brand-50 ${
+              target.parentId === currentParentId ? 'text-brand-500' : 'text-gray-700'
+            }`}
           >
-            <span>🏠</span>
-            <span className="font-medium">ルートに移動（最上位）</span>
-            {!target.parentId && <span className="ml-auto text-[10px] text-brand-400">現在</span>}
+            <span>↳</span>
+            <span>
+              {currentPage ? `「${currentPage.title || 'Untitled'}」の中へ移動` : 'ルートへ移動'}
+            </span>
+            {target.parentId === currentParentId && (
+              <span className="ml-auto text-[10px] text-brand-400">現在地</span>
+            )}
           </button>
-          <div className="mx-4 my-1 border-t border-gray-100" />
-          {validTargets.map((p) => {
-            const path = getAncestorPath(p);
-            return (
-              <button
-                key={p.id}
-                onClick={() => handleMove(p.id)}
-                className={`flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-brand-50 ${p.id === target.parentId ? 'bg-brand-50 text-brand-600' : 'text-gray-700'}`}
-              >
-                <PageIcon icon={p.icon} />
-                <div className="flex-1 min-w-0 text-left">
-                  <div className="truncate font-medium">{p.title || 'Untitled'}</div>
-                  {path && <div className="truncate text-[10px] text-gray-400">{path}</div>}
-                </div>
-                {p.id === target.parentId && <span className="ml-auto shrink-0 text-[10px] text-brand-400">現在の親</span>}
-              </button>
-            );
-          })}
-          {validTargets.length === 0 && (
-            <p className="px-4 py-4 text-center text-xs text-gray-400">移動可能なページがありません</p>
+
+          {/* 子ページ一覧 */}
+          {currentChildren.length === 0 ? (
+            <p className="px-4 py-4 text-center text-xs text-gray-400">子ページがありません</p>
+          ) : (
+            currentChildren.map((p) => {
+              const hasChild = hasChildren(p.id);
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => hasChild ? drillInto(p) : handleMove(p.id)}
+                  className={`flex w-full items-center gap-2 px-4 py-2.5 text-sm hover:bg-gray-50 ${
+                    p.id === target.parentId ? 'bg-brand-50 text-brand-600' : 'text-gray-700'
+                  }`}
+                >
+                  <PageIcon icon={p.icon} />
+                  <span className="flex-1 truncate text-left font-medium">{p.title || 'Untitled'}</span>
+                  {p.id === target.parentId && (
+                    <span className="shrink-0 text-[10px] text-brand-400">現在の親</span>
+                  )}
+                  {hasChild && <span className="shrink-0 text-gray-300 text-xs">›</span>}
+                </button>
+              );
+            })
           )}
         </div>
       </div>
