@@ -511,32 +511,23 @@ function NotionPageSidebar({ user }: { user: User }) {
         title="ドラッグでサイズ変更"
       />
       {/* ヘッダー */}
-      <div className="flex items-center justify-between border-b border-gray-100 px-3 py-3">
-        <div className="flex items-center gap-1">
-          {/* 🏠 ホームボタン（学習リストへ戻る） */}
-          <Link
-            href="/learning"
-            title="学習リストへ戻る"
-            className="rounded p-1 text-base leading-none text-gray-400 hover:bg-gray-200 hover:text-gray-700"
-          >🏠</Link>
+      <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
+        {/* 左：縦2行（NotionPlus / ホームに戻る） */}
+        <div className="flex flex-col gap-0.5">
           <Link href="/notion-plus" className="flex items-center gap-1.5 rounded px-1 hover:bg-gray-100">
-            <span className="text-base">📝</span>
+            <span className="text-base leading-none">📝</span>
             <span className="text-sm font-semibold text-gray-800">NotionPlus</span>
           </Link>
-        </div>
-        <div className="flex items-center gap-0.5">
-          {/* 設定ボタン */}
           <Link
-            href="/notion-plus/settings"
-            title="NotionPlus設定"
-            className={`rounded p-1 text-sm transition-colors ${
-              pathname === '/notion-plus/settings'
-                ? 'bg-gray-200 text-gray-700'
-                : 'text-gray-400 hover:bg-gray-200 hover:text-gray-700'
-            }`}
+            href="/learning"
+            className="flex items-center gap-1 rounded px-1 text-[11px] text-gray-400 hover:bg-gray-100 hover:text-gray-600"
           >
-            ⚙️
+            <span className="text-[11px] leading-none">🏠</span>
+            <span>ホームに戻る</span>
           </Link>
+        </div>
+        {/* 右：新規作成 + 閉じる（設定は削除→メインコンテンツ側へ） */}
+        <div className="flex items-center gap-0.5">
           <div ref={addMenuRef} className="relative">
             <button
               onClick={() => setAddMenuOpen((v) => !v)}

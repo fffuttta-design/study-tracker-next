@@ -604,7 +604,13 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
                   />
                 ) : (
                   <button
-                    onClick={() => { setActiveChapterId(chapter.id); setEditorKey((k) => k + 1); }}
+                    onClick={() => {
+                      // 既にアクティブなタブはキーを上げない（ダブルクリック時に2回リマウントされるのを防ぐ）
+                      if (activeChapterId !== chapter.id) {
+                        setActiveChapterId(chapter.id);
+                        setEditorKey((k) => k + 1);
+                      }
+                    }}
                     onDoubleClick={() => { setRenamingChapterId(chapter.id); setRenameDraft(chapter.title); }}
                     onContextMenu={(e) => {
                       e.preventDefault();
@@ -660,6 +666,7 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
               className="fixed z-50 min-w-[140px] rounded-xl border border-gray-200 bg-white py-1 shadow-xl"
               style={{ left: tabCtxMenu.x, top: tabCtxMenu.y }}
               onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
             >
               <button
                 className="flex w-full items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50"
