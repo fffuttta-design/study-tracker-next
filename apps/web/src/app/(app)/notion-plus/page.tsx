@@ -292,6 +292,14 @@ export default function NotionPlusPage() {
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
   const [dragOverItem, setDragOverItem] = useState<{ pageId: string; position: 'before' | 'after' } | null>(null);
 
+  // ルートページ一覧（handleReorder が参照するため先に宣言）
+  const roots = useMemo(() =>
+    pages
+      .filter((p) => !p.parentId && p.id !== WORKSPACE_ID)
+      .sort((a, b) => { if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1; return a.order - b.order; }),
+    [pages],
+  );
+
   // グループ内並び替え
   const handleReorder = useCallback(async (
     dragId: string, targetId: string, groupKey: string, insertBefore: boolean,
@@ -326,14 +334,6 @@ export default function NotionPlusPage() {
     const page = await add(user.uid);
     router.push(`/notion-plus/${page.id}`);
   };
-
-  // ルートページ一覧
-  const roots = useMemo(() =>
-    pages
-      .filter((p) => !p.parentId && p.id !== WORKSPACE_ID)
-      .sort((a, b) => { if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1; return a.order - b.order; }),
-    [pages],
-  );
 
   // pageOrder に従ってページを並び替えるヘルパー
   const applyOrder = useCallback((pages: NotionPage[], groupKey: string): NotionPage[] => {
