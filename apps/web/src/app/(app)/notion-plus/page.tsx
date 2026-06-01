@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
@@ -28,10 +28,12 @@ export default function NotionPlusPage() {
   // ワークスペースページを取得（全ページのルートノート）
   const workspacePage = pages.find((p) => p.id === WORKSPACE_ID);
 
-  // ワークスペースが未作成なら作成
-  if (!loading && !workspacePage && user) {
-    ensureWorkspace(user.uid).catch(() => {});
-  }
+  // ワークスペースが未作成なら作成（useEffect 内でないとレンダーループになる）
+  useEffect(() => {
+    if (!loading && !workspacePage && user) {
+      ensureWorkspace(user.uid).catch(() => {});
+    }
+  }, [loading, workspacePage, user, ensureWorkspace]);
 
   // ワークスペースエディタの保存
   const handleSave = useCallback(async (title: string, content: string) => {
@@ -93,16 +95,14 @@ export default function NotionPlusPage() {
         </div>
       </div>
 
-      {/* コンテンツ全体をひとつのスクロール領域に */}
-      <div className="flex-1 overflow-y-auto">
-        {/* ワークスペースエディタ（自由に書けるノート） */}
+      {/* ワークスペースエディタ（フルページ・自由に書けるノート） */}
+      <div className="flex min-h-0 flex-1 flex-col">
         <NotionEditor
           key={WORKSPACE_ID}
           initialTitle={workspacePage.title || 'NotionPlus'}
           initialContent={workspacePage.content}
           onSave={handleSave}
           hideTitle
-          compact
           onCreateSubPage={handleCreateSubPage}
           recordTriggerRef={recordTriggerRef}
           notionPageId={WORKSPACE_ID}
