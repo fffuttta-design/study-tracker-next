@@ -733,45 +733,48 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
           )}
         </>
       ) : (
-        <NotionEditor
-          key={`${page.id}-${editorKey}`}
-          initialTitle={page.title}
-          initialContent={page.content}
-          onSave={handleSave}
-          onCreateSubPage={handleCreateSubPage}
-          recordTriggerRef={recordTriggerRef}
-          notionPageId={page.id}
-          notionPagePath={breadcrumbs.map((p) => p.title || 'Untitled').join(' / ')}
-          highlightText={highlightText}
-        />
+        // 通常ページ: エディタ + 子ページをひとつのスクロール領域にまとめる
+        // （子ページが多い場合にエディタが潰れるのを防ぐ）
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          <NotionEditor
+            key={`${page.id}-${editorKey}`}
+            initialTitle={page.title}
+            initialContent={page.content}
+            onSave={handleSave}
+            onCreateSubPage={handleCreateSubPage}
+            recordTriggerRef={recordTriggerRef}
+            notionPageId={page.id}
+            notionPagePath={breadcrumbs.map((p) => p.title || 'Untitled').join(' / ')}
+            highlightText={highlightText}
+          />
+          {/* 子ページ一覧（エディタの下に続けて表示） */}
+          {(() => {
+            const childPages = pages.filter((p) => p.parentId === page.id && p.type !== 'database');
+            if (childPages.length === 0) return null;
+            return (
+              <div className="border-t border-gray-100 px-6 py-4">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">子ページ</p>
+                <div className="flex flex-col gap-0.5">
+                  {childPages.sort((a, b) => a.order - b.order).map((child) => (
+                    <button
+                      key={child.id}
+                      onClick={() => router.push(`/notion-plus/${child.id}`)}
+                      className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 text-left"
+                    >
+                      {(child.icon ?? '').startsWith('http') || (child.icon ?? '').startsWith('data:')
+                        // eslint-disable-next-line @next/next/no-img-element
+                        ? <img src={child.icon} alt="" className="h-5 w-5 shrink-0 rounded object-cover" />
+                        : <span className="text-base leading-none shrink-0">{child.icon || '📄'}</span>
+                      }
+                      <span className="truncate">{child.title || '無題'}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+        </div>
       )}
-
-      {/* 子ページ一覧（parentId が現在ページのもの） */}
-      {(() => {
-        const childPages = pages.filter((p) => p.parentId === page.id && p.type !== 'database');
-        if (childPages.length === 0) return null;
-        return (
-          <div className="shrink-0 border-t border-gray-100 px-6 py-4">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">子ページ</p>
-            <div className="flex flex-col gap-0.5">
-              {childPages.sort((a, b) => a.order - b.order).map((child) => (
-                <button
-                  key={child.id}
-                  onClick={() => router.push(`/notion-plus/${child.id}`)}
-                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 text-left"
-                >
-                  {(child.icon ?? '').startsWith('http') || (child.icon ?? '').startsWith('data:')
-                    // eslint-disable-next-line @next/next/no-img-element
-                    ? <img src={child.icon} alt="" className="h-5 w-5 shrink-0 rounded object-cover" />
-                    : <span className="text-base leading-none shrink-0">{child.icon || '📄'}</span>
-                  }
-                  <span className="truncate">{child.title || '無題'}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
 
       {historyOpen && user && (
         <HistoryModal
