@@ -41,6 +41,9 @@ interface SettingsState {
   // 学習メモ設定
   quickMemoDefaultRows: number;
   setQuickMemoDefaultRows: (n: number) => void;
+  // NotionPlus 前回表示ページ
+  lastViewedNotionPageId: string | null;
+  setLastViewedNotionPageId: (id: string | null) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -62,6 +65,8 @@ export const useSettingsStore = create<SettingsState>()(
       setReviewNotificationTime: (time) => set({ reviewNotificationTime: time }),
       quickMemoDefaultRows: 5,
       setQuickMemoDefaultRows: (n) => set({ quickMemoDefaultRows: n }),
+      lastViewedNotionPageId: null,
+      setLastViewedNotionPageId: (id) => set({ lastViewedNotionPageId: id }),
     }),
     { name: 'study-tracker-settings' }
   )

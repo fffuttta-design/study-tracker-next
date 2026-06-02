@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotionPageStore, WORKSPACE_ID, type PageHistorySnapshot } from '@/stores/notionPageStore';
 import { useSettingsStore, type NotionBlockOffsets, DEFAULT_BLOCK_OFFSETS } from '@/stores/settingsStore';
+
 import { type NotionPage, type BookChapter, parseBookChapters, serializeBookChapters, createBookChapter } from '@study-tracker/core';
 import { DatabaseView } from '@/components/database/DatabaseView';
 
@@ -119,6 +120,7 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
     notionPlusParaLineHeight, setNotionPlusParaLineHeight,
     notionPlusSoftLineHeight, setNotionPlusSoftLineHeight,
     notionPlusBlockOffsets, setNotionPlusBlockOffsets, resetNotionPlusBlockOffsets,
+    setLastViewedNotionPageId,
   } = useSettingsStore();
   const [saving, setSaving] = useState(false);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
@@ -147,6 +149,11 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
   useEffect(() => {
     if (!loading && !page) router.replace('/notion-plus');
   }, [page, loading, router]);
+
+  // 前回表示ページとして記録
+  useEffect(() => {
+    if (page) setLastViewedNotionPageId(page.id);
+  }, [page?.id, setLastViewedNotionPageId]);
 
   // ブック: page.content から chapters を初期化（pageId が変わった時 or 初回）
   useEffect(() => {
