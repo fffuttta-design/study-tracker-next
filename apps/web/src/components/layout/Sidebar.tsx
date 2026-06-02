@@ -647,28 +647,17 @@ function NotionPageSidebar({ user }: { user: User }) {
               uid={user.uid}
             />
 
-            {/* ページ一覧（全ルートページ） */}
+            {/* ページ一覧（全ルートページ・ドラッグで並び替え可） */}
             {!loading && allRootPages.length > 0 && (
               <div className="mt-3 border-t border-gray-100 pt-2">
                 <p className="px-3 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">ページ一覧</p>
-                <div className="space-y-0.5">
-                  {allRootPages.map((p) => (
-                    <Link
-                      key={p.id}
-                      href={`/notion-plus/${p.id}`}
-                      onContextMenu={(e) => { e.preventDefault(); handleCtxMenu(e, p); }}
-                      className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors ${
-                        p.id === currentId
-                          ? 'bg-white font-semibold text-gray-900 shadow-sm'
-                          : 'text-gray-600 hover:bg-white hover:text-gray-900'
-                      }`}
-                    >
-                      <PageIcon icon={p.type === 'database' && p.icon === '📄' ? '📊' : p.icon} />
-                      <span className="min-w-0 flex-1 truncate">{p.title || 'Untitled'}</span>
-                      {p.isFavorite && <span className="shrink-0 text-[10px] text-yellow-400">★</span>}
-                    </Link>
-                  ))}
-                </div>
+                <RootPageList
+                  roots={allRootPages}
+                  pages={pages}
+                  currentId={currentId}
+                  onCtxMenu={handleCtxMenu}
+                  uid={user.uid}
+                />
               </div>
             )}
           </>
