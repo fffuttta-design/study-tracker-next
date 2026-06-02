@@ -8,12 +8,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
 } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { useAuthStore } from '../../store/authStore';
 import { useNotionStore } from '../../store/notionStore';
 import { isTipTapContent, extractTextFromTipTap } from '../../types';
+import { TipTapWebEditor } from '../../components/TipTapWebEditor';
 
 export default function NotionPageScreen({ route, navigation }: any) {
   const { pageId } = route.params as { pageId: string };
@@ -90,13 +90,17 @@ export default function NotionPageScreen({ route, navigation }: any) {
 
       {editing ? (
         isTipTapContent(content) ? (
-          // TipTap JSON はモバイルで直接編集不可 → 読み取り専用案内
-          <ScrollView style={styles.preview} contentContainerStyle={styles.previewContent}>
-            <View style={styles.webOnlyBanner}>
-              <Text style={styles.webOnlyText}>⚠️ このページはWebアプリで作成されました。編集はWebから行ってください。</Text>
-            </View>
-            <Text style={styles.plainText}>{extractTextFromTipTap(content)}</Text>
-          </ScrollView>
+          // TipTap JSON → WebView エディタで編集
+          <TipTapWebEditor
+            content={content}
+            title={title}
+            onSave={(newContent, newTitle) => {
+              setContent(newContent);
+              setTitle(newTitle);
+              setDirty(true);
+            }}
+            style={styles.webEditor}
+          />
         ) : (
           <TextInput
             style={styles.editor}
@@ -113,12 +117,7 @@ export default function NotionPageScreen({ route, navigation }: any) {
         <ScrollView style={styles.preview} contentContainerStyle={styles.previewContent}>
           {content ? (
             isTipTapContent(content) ? (
-              <>
-                <View style={styles.webOnlyBanner}>
-                  <Text style={styles.webOnlyText}>⚠️ Webアプリで作成されたページです（読み取り専用）</Text>
-                </View>
-                <Text style={styles.plainText}>{extractTextFromTipTap(content)}</Text>
-              </>
+              <Text style={styles.plainText}>{extractTextFromTipTap(content)}</Text>
             ) : (
               <Markdown style={markdownStyles}>{content}</Markdown>
             )
@@ -150,11 +149,10 @@ const styles = StyleSheet.create({
   saveBtn: { marginLeft: 'auto', paddingHorizontal: 14, paddingVertical: 6, backgroundColor: '#10b981', borderRadius: 6 },
   saveBtnText: { color: '#fff', fontWeight: '600', fontSize: 13 },
   editor: { flex: 1, padding: 16, color: '#111827', fontSize: 15, lineHeight: 24, fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo', backgroundColor: '#ffffff' },
+  webEditor: { flex: 1 },
   preview: { flex: 1 },
   previewContent: { padding: 16 },
   emptyText: { color: '#9ca3af', fontSize: 14, fontStyle: 'italic', marginTop: 20 },
-  webOnlyBanner: { backgroundColor: '#fffbeb', borderRadius: 8, padding: 10, marginBottom: 16, borderWidth: 1, borderColor: '#fcd34d' },
-  webOnlyText: { color: '#92400e', fontSize: 13 },
   plainText: { color: '#374151', fontSize: 15, lineHeight: 24 },
 });
 
