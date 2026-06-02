@@ -191,17 +191,6 @@ function PageTreeEntry({
   if (page.type === 'book') return null;
 
   const isActive = page.id === currentId;
-  const activeChildId = currentId && currentId !== page.id
-    ? findActiveChild(pages, page.id, currentId)
-    : null;
-  const activeChild = activeChildId ? pages.find((p) => p.id === activeChildId) : null;
-
-  // 現在地がこのページ自身の場合、直接の子ページを表示（子への道案内）
-  const directChildren = isActive
-    ? pages
-        .filter((p) => p.parentId === page.id && p.type !== 'book')
-        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-    : [];
   const update = useNotionPageStore((s) => s.update);
   const { user } = useAuthStore();
   const router = useRouter();
@@ -278,18 +267,6 @@ function PageTreeEntry({
         {isDragOver && <span className="shrink-0 text-[10px] text-brand-400">↳</span>}
         {!isDragOver && page.isFavorite && <span className="shrink-0 text-[10px] text-yellow-400">★</span>}
       </Link>
-      {/* 現在いるページへのパス上にある子ページを再帰表示 */}
-      {activeChild && (
-        <div className="ml-4 border-l border-gray-200 pl-2 pt-0.5">
-          <PageTreeEntry page={activeChild} pages={pages} currentId={currentId} onCtxMenu={onCtxMenu} />
-        </div>
-      )}
-      {/* 現在地がこのページの場合、直接の子ページ一覧を表示 */}
-      {directChildren.map((child) => (
-        <div key={child.id} className="ml-4 border-l border-gray-200 pl-2 pt-0.5">
-          <PageTreeEntry page={child} pages={pages} currentId={currentId} onCtxMenu={onCtxMenu} />
-        </div>
-      ))}
     </div>
   );
 }
@@ -510,6 +487,17 @@ function NotionPageSidebar({ user }: { user: User }) {
     .filter((p) => !p.parentId && p.id !== WORKSPACE_ID)
     .sort((a, b) => a.order - b.order);
 
+  // 現在地のルート祖先ID（子ページを開いていても親ルートをハイライトするため）
+  const activeRootId = useMemo(() => {
+    if (!currentId) return null;
+    let cur = pages.find((p) => p.id === currentId);
+    while (cur) {
+      if (!cur.parentId || cur.parentId === WORKSPACE_ID) return cur.id;
+      cur = pages.find((p) => p.id === cur!.parentId);
+    }
+    return null;
+  }, [currentId, pages]);
+
   useEffect(() => {
     if (!addMenuOpen) return;
     const handler = (e: MouseEvent) => {
@@ -711,14 +699,14 @@ function NotionPageSidebar({ user }: { user: User }) {
               uid={user.uid}
             />
 
-            {/* ページ一覧（全ルートページ・ドラッグで並び替え可） */}
+            {/* ページ一覧（全ルートページ・フラット表示・D&D並び替え可） */}
             {!loading && allRootPages.length > 0 && (
               <div className="mt-3 border-t border-gray-100 pt-2">
                 <p className="px-3 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">ページ一覧</p>
                 <RootPageList
                   roots={allRootPages}
                   pages={pages}
-                  currentId={currentId}
+                  currentId={activeRootId ?? undefined}
                   onCtxMenu={handleCtxMenu}
                   uid={user.uid}
                 />
