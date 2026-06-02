@@ -241,13 +241,29 @@ function DashboardTab({ todayItems, dueItems, inboxItems, uid, onAdd, onQuickAdd
         .map(([label, items]) => ({ label, items }))
     : null;
 
+  // 昨日の日付キー
+  const yesterday = toDateKey(subDays(new Date(), 1));
+
+  // 昨日学んだ → 翌日(stageIndex=0)が due → 左パネル下部に表示
+  const yesterdayDueItems = useMemo(
+    () => dueItems.filter((item) => {
+      const next = item.reviews.find((r) => !r.completed);
+      return next?.stageIndex === 0 && item.dateKey === yesterday;
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [dueItems],
+  );
+
   // 復習待ちをステージでグループ化
+  // 翌日(index=0)は昨日分を除く（左パネルに表示するため）
   const dueGrouped = STAGE_LABELS.map((label, i) => ({
     label,
     index: i,
     items: dueItems.filter((item) => {
       const next = item.reviews.find((r) => !r.completed);
-      return next?.stageIndex === i;
+      if (next?.stageIndex !== i) return false;
+      if (i === 0 && item.dateKey === yesterday) return false; // 左パネルに移動済み
+      return true;
     }),
   })).filter((g) => g.items.length > 0);
 
@@ -306,6 +322,20 @@ function DashboardTab({ todayItems, dueItems, inboxItems, uid, onAdd, onQuickAdd
             </div>
           ) : (
             <ItemList items={todayItems} uid={uid} compact fromTab={0} />
+          )}
+
+          {/* 昨日の学習（翌日due → 今日復習すべきもの） */}
+          {yesterdayDueItems.length > 0 && (
+            <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-3">
+              <BadgeDivider
+                label="昨日の学習"
+                count={yesterdayDueItems.length}
+                badgeClass={STAGE_COLORS[0]}
+                countBg={STAGE_BADGE_COUNT_BG[0]}
+                leftAlign
+              />
+              <ItemList items={yesterdayDueItems} uid={uid} showReviewAction compact fromTab={0} />
+            </div>
           )}
         </div>
       </div>
