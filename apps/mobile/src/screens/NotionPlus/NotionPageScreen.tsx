@@ -98,6 +98,10 @@ export default function NotionPageScreen({ route, navigation }: any) {
             if (newTitle) setTitle(newTitle);
             setDirty(true);
           }}
+          onNavigate={(href) => {
+            const match = href?.match(/\/notion-plus\/([^/?#]+)/);
+            if (match) navigation.push('NotionPage', { pageId: match[1], title: '' });
+          }}
           style={styles.webEditor}
         />
       ) : editing ? (

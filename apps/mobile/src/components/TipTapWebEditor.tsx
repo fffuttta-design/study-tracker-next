@@ -1,5 +1,5 @@
-import React, { useRef } from 'react';
-import { StyleSheet } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { StyleSheet, View, ActivityIndicator } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
 const EDITOR_URL = __DEV__
@@ -11,12 +11,14 @@ interface Props {
   title: string;
   readOnly?: boolean;
   onSave?: (content: string, title: string) => void;
+  onNavigate?: (href: string) => void;
   style?: object;
 }
 
-export function TipTapWebEditor({ content, title, readOnly = false, onSave, style }: Props) {
+export function TipTapWebEditor({ content, title, readOnly = false, onSave, onNavigate, style }: Props) {
   const webViewRef = useRef<WebView>(null);
   const readyRef = useRef(false);
+  const [contentReady, setContentReady] = useState(false);
 
   // injectJavaScript でコンテンツを渡す（postMessage より確実）
   const injectContent = (c: string, t: string, ro: boolean) => {
@@ -62,6 +64,10 @@ export function TipTapWebEditor({ content, title, readOnly = false, onSave, styl
         injectContent(content, title, readOnly);
       } else if (data.type === 'change' && !readOnly && onSave) {
         onSave(data.content ?? '', data.title ?? '');
+      } else if (data.type === 'contentReady') {
+        setContentReady(true);
+      } else if (data.type === 'navigate' && onNavigate) {
+        onNavigate(data.href ?? '');
       }
     } catch {
       // 無視
@@ -69,19 +75,28 @@ export function TipTapWebEditor({ content, title, readOnly = false, onSave, styl
   };
 
   return (
-    <WebView
-      ref={webViewRef}
-      source={{ uri: EDITOR_URL }}
-      onMessage={handleMessage}
-      onLoadEnd={handleLoadEnd}
-      style={[styles.webview, style]}
-      keyboardDisplayRequiresUserAction={false}
-      scrollEnabled={true}
-      showsVerticalScrollIndicator={false}
-    />
+    <View style={[styles.container, style]}>
+      <WebView
+        ref={webViewRef}
+        source={{ uri: EDITOR_URL }}
+        onMessage={handleMessage}
+        onLoadEnd={handleLoadEnd}
+        style={[styles.webview, { opacity: contentReady ? 1 : 0 }]}
+        keyboardDisplayRequiresUserAction={false}
+        scrollEnabled={true}
+        showsVerticalScrollIndicator={false}
+      />
+      {!contentReady && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="small" color="#F59E0B" />
+        </View>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  webview: { flex: 1, backgroundColor: '#ffffff' },
+  container:      { flex: 1, backgroundColor: '#ffffff' },
+  webview:        { flex: 1, backgroundColor: '#ffffff' },
+  loadingOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: '#ffffff' },
 });

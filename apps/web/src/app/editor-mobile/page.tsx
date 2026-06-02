@@ -56,14 +56,19 @@ const PageLinkStub = TiptapNode.create({
   addNodeView() {
     return ({ node }) => {
       const dom = document.createElement('div');
-      dom.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;margin:4px 0;background:#f9fafb;';
-      const raw   = node.attrs.icon || '📄';
+      dom.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;margin:4px 0;background:#f9fafb;cursor:pointer;-webkit-tap-highlight-color:rgba(0,0,0,0.05);';
+      const raw   = node.attrs.icon  || '📄';
       const title = node.attrs.title || 'Untitled';
+      const href  = node.attrs.href  || '';
       const isUrl = raw.startsWith('http') || raw.startsWith('data:');
       const iconHtml = isUrl
         ? `<img src="${raw}" style="width:20px;height:20px;border-radius:4px;object-fit:cover;flex-shrink:0;" />`
         : `<span style="font-size:18px;line-height:1;flex-shrink:0;">${raw}</span>`;
       dom.innerHTML = `${iconHtml}<span style="color:#1d4ed8;text-decoration:underline;font-size:15px;">${title}</span>`;
+      // タップでRNにナビゲーションを依頼
+      dom.addEventListener('click', () => {
+        if (href) window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'navigate', href }));
+      });
       return { dom };
     };
   },
@@ -218,6 +223,8 @@ export default function EditorMobilePage() {
         setDbg(`⑤ JSON parse失敗: ${String(e).slice(0, 40)}`);
         editor.commands.setContent(c ?? '', { emitUpdate: false });
       }
+      // コンテンツ準備完了をRNに通知（ホワイトアウト解消用）
+      window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'contentReady' }));
     };
 
     // ページロード前に injectJavaScript が先に実行された場合の処理
