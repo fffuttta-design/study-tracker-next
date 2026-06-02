@@ -35,8 +35,14 @@ export function TipTapWebEditor({ content, title, readOnly = false, onSave, styl
   };
 
   const handleLoadEnd = () => {
-    // ページロード完了後にコンテンツを注入（200ms待機してエディタ初期化を待つ）
-    setTimeout(() => injectContent(content, title, readOnly), 200);
+    console.log('[TipTapWebEditor] onLoadEnd fired, content length:', content?.length ?? 0);
+    // ページロード完了後にコンテンツを注入（500ms待機してエディタ初期化を待つ）
+    setTimeout(() => {
+      console.log('[TipTapWebEditor] injectContent called');
+      injectContent(content, title, readOnly);
+    }, 500);
+    // 念のため1.5秒後にも再試行
+    setTimeout(() => injectContent(content, title, readOnly), 1500);
   };
 
   // readOnly が変わったときも注入で通知

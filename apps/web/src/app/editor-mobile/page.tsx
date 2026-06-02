@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -85,6 +85,7 @@ export default function EditorMobilePage() {
   const titleRef = useRef('');
   const readyPostedRef = useRef(false);
   const readOnlyRef = useRef(false);
+  const [dbg, setDbg] = useState('① ページロード中');
 
   const editor = useEditor({
     extensions: [
@@ -121,15 +122,20 @@ export default function EditorMobilePage() {
   useEffect(() => {
     if (!editor) return;
 
+    setDbg('② エディタ初期化完了');
+
     // injectJavaScript から呼ばれるグローバル関数を公開
     (window as any).__applyEditorContent = (c: string, t: string, ro: boolean) => {
+      setDbg(`③ コンテンツ受信 len=${c?.length ?? 0} ro=${ro}`);
       titleRef.current = t ?? '';
       readOnlyRef.current = !!ro;
       editor.setEditable(!ro);
       try {
         const parsed = JSON.parse(c);
         editor.commands.setContent(parsed, { emitUpdate: false });
-      } catch {
+        setDbg(`④ setContent完了 nodes=${parsed?.content?.length ?? '?'}`);
+      } catch (e) {
+        setDbg(`⑤ JSON parse失敗: ${String(e).slice(0, 40)}`);
         editor.commands.setContent(c ?? '', { emitUpdate: false });
       }
     };
@@ -137,6 +143,7 @@ export default function EditorMobilePage() {
     // ページロード前に injectJavaScript が先に実行された場合の処理
     const pending = (window as any).__rnContent;
     if (pending) {
+      setDbg('② エディタ初期化完了（ペンディングあり）');
       (window as any).__applyEditorContent(
         pending,
         (window as any).__rnTitle ?? '',
@@ -322,6 +329,11 @@ export default function EditorMobilePage() {
       {/* エディタエリア */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 16px 80px' }}>
         <EditorContent editor={editor} />
+      </div>
+
+      {/* デバッグバナー（問題解決後に削除） */}
+      <div style={{ background: '#fef08a', borderTop: '1px solid #ca8a04', padding: '4px 10px', fontSize: '11px', color: '#713f12', flexShrink: 0 }}>
+        🔍 {dbg}
       </div>
 
       <style>{`
