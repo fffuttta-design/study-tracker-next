@@ -1200,7 +1200,11 @@ export function NotionEditor({
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ heading: { levels: [1, 2, 3, 4] } }),
+      StarterKit.configure({
+        heading: { levels: [1, 2, 3, 4] },
+        link: false,      // StarterKit v3 同梱済み。下でカスタム設定を使うため除外
+        underline: false, // StarterKit v3 同梱済み。下で個別追加するため除外
+      }),
       Placeholder.configure({ placeholder: '書き始めるか、「/」でコマンドを入力...' }),
       TaskList,
       TaskItem.configure({ nested: true }),

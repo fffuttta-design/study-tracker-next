@@ -24,7 +24,6 @@ export default function NotionPlusPage() {
   const { pages, loading, ensureWorkspace, add, update } = useNotionPageStore();
   const router = useRouter();
   const recordTriggerRef = useRef<(() => void) | null>(null);
-  const ensureWorkspaceCalled = useRef(false);
 
   // ワークスペースページを取得（全ページのルートノート）
   const workspacePage = pages.find((p) => p.id === WORKSPACE_ID);
@@ -34,14 +33,8 @@ export default function NotionPlusPage() {
   // ワークスペースが未作成なら作成。
   // deps に boolean と uid を使い、オブジェクト参照変化による多重実行を防ぐ
   useEffect(() => {
-    if (!loading && !hasWorkspace && uid && !ensureWorkspaceCalled.current) {
-      ensureWorkspaceCalled.current = true;
-      ensureWorkspace(uid).catch(() => {
-        ensureWorkspaceCalled.current = false; // エラー時はリトライを許可
-      });
-    }
-    if (hasWorkspace) {
-      ensureWorkspaceCalled.current = false; // ワークスペース確立後にリセット
+    if (!loading && !hasWorkspace && uid) {
+      ensureWorkspace(uid).catch((err) => console.error('[NotionPlus] workspace作成失敗:', err));
     }
   // ensureWorkspace は Zustand の安定参照のため deps 省略
   // eslint-disable-next-line react-hooks/exhaustive-deps
