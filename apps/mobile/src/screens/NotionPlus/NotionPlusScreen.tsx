@@ -20,12 +20,13 @@ import { NotionPage } from '../../types';
 
 export default function NotionPlusScreen({ navigation }: any) {
   const { user } = useAuthStore();
-  const { pages, subscribePages, addPage, deletePage, reorderPages } = useNotionStore();
+  const { pages, loading, subscribePages, addPage, deletePage, reorderPages } = useNotionStore();
   const [showAdd, setShowAdd] = useState(false);
   const [newTitle, setNewTitle] = useState('');
 
   useEffect(() => {
     if (!user) return;
+    // HomeScreenでも購読しているが、NotionPlusが先に開かれた場合のフォールバック
     return subscribePages(user.uid);
   }, [user]);
 
@@ -95,7 +96,9 @@ export default function NotionPlusScreen({ navigation }: any) {
         onDragEnd={handleDragEnd}
         renderItem={renderItem}
         ListEmptyComponent={
-          <Text style={styles.empty}>ノートがありません。「＋ 新規」から作成してください。</Text>
+          loading
+            ? null  // 読み込み中は空テキストを出さない
+            : <Text style={styles.empty}>ノートがありません。「＋ 新規」から作成してください。</Text>
         }
       />
 

@@ -9,6 +9,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../store/authStore';
 import { useLearningStore } from '../../store/learningStore';
+import { useNotionStore } from '../../store/notionStore';
 import { LearningItem, hasDueReview, isFullyCompleted, localDateKey, REVIEW_STAGE_LABELS, toggleTipTapTask } from '../../types';
 
 const STAGE_COLORS = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'] as const;
@@ -18,12 +19,15 @@ import { ContentRenderer } from '../../components/ContentRenderer';
 export default function HomeScreen({ navigation }: any) {
   const { user } = useAuthStore();
   const { items, subscribeItems, subscribeCategories, completeReview, updateItemContent } = useLearningStore();
+  const { subscribePages: subscribeNotionPages } = useNotionStore();
 
   useEffect(() => {
     if (!user) return;
     const unsub1 = subscribeItems(user.uid);
     const unsub2 = subscribeCategories(user.uid);
-    return () => { unsub1(); unsub2(); };
+    // HomeScreenで常時購読することでタブ切替時のフラッシュを防ぐ
+    const unsub3 = subscribeNotionPages(user.uid);
+    return () => { unsub1(); unsub2(); unsub3(); };
   }, [user]);
 
   const today = localDateKey();
