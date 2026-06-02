@@ -30,6 +30,11 @@ export default function NotionPlusPage() {
   const hasWorkspace = !!workspacePage;
   const uid = user?.uid;
 
+  // 親ページ一覧（ルートレベルのページ、ワークスペース除く）
+  const rootPages = pages
+    .filter((p) => !p.parentId && p.id !== WORKSPACE_ID)
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
   // ワークスペースが未作成なら作成。
   // deps に boolean と uid を使い、オブジェクト参照変化による多重実行を防ぐ
   useEffect(() => {
@@ -99,6 +104,30 @@ export default function NotionPlusPage() {
           >⚙️</Link>
         </div>
       </div>
+
+      {/* 親ページ一覧 */}
+      {rootPages.length > 0 && (
+        <div className="shrink-0 border-b border-gray-100 px-6 py-4">
+          <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">ページ</p>
+          <div className="flex flex-wrap gap-2">
+            {rootPages.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => router.push(`/notion-plus/${p.id}`)}
+                className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
+              >
+                {p.icon && (
+                  p.icon.startsWith('http') || p.icon.startsWith('data:')
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img src={p.icon} alt="" className="h-4 w-4 shrink-0 rounded object-cover" />
+                    : <span className="shrink-0 text-base leading-none">{p.icon}</span>
+                )}
+                <span className="max-w-[160px] truncate font-medium">{p.title || 'Untitled'}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ワークスペースエディタ（フルページ・自由に書けるノート） */}
       <div className="flex min-h-0 flex-1 flex-col">
