@@ -227,11 +227,18 @@ function DashboardTab({ todayItems, dueItems, inboxItems, uid, onAdd, onQuickAdd
   onDigest: (item: LearningItem) => void;
 }) {
   const [reviewSortDir, setReviewSortDir] = useState<'asc' | 'desc'>('asc');
-  // 今日の登録を時間帯でグループ化
-  const hasTimeInfo = todayItems.some((i) => i.createdAt);
+  const [expandedInboxIds, setExpandedInboxIds] = useState<Set<string>>(new Set());
+  const { remove: removeItem } = useLearningStore();
+
+  const toggleInbox = (id: string) =>
+    setExpandedInboxIds((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+
+  // 今日の登録を時間帯でグループ化（消化済みアイテムのみ）
+  const digestedItems = todayItems.filter((i) => !!i.notionPageId);
+  const hasTimeInfo = digestedItems.some((i) => i.createdAt);
   const todayGrouped = hasTimeInfo
     ? Object.entries(
-        todayItems.reduce<Record<string, LearningItem[]>>((acc, item) => {
+        digestedItems.reduce<Record<string, LearningItem[]>>((acc, item) => {
           const key = item.createdAt ? toHHGroup(item.createdAt) : '--:--';
           (acc[key] ??= []).push(item);
           return acc;
@@ -286,31 +293,60 @@ function DashboardTab({ todayItems, dueItems, inboxItems, uid, onAdd, onQuickAdd
           </div>
         </div>
         <div className="p-6">
-          {/* 特急インボックス（未消化のみ、最新3件） */}
+          {/* ⚡ 特急メモ（クリックで展開・インラインリスト） */}
           {inboxItems.length > 0 && (
-            <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-3">
-              <div className="mb-2 flex items-center justify-between">
+            <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2 border-b border-amber-200">
                 <span className="text-xs font-semibold text-amber-700">⚡ 特急メモ（未消化）</span>
                 <span className="rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{inboxItems.length}</span>
               </div>
-              <div className="space-y-1.5">
-                {inboxItems.slice(0, 3).map((item) => (
-                  <div key={item.id} className="flex items-center gap-2">
-                    <span className="flex-1 truncate text-xs text-gray-700">{item.title}</span>
-                    <button
-                      onClick={() => onDigest(item)}
-                      className="shrink-0 rounded px-2 py-0.5 text-[10px] font-medium text-brand-500 hover:bg-brand-50"
-                    >消化</button>
-                  </div>
-                ))}
-                {inboxItems.length > 3 && (
-                  <p className="text-[10px] text-amber-600">他 {inboxItems.length - 3} 件 → 「⚡ 特急」タブへ</p>
-                )}
+              <div className="divide-y divide-amber-100">
+                {inboxItems.map((item) => {
+                  const isOpen = expandedInboxIds.has(item.id);
+                  return (
+                    <div key={item.id}>
+                      {/* タイトル行（クリックで開閉） */}
+                      <button
+                        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-amber-100 transition-colors"
+                        onClick={() => toggleInbox(item.id)}
+                      >
+                        <span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-800">{item.title || '（タイトルなし）'}</span>
+                        <span className="shrink-0 text-[10px] text-amber-400">{isOpen ? '▲' : '▼'}</span>
+                      </button>
+                      {/* 展開コンテンツ */}
+                      {isOpen && (
+                        <div className="border-t border-amber-100 bg-white px-3 py-2">
+                          {item.content && (
+                            <p className="mb-2 whitespace-pre-wrap text-xs text-gray-600 leading-relaxed">
+                              {item.content.replace(/[#\*`_~>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 300)}
+                            </p>
+                          )}
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-gray-400">{format(new Date(item.dateKey), 'M/d', { locale: ja })} 登録</span>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => onDigest(item)}
+                                className="rounded-lg bg-brand-500 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-brand-600"
+                              >消化する →</button>
+                              <button
+                                onClick={() => removeItem(uid, item.id)}
+                                className="rounded-lg border border-gray-200 px-2 py-1 text-[11px] text-gray-400 hover:border-red-200 hover:text-red-400"
+                                title="削除"
+                              >🗑</button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
-          {todayItems.length === 0 ? (
-            <Empty text="今日の学習はまだありません" />
+
+          {/* 消化済み学習アイテム（時間帯グループ） */}
+          {digestedItems.length === 0 ? (
+            inboxItems.length === 0 && <Empty text="今日の学習はまだありません" />
           ) : todayGrouped ? (
             <div>
               {todayGrouped.map((g) => (
@@ -321,7 +357,7 @@ function DashboardTab({ todayItems, dueItems, inboxItems, uid, onAdd, onQuickAdd
               ))}
             </div>
           ) : (
-            <ItemList items={todayItems} uid={uid} compact fromTab={0} />
+            <ItemList items={digestedItems} uid={uid} compact fromTab={0} />
           )}
 
           {/* 昨日の学習（翌日due → 今日復習すべきもの） */}
