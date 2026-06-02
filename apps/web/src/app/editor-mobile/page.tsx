@@ -117,18 +117,38 @@ export default function EditorMobilePage() {
     },
   });
 
-  // エディタ ready 後に RN へ通知（ReactNativeWebView がまだない場合はリトライ）
+  // エディタ ready 後の処理
   useEffect(() => {
-    if (!editor || readyPostedRef.current) return;
-    const tryReady = () => {
-      if (window.ReactNativeWebView) {
-        readyPostedRef.current = true;
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ready' }));
-      } else {
-        setTimeout(tryReady, 100);
+    if (!editor) return;
+
+    // injectJavaScript から呼ばれるグローバル関数を公開
+    (window as any).__applyEditorContent = (c: string, t: string, ro: boolean) => {
+      titleRef.current = t ?? '';
+      readOnlyRef.current = !!ro;
+      editor.setEditable(!ro);
+      try {
+        const parsed = JSON.parse(c);
+        editor.commands.setContent(parsed, { emitUpdate: false });
+      } catch {
+        editor.commands.setContent(c ?? '', { emitUpdate: false });
       }
     };
-    tryReady();
+
+    // ページロード前に injectJavaScript が先に実行された場合の処理
+    const pending = (window as any).__rnContent;
+    if (pending) {
+      (window as any).__applyEditorContent(
+        pending,
+        (window as any).__rnTitle ?? '',
+        (window as any).__rnReadOnly ?? false,
+      );
+    }
+
+    // postMessage 経由の通知もサポート（フォールバック）
+    if (!readyPostedRef.current) {
+      readyPostedRef.current = true;
+      window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'ready' }));
+    }
   }, [editor]);
 
   // RN からの init メッセージを受信してエディタにコンテンツをセット
@@ -140,17 +160,11 @@ export default function EditorMobilePage() {
           : event.data;
 
         if (data.type === 'init' && editor) {
-          titleRef.current = data.title ?? '';
-          readOnlyRef.current = !!data.readOnly;
-          editor.setEditable(!data.readOnly);
-          try {
-            const parsed = JSON.parse(data.content);
-            editor.commands.setContent(parsed, { emitUpdate: false });
-          } catch {
-            editor.commands.setContent(data.content ?? '', { emitUpdate: false });
+          const apply = (window as any).__applyEditorContent;
+          if (typeof apply === 'function') {
+            apply(data.content, data.title ?? '', !!data.readOnly);
           }
         }
-        // 編集/プレビュー切り替え（WebView再マウントなし）
         if (data.type === 'setEditable' && editor) {
           readOnlyRef.current = !data.editable;
           editor.setEditable(!!data.editable);

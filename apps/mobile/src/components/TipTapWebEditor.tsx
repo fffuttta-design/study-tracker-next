@@ -18,15 +18,34 @@ export function TipTapWebEditor({ content, title, readOnly = false, onSave, styl
   const webViewRef = useRef<WebView>(null);
   const readyRef = useRef(false);
 
-  const sendInit = (c: string, t: string) => {
-    webViewRef.current?.postMessage(JSON.stringify({ type: 'init', content: c, title: t, readOnly }));
+  // injectJavaScript でコンテンツを渡す（postMessage より確実）
+  const injectContent = (c: string, t: string, ro: boolean) => {
+    const script = `
+      (function() {
+        window.__rnContent = ${JSON.stringify(c)};
+        window.__rnTitle = ${JSON.stringify(t)};
+        window.__rnReadOnly = ${JSON.stringify(ro)};
+        if (typeof window.__applyEditorContent === 'function') {
+          window.__applyEditorContent(window.__rnContent, window.__rnTitle, window.__rnReadOnly);
+        }
+        true;
+      })();
+    `;
+    webViewRef.current?.injectJavaScript(script);
   };
 
-  // readOnly が変わったときにWebViewへ通知（再マウントなしに切り替え）
+  const handleLoadEnd = () => {
+    // ページロード完了後にコンテンツを注入（200ms待機してエディタ初期化を待つ）
+    setTimeout(() => injectContent(content, title, readOnly), 200);
+  };
+
+  // readOnly が変わったときも注入で通知
   const prevReadOnlyRef = useRef(readOnly);
-  if (prevReadOnlyRef.current !== readOnly && readyRef.current) {
+  if (prevReadOnlyRef.current !== readOnly) {
     prevReadOnlyRef.current = readOnly;
-    webViewRef.current?.postMessage(JSON.stringify({ type: 'setEditable', editable: !readOnly }));
+    if (readyRef.current) {
+      setTimeout(() => injectContent(content, title, readOnly), 0);
+    }
   }
 
   const handleMessage = (event: WebViewMessageEvent) => {
@@ -34,7 +53,7 @@ export function TipTapWebEditor({ content, title, readOnly = false, onSave, styl
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'ready') {
         readyRef.current = true;
-        sendInit(content, title);
+        injectContent(content, title, readOnly);
       } else if (data.type === 'change' && !readOnly && onSave) {
         onSave(data.content ?? '', data.title ?? '');
       }
@@ -48,6 +67,7 @@ export function TipTapWebEditor({ content, title, readOnly = false, onSave, styl
       ref={webViewRef}
       source={{ uri: EDITOR_URL }}
       onMessage={handleMessage}
+      onLoadEnd={handleLoadEnd}
       style={[styles.webview, style]}
       keyboardDisplayRequiresUserAction={false}
       scrollEnabled={true}
