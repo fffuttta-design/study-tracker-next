@@ -169,6 +169,13 @@ function PageTreeEntry({
     ? findActiveChild(pages, page.id, currentId)
     : null;
   const activeChild = activeChildId ? pages.find((p) => p.id === activeChildId) : null;
+
+  // 現在地がこのページ自身の場合、直接の子ページを表示（子への道案内）
+  const directChildren = isActive
+    ? pages
+        .filter((p) => p.parentId === page.id && p.type !== 'book')
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    : [];
   const update = useNotionPageStore((s) => s.update);
   const { user } = useAuthStore();
   const router = useRouter();
@@ -226,6 +233,12 @@ function PageTreeEntry({
           <PageTreeEntry page={activeChild} pages={pages} currentId={currentId} onCtxMenu={onCtxMenu} />
         </div>
       )}
+      {/* 現在地がこのページの場合、直接の子ページ一覧を表示 */}
+      {directChildren.map((child) => (
+        <div key={child.id} className="ml-4 border-l border-gray-200 pl-2 pt-0.5">
+          <PageTreeEntry page={child} pages={pages} currentId={currentId} onCtxMenu={onCtxMenu} />
+        </div>
+      ))}
     </div>
   );
 }
