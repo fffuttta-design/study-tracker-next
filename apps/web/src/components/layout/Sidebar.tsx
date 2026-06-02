@@ -140,7 +140,7 @@ function MovePageModal({
           {(() => {
             const renderTree = (parentId: string | undefined, depth: number): React.ReactNode => {
               const children = pages
-                .filter((p) => p.parentId === parentId && !excludeIds.has(p.id) && p.type !== 'database')
+                .filter((p) => p.parentId === parentId && !excludeIds.has(p.id) && p.type !== 'database' && p.type !== 'book')
                 .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
               if (children.length === 0) return null;
               return children.map((p) => {
@@ -172,7 +172,7 @@ function MovePageModal({
                 );
               });
             };
-            const rootNodes = pages.filter((p) => !p.parentId && !excludeIds.has(p.id) && p.type !== 'database');
+            const rootNodes = pages.filter((p) => !p.parentId && !excludeIds.has(p.id) && p.type !== 'database' && p.type !== 'book');
             if (rootNodes.length === 0) return <p className="px-4 py-4 text-center text-xs text-gray-400">移動可能なページがありません</p>;
             return <div className="px-2 py-1">{renderTree(undefined, 0)}</div>;
           })()}
