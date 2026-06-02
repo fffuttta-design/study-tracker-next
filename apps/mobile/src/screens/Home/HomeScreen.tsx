@@ -143,6 +143,8 @@ export default function HomeScreen({ navigation }: any) {
                     <DueItemCard
                       key={item.id}
                       item={item}
+                      stageColor={group.color}
+                      stageBg={group.bg}
                       expanded={expandedDueId === item.id}
                       onToggle={() => setExpandedDueId(prev => prev === item.id ? null : item.id)}
                       onCompleteReview={handleCompleteReview}
@@ -172,17 +174,21 @@ function HomeItemChip({ item, onPress }: { item: LearningItem; onPress: () => vo
 
 // ── 今日の復習カード（タップでその場に展開） ────────────────────────────────
 
-function DueItemCard({ item, expanded, onToggle, onCompleteReview, onToggleTask }: {
+function DueItemCard({ item, stageColor, stageBg, expanded, onToggle, onCompleteReview, onToggleTask }: {
   item: LearningItem;
+  stageColor?: string;
+  stageBg?: string;
   expanded: boolean;
   onToggle: () => void;
   onCompleteReview: (item: LearningItem, stageIndex: number) => void;
   onToggleTask?: (taskIndex: number) => void;
 }) {
   const nextReview = item.reviews?.find(r => !r.completed);
+  const borderColor = stageColor ?? '#fecaca';
+  const bgColor     = stageBg    ?? '#fef2f2';
 
   return (
-    <View style={[styles.dueCard, expanded && styles.dueCardExpanded]}>
+    <View style={[styles.dueCard, { backgroundColor: bgColor, borderColor }, expanded && { borderColor }]}>
       {/* ヘッダー行（タップで開閉） */}
       <TouchableOpacity style={styles.dueCardHeader} onPress={onToggle} activeOpacity={0.7}>
         <View style={styles.dueCardTitleRow}>

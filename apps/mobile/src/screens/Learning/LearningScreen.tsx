@@ -194,6 +194,7 @@ function LearningItemCard({
   const [expanded, setExpanded] = useState(initialExpanded ?? false);
   const completed = isFullyCompleted(item);
   const due = hasDueReview(item);
+  const nextReview = item.reviews?.find(r => !r.completed);
 
   return (
     <TouchableOpacity
@@ -229,7 +230,18 @@ function LearningItemCard({
           {item.content ? (
             <ContentRenderer content={item.content} baseTextColor="#6b7280" />
           ) : null}
-          {/* 復習ステージ */}
+          {/* 復習完了ボタン（次の未完了ステージ） */}
+          {due && !completed && nextReview && (
+            <TouchableOpacity
+              style={styles.completeBtn}
+              onPress={() => onCompleteReview(item, nextReview.stageIndex)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.completeBtnText}>✓ 復習完了</Text>
+              <Text style={styles.completeBtnStage}>{REVIEW_STAGE_LABELS[nextReview.stageIndex]}</Text>
+            </TouchableOpacity>
+          )}
+          {/* 復習ステージ進捗 */}
           <View style={styles.reviewRow}>
             {(item.reviews ?? []).map((r, i) => (
               <TouchableOpacity
@@ -288,4 +300,7 @@ const styles = StyleSheet.create({
   reviewDotDue: { backgroundColor: '#ef4444' },
   reviewDotFuture: { backgroundColor: '#d1d5db' },
   reviewDotText: { fontSize: 10, color: '#fff', fontWeight: '600' },
+  completeBtn: { margin: 8, marginBottom: 4, backgroundColor: '#10b981', borderRadius: 10, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  completeBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  completeBtnStage: { fontSize: 11, color: 'rgba(255,255,255,0.8)', fontWeight: '500' },
 });
