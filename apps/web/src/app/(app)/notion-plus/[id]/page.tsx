@@ -146,6 +146,11 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
   const page = pages.find((p) => p.id === id);
   const breadcrumbs = buildBreadcrumbs(pages, id);
 
+  // 直接の子ページ（ブック除く）
+  const childPages = pages
+    .filter((p) => p.parentId === id && p.type !== 'book')
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
   useEffect(() => {
     if (!loading && !page) router.replace('/notion-plus');
   }, [page, loading, router]);
@@ -751,6 +756,30 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
           notionPagePath={breadcrumbs.map((p) => p.title || 'Untitled').join(' / ')}
           highlightText={highlightText}
         />
+      )}
+
+      {/* 子ページ一覧（エディタ下部に自動表示） */}
+      {childPages.length > 0 && (
+        <div className="shrink-0 border-t border-gray-100 px-8 py-5">
+          <p className="mb-3 text-xs font-semibold text-gray-400">子ページ</p>
+          <div className="space-y-1.5">
+            {childPages.map((child) => (
+              <button
+                key={child.id}
+                onClick={() => router.push(`/notion-plus/${child.id}`)}
+                className="flex w-full items-center gap-2.5 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
+              >
+                {child.icon && (
+                  child.icon.startsWith('http') || child.icon.startsWith('data:')
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img src={child.icon} alt="" className="h-5 w-5 shrink-0 rounded object-cover" />
+                    : <span className="shrink-0 text-lg leading-none">{child.icon}</span>
+                )}
+                <span className="min-w-0 flex-1 truncate font-medium">{child.title || 'Untitled'}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       )}
 
       {historyOpen && user && (
