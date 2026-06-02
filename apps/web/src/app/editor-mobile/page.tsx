@@ -120,12 +120,18 @@ export default function EditorMobilePage() {
     },
   });
 
-  // エディタ ready 後に RN へ通知
+  // エディタ ready 後に RN へ通知（ReactNativeWebView がまだない場合はリトライ）
   useEffect(() => {
-    if (editor && !readyPostedRef.current) {
-      readyPostedRef.current = true;
-      window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'ready' }));
-    }
+    if (!editor || readyPostedRef.current) return;
+    const tryReady = () => {
+      if (window.ReactNativeWebView) {
+        readyPostedRef.current = true;
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ready' }));
+      } else {
+        setTimeout(tryReady, 100);
+      }
+    };
+    tryReady();
   }, [editor]);
 
   // RN からの init メッセージを受信してエディタにコンテンツをセット
@@ -144,6 +150,7 @@ export default function EditorMobilePage() {
             const parsed = JSON.parse(data.content);
             editor.commands.setContent(parsed, { emitUpdate: false });
           } catch {
+            // JSONパース失敗時はプレーンテキストとしてセット
             editor.commands.setContent(data.content ?? '', { emitUpdate: false });
           }
         }
@@ -155,8 +162,13 @@ export default function EditorMobilePage() {
   );
 
   useEffect(() => {
+    // Android WebView は document に、iOS/ブラウザは window に届く
     window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
+    document.addEventListener('message', handleMessage as EventListener);
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      document.removeEventListener('message', handleMessage as EventListener);
+    };
   }, [handleMessage]);
 
   if (!editor) return null;
