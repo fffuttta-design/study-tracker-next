@@ -202,28 +202,23 @@ function LearningItemCard({
       onPress={() => setExpanded(v => !v)}
       activeOpacity={0.85}
     >
+      {/* タイトル行：タイトル ＋ ゴミ箱を同じ行に中央揃え */}
       <View style={styles.cardHeader}>
-        <View style={styles.cardMeta}>
-          {categoryName && (
-            <Text style={styles.category}>{categoryName}</Text>
-          )}
-          {due && !completed && (
-            <View style={styles.dueBadge}>
-              <Text style={styles.dueText}>要復習</Text>
-            </View>
-          )}
-          {completed && (
-            <View style={styles.doneBadge}>
-              <Text style={styles.doneText}>完了</Text>
-            </View>
-          )}
+        <View style={styles.cardTitleBlock}>
+          <Text style={[styles.cardTitle, completed && styles.cardTitleDone]} numberOfLines={expanded ? undefined : 2}>
+            {item.title}
+          </Text>
+          {/* バッジをタイトル下に小さく表示 */}
+          <View style={styles.cardMeta}>
+            {categoryName && <Text style={styles.category}>{categoryName}</Text>}
+            {due && !completed && <View style={styles.dueBadge}><Text style={styles.dueText}>要復習</Text></View>}
+            {completed && <View style={styles.doneBadge}><Text style={styles.doneText}>完了</Text></View>}
+          </View>
         </View>
         <TouchableOpacity onPress={onDelete} style={styles.deleteBtn}>
           <Text style={styles.deleteBtnText}>🗑</Text>
         </TouchableOpacity>
       </View>
-
-      <Text style={[styles.cardTitle, completed && styles.cardTitleDone]}>{item.title}</Text>
 
       {expanded && (
         <>
@@ -283,8 +278,9 @@ const styles = StyleSheet.create({
   // カード
   card: { backgroundColor: '#ffffff', borderRadius: 10, padding: 14, borderLeftWidth: 3, borderLeftColor: '#e5e7eb', elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3 },
   cardCompleted: { opacity: 0.6, borderLeftColor: '#10b981' },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
-  cardMeta: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  cardTitleBlock: { flex: 1, marginRight: 8 },
+  cardMeta: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 4 },
   category: { fontSize: 11, color: '#6b7280', backgroundColor: '#f3f4f6', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   dueBadge: { backgroundColor: '#fef2f2', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
   dueText: { fontSize: 11, color: '#ef4444', fontWeight: '600' },
@@ -292,7 +288,7 @@ const styles = StyleSheet.create({
   doneText: { fontSize: 11, color: '#10b981', fontWeight: '600' },
   deleteBtn: { padding: 4 },
   deleteBtnText: { fontSize: 16 },
-  cardTitle: { fontSize: 15, fontWeight: '600', color: '#111827', marginBottom: 4 },
+  cardTitle: { fontSize: 15, fontWeight: '600', color: '#111827' },
   cardTitleDone: { textDecorationLine: 'line-through', color: '#9ca3af' },
   reviewRow: { flexDirection: 'row', gap: 4, marginTop: 8, flexWrap: 'wrap' },
   reviewDot: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
