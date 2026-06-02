@@ -10,6 +10,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../store/authStore';
 import { useLearningStore } from '../../store/learningStore';
 import { LearningItem, hasDueReview, isFullyCompleted, localDateKey, REVIEW_STAGE_LABELS, toggleTipTapTask } from '../../types';
+
+const STAGE_COLORS = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'] as const;
+const STAGE_BG     = ['#fef2f2', '#fffbeb', '#f0fdf4', '#eff6ff', '#faf5ff'] as const;
 import { ContentRenderer } from '../../components/ContentRenderer';
 
 export default function HomeScreen({ navigation }: any) {
@@ -33,6 +36,21 @@ export default function HomeScreen({ navigation }: any) {
   const dueItems = useMemo(
     () => items.filter(i => !isFullyCompleted(i) && hasDueReview(i)),
     [items],
+  );
+
+  // ステージごとにグループ化
+  const dueGroups = useMemo(
+    () => REVIEW_STAGE_LABELS.map((label, i) => ({
+      label,
+      stageIndex: i,
+      color: STAGE_COLORS[i],
+      bg:    STAGE_BG[i],
+      items: dueItems.filter(item => {
+        const next = item.reviews?.find(r => !r.completed);
+        return next?.stageIndex === i;
+      }),
+    })).filter(g => g.items.length > 0),
+    [dueItems],
   );
 
   const weekCount = useMemo(() =>
@@ -112,17 +130,26 @@ export default function HomeScreen({ navigation }: any) {
               <Text style={styles.badgeText}>{dueItems.length}</Text>
             </View>
           </View>
-          {dueItems.length === 0
+          {dueGroups.length === 0
             ? <Text style={styles.empty}>なし 🎉</Text>
-            : dueItems.map(item => (
-                <DueItemCard
-                  key={item.id}
-                  item={item}
-                  expanded={expandedDueId === item.id}
-                  onToggle={() => setExpandedDueId(prev => prev === item.id ? null : item.id)}
-                  onCompleteReview={handleCompleteReview}
-                  onToggleTask={(taskIndex) => handleToggleTask(item, taskIndex)}
-                />
+            : dueGroups.map(group => (
+                <View key={group.stageIndex}>
+                  {/* ステージヘッダー */}
+                  <View style={[styles.stageHeader, { backgroundColor: group.bg, borderLeftColor: group.color }]}>
+                    <Text style={[styles.stageLabel, { color: group.color }]}>{group.label}</Text>
+                    <Text style={[styles.stageCount, { color: group.color }]}>{group.items.length}件</Text>
+                  </View>
+                  {group.items.map(item => (
+                    <DueItemCard
+                      key={item.id}
+                      item={item}
+                      expanded={expandedDueId === item.id}
+                      onToggle={() => setExpandedDueId(prev => prev === item.id ? null : item.id)}
+                      onCompleteReview={handleCompleteReview}
+                      onToggleTask={(taskIndex) => handleToggleTask(item, taskIndex)}
+                    />
+                  ))}
+                </View>
               ))
           }
         </View>
@@ -290,6 +317,11 @@ const styles = StyleSheet.create({
     borderColor: '#e5e7eb',
   },
   chipTitle: { fontSize: 12, color: '#111827', fontWeight: '500' },
+
+  // 復習ステージヘッダー
+  stageHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderLeftWidth: 3, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, marginBottom: 6, marginTop: 4 },
+  stageLabel:  { fontSize: 12, fontWeight: '700' },
+  stageCount:  { fontSize: 11, fontWeight: '600' },
 
   // 今日の復習カード
   dueCard: {
