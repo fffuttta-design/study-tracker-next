@@ -3,7 +3,10 @@ import { create } from 'zustand';
 import { type NotionPage, createNotionPage } from '@study-tracker/core';
 import { subscribeCol, upsertDoc, deleteDocById, fetchWhere, batchUpsert, batchDelete } from '@study-tracker/firebase';
 
-export const WORKSPACE_ID = '__workspace__';
+// '__workspace__' は Firestore の予約済み ID で書き込み不可のため変更
+export const WORKSPACE_ID = 'workspace';
+// 旧 ID（移行用）
+const LEGACY_WORKSPACE_ID = '__workspace__';
 
 export interface PageHistorySnapshot {
   id: string;
@@ -57,16 +60,36 @@ export const useNotionPageStore = create<NotionPageState>((set) => ({
   ensureWorkspace: async (uid) => {
     const { pages } = useNotionPageStore.getState();
     if (pages.find((p) => p.id === WORKSPACE_ID)) return;
-    const workspace: NotionPage = {
-      id: WORKSPACE_ID,
-      title: 'ワークスペース',
-      content: '',
-      icon: '🏠',
-      order: -9999,
-      updatedAt: new Date().toISOString(),
-      isFavorite: false,
-    };
+
+    // 旧 ID(__workspace__) のデータがあればコンテンツを引き継ぐ
+    const legacy = pages.find((p) => p.id === LEGACY_WORKSPACE_ID);
+    const workspace: NotionPage = legacy
+      ? { ...legacy, id: WORKSPACE_ID, updatedAt: new Date().toISOString() }
+      : {
+          id: WORKSPACE_ID,
+          title: 'ワークスペース',
+          content: '',
+          icon: '🏠',
+          order: -9999,
+          updatedAt: new Date().toISOString(),
+          isFavorite: false,
+        };
     await upsertDoc(uid, 'notionPages', WORKSPACE_ID, workspace as unknown as Record<string, unknown>);
+
+    // 旧ワークスペースの子ページの parentId を新 ID に更新
+    if (legacy) {
+      const children = useNotionPageStore.getState().pages.filter(
+        (p) => p.parentId === LEGACY_WORKSPACE_ID,
+      );
+      if (children.length > 0) {
+        const now = new Date().toISOString();
+        await batchUpsert(
+          uid,
+          'notionPages',
+          children.map((c) => ({ id: c.id, parentId: WORKSPACE_ID, updatedAt: now })),
+        );
+      }
+    }
   },
 
   remove: async (uid, id) => {
