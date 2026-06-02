@@ -20,57 +20,8 @@ export default function NotionPlusSettingsPage() {
 
       <div className="max-w-md space-y-4">
         <NotionImportSection uid={user?.uid ?? ''} addPage={addPage} />
-        <CleanupSection uid={user?.uid ?? ''} />
       </div>
     </div>
-  );
-}
-
-// ── 孤児ページ削除セクション ──────────────────────────────────────────
-
-function CleanupSection({ uid }: { uid: string }) {
-  const { pages } = useNotionPageStore();
-  const [status, setStatus] = useState<'idle' | 'running' | 'done'>('idle');
-  const [deletedCount, setDeletedCount] = useState(0);
-
-  const pageIds = new Set(pages.map((p) => p.id));
-  const orphans = pages.filter((p) => p.parentId && !pageIds.has(p.parentId));
-
-  const handleCleanup = async () => {
-    if (!uid || orphans.length === 0) return;
-    if (!confirm(`孤児ページ ${orphans.length} 件を削除します。よろしいですか？`)) return;
-    setStatus('running');
-    // notionPageStore の remove は子孫も消すが、ここでは孤児自身のIDを直接バッチ削除
-    // （孤児の子孫も孤児として同リストに含まれているはずなので一括で問題ない）
-    const { batchDelete } = await import('@study-tracker/firebase');
-    await batchDelete(uid, 'notionPages', orphans.map((p) => p.id));
-    setDeletedCount(orphans.length);
-    setStatus('done');
-  };
-
-  return (
-    <Section title="データクリーンアップ">
-      <p className="mb-3 text-xs text-gray-400">
-        過去のインポート失敗などで残った孤児ページ（親が存在しないページ）を削除します。
-      </p>
-      <div className="mb-3 flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2">
-        <span className="text-sm text-gray-600">検出された孤児ページ</span>
-        <span className={`ml-auto text-sm font-semibold ${orphans.length > 0 ? 'text-red-500' : 'text-green-500'}`}>
-          {orphans.length} 件
-        </span>
-      </div>
-      {status === 'done' ? (
-        <p className="text-sm text-green-600">✅ {deletedCount} 件削除しました</p>
-      ) : (
-        <button
-          onClick={handleCleanup}
-          disabled={orphans.length === 0 || status === 'running'}
-          className="rounded-lg border border-red-200 px-4 py-2 text-sm text-red-500 hover:bg-red-50 disabled:opacity-40"
-        >
-          {status === 'running' ? '削除中...' : '孤児ページを削除'}
-        </button>
-      )}
-    </Section>
   );
 }
 

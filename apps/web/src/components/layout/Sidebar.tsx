@@ -772,16 +772,6 @@ function NotionPageSidebar({ user }: { user: User }) {
         />
       )}
 
-      {/* フッター: 学習リストに戻るのみ */}
-      <div className="border-t border-gray-100">
-        <Suspense fallback={
-          <Link href="/learning" className="flex items-center gap-2 px-3 py-2.5 text-xs text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700">
-            <span>←</span><span>学習リストに戻る</span>
-          </Link>
-        }>
-          <BackToLearningLink />
-        </Suspense>
-      </div>
     </aside>
   );
 }
