@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
-import { useNotionPageStore, WORKSPACE_ID, type PageHistorySnapshot } from '@/stores/notionPageStore';
+import { useNotionPageStore, WORKSPACE_ID, addPageLinkToContent, type PageHistorySnapshot } from '@/stores/notionPageStore';
 import { useSettingsStore, type NotionBlockOffsets, DEFAULT_BLOCK_OFFSETS } from '@/stores/settingsStore';
 
 import { type NotionPage, type BookChapter, parseBookChapters, serializeBookChapters, createBookChapter } from '@study-tracker/core';
@@ -154,6 +154,24 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
   useEffect(() => {
     if (page) setLastViewedNotionPageId(page.id);
   }, [page?.id, setLastViewedNotionPageId]);
+
+  // 子ページのPageLinkが欠けていれば自動補完（過去に移動したページ対応）
+  useEffect(() => {
+    if (!page || !user || loading || page.type === 'book' || page.type === 'database') return;
+    const children = pages.filter((p) => p.parentId === page.id);
+    if (children.length === 0) return;
+    let content = page.content;
+    let changed = false;
+    for (const child of children) {
+      const next = addPageLinkToContent(content, child.id, child.title, child.icon);
+      if (next !== content) { content = next; changed = true; }
+    }
+    if (changed) {
+      update(user.uid, page.id, { content });
+    }
+  // page.idとchildren数が変わったときだけ実行
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page?.id, pages.length]);
 
   // ブック: page.content から chapters を初期化（pageId が変わった時 or 初回）
   useEffect(() => {
