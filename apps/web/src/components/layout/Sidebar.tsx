@@ -8,7 +8,7 @@ import { type User } from 'firebase/auth';
 import { type NotionPage, serializeBookChapters, createBookChapter } from '@study-tracker/core';
 import { deleteField } from 'firebase/firestore';
 import { useAuthStore } from '@/stores/authStore';
-import { useNotionPageStore, WORKSPACE_ID } from '@/stores/notionPageStore';
+import { useNotionPageStore, WORKSPACE_ID, addPageLinkToContent, removePageLinkFromContent } from '@/stores/notionPageStore';
 import { useElectronVersion } from '@/hooks/useElectronVersion';
 import appIcon from '@/app/icon.png';
 
@@ -75,6 +75,9 @@ function MovePageModal({
   };
 
   const handleMove = async (parentId: string | undefined) => {
+    const oldParentId = target.parentId;
+
+    // 1. ページの parentId を更新
     const data: Record<string, unknown> = { order: getMaxOrder(parentId), updatedAt: new Date().toISOString() };
     if (parentId !== undefined) {
       data.parentId = parentId;
@@ -82,6 +85,29 @@ function MovePageModal({
       data.parentId = deleteField(); // フィールドを削除してルートに昇格
     }
     await update(uid, target.id, data as Partial<NotionPage>);
+
+    // 2. 旧親ページの content からリンクを削除
+    if (oldParentId) {
+      const oldParent = pages.find((p) => p.id === oldParentId);
+      if (oldParent) {
+        const newContent = removePageLinkFromContent(oldParent.content, target.id);
+        if (newContent !== oldParent.content) {
+          await update(uid, oldParentId, { content: newContent });
+        }
+      }
+    }
+
+    // 3. 新しい親ページの content にリンクを追加
+    if (parentId) {
+      const newParent = pages.find((p) => p.id === parentId);
+      if (newParent) {
+        const newContent = addPageLinkToContent(newParent.content, target.id, target.title, target.icon);
+        if (newContent !== newParent.content) {
+          await update(uid, parentId, { content: newContent });
+        }
+      }
+    }
+
     onClose();
     router.push(`/notion-plus/${target.id}`);
   };
@@ -195,7 +221,32 @@ function PageTreeEntry({
     if (!droppedPageId || !user || droppedPageId === page.id) return;
     // UUIDっぽくない文字列（URLなど）は無視
     if (!/^[0-9a-f-]{36}$/.test(droppedPageId)) return;
+
+    const droppedPage = pages.find((p) => p.id === droppedPageId);
+    const oldParentId = droppedPage?.parentId;
+
+    // 1. parentId を更新
     await update(user.uid, droppedPageId, { parentId: page.id });
+
+    // 2. 旧親ページの content からリンクを削除
+    if (oldParentId) {
+      const oldParent = pages.find((p) => p.id === oldParentId);
+      if (oldParent) {
+        const newContent = removePageLinkFromContent(oldParent.content, droppedPageId);
+        if (newContent !== oldParent.content) {
+          await update(user.uid, oldParentId, { content: newContent });
+        }
+      }
+    }
+
+    // 3. 新しい親ページ（page）の content にリンクを追加
+    if (droppedPage) {
+      const newContent = addPageLinkToContent(page.content, droppedPageId, droppedPage.title, droppedPage.icon);
+      if (newContent !== page.content) {
+        await update(user.uid, page.id, { content: newContent });
+      }
+    }
+
     // 移動後に対象ページへ遷移（消えたように見えるのを防止）
     router.push(`/notion-plus/${droppedPageId}`);
   };

@@ -3,6 +3,44 @@ import { create } from 'zustand';
 import { type NotionPage, createNotionPage } from '@study-tracker/core';
 import { subscribeCol, upsertDoc, deleteDocById, fetchWhere, batchUpsert, batchDelete } from '@study-tracker/firebase';
 
+// ── TipTap content 内の PageLinkNode を操作するユーティリティ ─────────────
+
+type TipTapNode = { type: string; attrs?: Record<string, unknown>; content?: TipTapNode[] };
+type TipTapDoc  = { type: 'doc'; content: TipTapNode[] };
+
+function parseTipTapDoc(content: string): TipTapDoc {
+  if (!content) return { type: 'doc', content: [] };
+  try {
+    const doc = JSON.parse(content) as TipTapDoc;
+    if (doc.type === 'doc' && Array.isArray(doc.content)) return doc;
+  } catch { /* ignore */ }
+  return { type: 'doc', content: [] };
+}
+
+/** 親ページの content に PageLinkNode を追加（既存なら何もしない） */
+export function addPageLinkToContent(
+  content: string, pageId: string, title: string, icon: string,
+): string {
+  const href = `/notion-plus/${pageId}`;
+  const doc  = parseTipTapDoc(content);
+  if (doc.content.some((n) => n.type === 'pageLink' && n.attrs?.href === href)) return content;
+  const newDoc: TipTapDoc = {
+    ...doc,
+    content: [...doc.content, { type: 'pageLink', attrs: { href, title: title || 'Untitled', icon: icon || '📄' } }],
+  };
+  return JSON.stringify(newDoc);
+}
+
+/** 親ページの content から PageLinkNode を削除（なければ何もしない） */
+export function removePageLinkFromContent(content: string, pageId: string): string {
+  if (!content) return content;
+  const href = `/notion-plus/${pageId}`;
+  const doc  = parseTipTapDoc(content);
+  const filtered = doc.content.filter((n) => !(n.type === 'pageLink' && n.attrs?.href === href));
+  if (filtered.length === doc.content.length) return content; // 変化なし
+  return JSON.stringify({ ...doc, content: filtered });
+}
+
 // '__workspace__' は Firestore の予約済み ID で書き込み不可のため変更
 export const WORKSPACE_ID = 'workspace';
 // 旧 ID（移行用）
