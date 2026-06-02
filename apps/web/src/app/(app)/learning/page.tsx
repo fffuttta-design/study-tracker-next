@@ -307,11 +307,14 @@ function DashboardTab({ todayItems, dueItems, inboxItems, uid, onAdd, onQuickAdd
                     <div key={item.id}>
                       {/* タイトル行（クリックで開閉） */}
                       <button
-                        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-amber-100 transition-colors"
+                        className="flex w-full items-center justify-between gap-2 bg-white px-3 py-2 text-left hover:bg-gray-50 transition-colors"
                         onClick={() => toggleInbox(item.id)}
                       >
                         <span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-800">{item.title || '（タイトルなし）'}</span>
-                        <span className="shrink-0 text-[10px] text-amber-400">{isOpen ? '▲' : '▼'}</span>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span className="text-[10px] text-gray-400">{format(new Date(item.dateKey), 'M/d', { locale: ja })} 登録</span>
+                          <span className="text-[10px] text-amber-400">{isOpen ? '▲' : '▼'}</span>
+                        </div>
                       </button>
                       {/* 展開コンテンツ */}
                       {isOpen && (
@@ -321,8 +324,7 @@ function DashboardTab({ todayItems, dueItems, inboxItems, uid, onAdd, onQuickAdd
                               {item.content.replace(/[#\*`_~>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 300)}
                             </p>
                           )}
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] text-gray-400">{format(new Date(item.dateKey), 'M/d', { locale: ja })} 登録</span>
+                          <div className="flex items-center justify-end">
                             <div className="flex gap-2">
                               <button
                                 onClick={() => onDigest(item)}
