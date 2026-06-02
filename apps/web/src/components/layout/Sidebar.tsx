@@ -54,6 +54,10 @@ function MovePageModal({
 }) {
   const { update } = useNotionPageStore();
   const router = useRouter();
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  const toggleExpand = (id: string) =>
+    setExpandedIds((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
   const getDescendantIds = (id: string): string[] => {
     const children = pages.filter((p) => p.parentId === id);
@@ -61,9 +65,6 @@ function MovePageModal({
   };
 
   const excludeIds = new Set([target.id, WORKSPACE_ID, ...getDescendantIds(target.id)]);
-  const validTargets = pages
-    .filter((p) => !excludeIds.has(p.id) && p.type !== 'database')
-    .sort((a, b) => a.order - b.order);
 
   const getMaxOrder = (parentId: string | undefined) => {
     const siblings = pages.filter((p) =>
@@ -135,31 +136,46 @@ function MovePageModal({
             {!target.parentId && <span className="ml-auto text-[10px] text-brand-400">現在</span>}
           </button>
           <div className="mx-4 my-1 border-t border-gray-100" />
-          {/* ページ一覧 */}
-          {validTargets.map((p) => {
-            const path = getAncestorPath(pages, p);
-            return (
-              <button
-                key={p.id}
-                onClick={() => handleMove(p.id)}
-                className={`flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-brand-50 ${
-                  p.id === target.parentId ? 'bg-brand-50 text-brand-600' : 'text-gray-700'
-                }`}
-              >
-                <PageIcon icon={p.icon} />
-                <div className="flex-1 min-w-0 text-left">
-                  <div className="truncate font-medium">{p.title || 'Untitled'}</div>
-                  {path && <div className="truncate text-[10px] text-gray-400">{path}</div>}
-                </div>
-                {p.id === target.parentId && (
-                  <span className="ml-auto shrink-0 text-[10px] text-brand-400">現在の親</span>
-                )}
-              </button>
-            );
-          })}
-          {validTargets.length === 0 && (
-            <p className="px-4 py-4 text-center text-xs text-gray-400">移動可能なページがありません</p>
-          )}
+          {/* ページツリー（親→子→孫と展開） */}
+          {(() => {
+            const renderTree = (parentId: string | undefined, depth: number): React.ReactNode => {
+              const children = pages
+                .filter((p) => p.parentId === parentId && !excludeIds.has(p.id) && p.type !== 'database')
+                .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+              if (children.length === 0) return null;
+              return children.map((p) => {
+                const hasChildren = pages.some((c) => c.parentId === p.id && !excludeIds.has(c.id) && c.type !== 'database');
+                const isExpanded = expandedIds.has(p.id);
+                const isCurrent = p.id === target.parentId;
+                return (
+                  <div key={p.id}>
+                    <div className="flex items-center" style={{ paddingLeft: depth * 16 }}>
+                      {/* 展開トグル */}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); if (hasChildren) toggleExpand(p.id); }}
+                        className={`w-7 shrink-0 text-center text-[10px] ${hasChildren ? 'text-gray-400 hover:text-gray-600 cursor-pointer' : 'cursor-default text-transparent'}`}
+                      >
+                        {hasChildren ? (isExpanded ? '▼' : '▶') : '　'}
+                      </button>
+                      {/* ページ選択ボタン */}
+                      <button
+                        onClick={() => handleMove(p.id)}
+                        className={`flex flex-1 items-center gap-2 py-2 pr-4 text-sm hover:bg-brand-50 rounded-lg ${isCurrent ? 'bg-brand-50 text-brand-600' : 'text-gray-700'}`}
+                      >
+                        <PageIcon icon={p.type === 'database' && p.icon === '📄' ? '📊' : p.icon} />
+                        <span className="min-w-0 flex-1 truncate text-left font-medium">{p.title || 'Untitled'}</span>
+                        {isCurrent && <span className="ml-auto shrink-0 text-[10px] text-brand-400">現在の親</span>}
+                      </button>
+                    </div>
+                    {isExpanded && renderTree(p.id, depth + 1)}
+                  </div>
+                );
+              });
+            };
+            const rootNodes = pages.filter((p) => !p.parentId && !excludeIds.has(p.id) && p.type !== 'database');
+            if (rootNodes.length === 0) return <p className="px-4 py-4 text-center text-xs text-gray-400">移動可能なページがありません</p>;
+            return <div className="px-2 py-1">{renderTree(undefined, 0)}</div>;
+          })()}
         </div>
       </div>
     </div>
