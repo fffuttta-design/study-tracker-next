@@ -13,12 +13,9 @@ import { TextStyle, Color } from '@tiptap/extension-text-style';
 import Underline from '@tiptap/extension-underline';
 
 // ── 型定義 ──────────────────────────────────────────────────
-interface InitMessage {
-  type: 'init';
-  content: string;
-  title: string;
-  readOnly?: boolean;
-}
+type RNMessage =
+  | { type: 'init'; content: string; title: string; readOnly?: boolean }
+  | { type: 'setEditable'; editable: boolean };
 
 declare global {
   interface Window {
@@ -138,7 +135,7 @@ export default function EditorMobilePage() {
   const handleMessage = useCallback(
     (event: MessageEvent) => {
       try {
-        const data: InitMessage = typeof event.data === 'string'
+        const data: RNMessage = typeof event.data === 'string'
           ? JSON.parse(event.data)
           : event.data;
 
@@ -150,9 +147,13 @@ export default function EditorMobilePage() {
             const parsed = JSON.parse(data.content);
             editor.commands.setContent(parsed, { emitUpdate: false });
           } catch {
-            // JSONパース失敗時はプレーンテキストとしてセット
             editor.commands.setContent(data.content ?? '', { emitUpdate: false });
           }
+        }
+        // 編集/プレビュー切り替え（WebView再マウントなし）
+        if (data.type === 'setEditable' && editor) {
+          readOnlyRef.current = !data.editable;
+          editor.setEditable(!!data.editable);
         }
       } catch {
         // 無視

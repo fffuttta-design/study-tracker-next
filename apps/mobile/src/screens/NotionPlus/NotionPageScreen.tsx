@@ -66,7 +66,6 @@ export default function NotionPageScreen({ route, navigation }: any) {
         onChangeText={t => { setTitle(t); setDirty(true); }}
         placeholder="ページタイトル"
         placeholderTextColor="#9ca3af"
-        onFocus={() => setEditing(true)}
       />
 
       {/* 編集モード切替 */}
@@ -88,49 +87,38 @@ export default function NotionPageScreen({ route, navigation }: any) {
         )}
       </View>
 
-      {editing ? (
-        isTipTapContent(content) ? (
-          // TipTap JSON → WebView エディタで編集
-          <TipTapWebEditor
-            content={content}
-            title={title}
-            onSave={(newContent, newTitle) => {
-              setContent(newContent);
-              setTitle(newTitle);
-              setDirty(true);
-            }}
-            style={styles.webEditor}
-          />
-        ) : (
-          <TextInput
-            style={styles.editor}
-            value={content}
-            onChangeText={t => { setContent(t); setDirty(true); }}
-            multiline
-            textAlignVertical="top"
-            placeholder={'# 見出し\n\nMarkdown で書けます...\n\n- リスト\n- **太字**\n- *イタリック*'}
-            placeholderTextColor="#9ca3af"
-            autoFocus
-          />
-        )
+      {isTipTapContent(content) ? (
+        // TipTapコンテンツ: 単一WebViewで編集/プレビュー両対応（再マウントしない）
+        <TipTapWebEditor
+          content={content}
+          title={title}
+          readOnly={!editing}
+          onSave={(newContent, newTitle) => {
+            setContent(newContent);
+            if (newTitle) setTitle(newTitle);
+            setDirty(true);
+          }}
+          style={styles.webEditor}
+        />
+      ) : editing ? (
+        <TextInput
+          style={styles.editor}
+          value={content}
+          onChangeText={t => { setContent(t); setDirty(true); }}
+          multiline
+          textAlignVertical="top"
+          placeholder={'# 見出し\n\nMarkdown で書けます...\n\n- リスト\n- **太字**\n- *イタリック*'}
+          placeholderTextColor="#9ca3af"
+          autoFocus
+        />
       ) : (
-        isTipTapContent(content) ? (
-          // TipTapコンテンツはプレビューもWebViewで表示（読み取り専用）
-          <TipTapWebEditor
-            content={content}
-            title={title}
-            readOnly
-            style={styles.webEditor}
-          />
-        ) : (
-          <ScrollView style={styles.preview} contentContainerStyle={styles.previewContent}>
-            {content ? (
-              <Markdown style={markdownStyles}>{content}</Markdown>
-            ) : (
-              <Text style={styles.emptyText}>編集タブをタップして書き始めましょう</Text>
-            )}
-          </ScrollView>
-        )
+        <ScrollView style={styles.preview} contentContainerStyle={styles.previewContent}>
+          {content ? (
+            <Markdown style={markdownStyles}>{content}</Markdown>
+          ) : (
+            <Text style={styles.emptyText}>編集タブをタップして書き始めましょう</Text>
+          )}
+        </ScrollView>
       )}
     </KeyboardAvoidingView>
   );

@@ -22,6 +22,13 @@ export function TipTapWebEditor({ content, title, readOnly = false, onSave, styl
     webViewRef.current?.postMessage(JSON.stringify({ type: 'init', content: c, title: t, readOnly }));
   };
 
+  // readOnly が変わったときにWebViewへ通知（再マウントなしに切り替え）
+  const prevReadOnlyRef = useRef(readOnly);
+  if (prevReadOnlyRef.current !== readOnly && readyRef.current) {
+    prevReadOnlyRef.current = readOnly;
+    webViewRef.current?.postMessage(JSON.stringify({ type: 'setEditable', editable: !readOnly }));
+  }
+
   const handleMessage = (event: WebViewMessageEvent) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
