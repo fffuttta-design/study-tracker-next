@@ -156,6 +156,7 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
   }, [page?.id, setLastViewedNotionPageId]);
 
   // 子ページのPageLinkが欠けていれば自動補完（過去に移動したページ対応）
+  // 保存後にeditorKeyを上げてエディタを再初期化→上書きによる消失を防ぐ
   useEffect(() => {
     if (!page || !user || loading || page.type === 'book' || page.type === 'database') return;
     const children = pages.filter((p) => p.parentId === page.id);
@@ -167,7 +168,10 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
       if (next !== content) { content = next; changed = true; }
     }
     if (changed) {
-      update(user.uid, page.id, { content });
+      update(user.uid, page.id, { content }).then(() => {
+        // エディタを強制リセットして補完済みコンテンツで再初期化
+        setEditorKey(k => k + 1);
+      });
     }
   // page.idとchildren数が変わったときだけ実行
   // eslint-disable-next-line react-hooks/exhaustive-deps
