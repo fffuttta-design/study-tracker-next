@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useLearningStore } from '@/stores/learningStore';
-import { useNotionPageStore } from '@/stores/notionPageStore';
+import { useNotionPageStore, WORKSPACE_ID } from '@/stores/notionPageStore';
 import { NotionEditor } from '@/components/editor/NotionEditor';
 
 function isImageSrc(s: string) {
@@ -206,7 +206,7 @@ export function AddItemDialog({ uid, onClose, onAfterRecord }: {
 
   const roots = useMemo(() =>
     pages
-      .filter((p) => !p.parentId)
+      .filter((p) => !p.parentId && p.id !== WORKSPACE_ID)
       .sort((a, b) => {
         if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1;
         return a.order - b.order;

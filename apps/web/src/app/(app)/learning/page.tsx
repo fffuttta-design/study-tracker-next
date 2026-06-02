@@ -1096,6 +1096,7 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
   const pageDeleted = !!item.notionPageId && pages.length > 0 && !linkedPage;
   const nextReview = item.reviews.find((r) => !r.completed);
   const fullyDone = isFullyCompleted(item);
+  const isInboxItem = !item.notionPageId; // 特急メモ（復習バッジ不要）
 
   const completeReview = async () => {
     const today = localDateKey();
@@ -1204,10 +1205,10 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
               </div>
             )}
 
-            {/* 復習スケジュールチップ + 登録日 */}
+            {/* 復習スケジュールチップ + 登録日（特急メモはチップ非表示） */}
             <div className="flex items-center justify-between gap-2">
               <div className="flex flex-wrap gap-1.5">
-                {item.reviews.map((r) => (
+                {!isInboxItem && item.reviews.map((r) => (
                   <span
                     key={r.stageIndex}
                     className={`rounded border px-2 py-0.5 text-xs ${
@@ -1226,7 +1227,7 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
               <span className="shrink-0 text-xs text-gray-400">{format(new Date(item.dateKey), 'M/d', { locale: ja })} 登録</span>
             </div>
 
-            {showReviewAction && nextReview && !fullyDone && (
+            {showReviewAction && nextReview && !fullyDone && !isInboxItem && (
               <button
                 onClick={completeReview}
                 className="mt-3 inline-flex items-center gap-1.5 rounded-full border-2 border-brand-500 px-4 py-1 text-xs font-semibold text-brand-600 hover:bg-brand-50 transition-colors"
@@ -1319,9 +1320,10 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
           )}
 
           {/* 復習スケジュールチップ + 登録日 */}
+          {/* 復習スケジュールチップ + 登録日（特急メモはチップ非表示） */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex flex-wrap gap-1.5">
-              {item.reviews.map((r) => (
+              {!isInboxItem && item.reviews.map((r) => (
                 <span
                   key={r.stageIndex}
                   className={`rounded border px-2 py-0.5 text-xs ${
@@ -1340,7 +1342,7 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
             <span className="shrink-0 text-xs text-gray-400">{format(new Date(item.dateKey), 'M/d', { locale: ja })} 登録</span>
           </div>
 
-          {showReviewAction && nextReview && !fullyDone && (
+          {showReviewAction && nextReview && !fullyDone && !isInboxItem && (
             <button
               onClick={completeReview}
               className="mt-3 inline-flex items-center gap-1.5 rounded-full border-2 border-brand-500 px-4 py-1 text-xs font-semibold text-brand-600 hover:bg-brand-50 transition-colors"
