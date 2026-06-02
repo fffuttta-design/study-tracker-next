@@ -37,7 +37,7 @@ function makeStubNode(name: string, isInline = false) {
   });
 }
 
-// pageLink: ページリンクノード（クリッカブルリンクとして表示）
+// pageLink: ページリンクノード（アイコン＋タイトルのリンク表示）
 const PageLinkStub = TiptapNode.create({
   name: 'pageLink',
   group: 'block',
@@ -50,13 +50,22 @@ const PageLinkStub = TiptapNode.create({
     };
   },
   parseHTML() { return [{ tag: 'div[data-type="page-link"]' }]; },
-  renderHTML({ node }) {
-    const icon  = node.attrs.icon  || '📄';
-    const title = node.attrs.title || 'Untitled';
-    return ['div', {
-      'data-type': 'page-link',
-      style: 'display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;margin:3px 0;color:#1d4ed8;',
-    }, `${icon} ${title}`];
+  renderHTML({ HTMLAttributes }) {
+    return ['div', { ...HTMLAttributes, 'data-type': 'page-link' }];
+  },
+  addNodeView() {
+    return ({ node }) => {
+      const dom = document.createElement('div');
+      dom.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;margin:4px 0;background:#f9fafb;';
+      const raw   = node.attrs.icon || '📄';
+      const title = node.attrs.title || 'Untitled';
+      const isUrl = raw.startsWith('http') || raw.startsWith('data:');
+      const iconHtml = isUrl
+        ? `<img src="${raw}" style="width:20px;height:20px;border-radius:4px;object-fit:cover;flex-shrink:0;" />`
+        : `<span style="font-size:18px;line-height:1;flex-shrink:0;">${raw}</span>`;
+      dom.innerHTML = `${iconHtml}<span style="color:#1d4ed8;text-decoration:underline;font-size:15px;">${title}</span>`;
+      return { dom };
+    };
   },
 });
 
@@ -402,10 +411,6 @@ export default function EditorMobilePage() {
         <EditorContent editor={editor} />
       </div>
 
-      {/* デバッグバナー（問題解決後に削除） */}
-      <div style={{ background: '#fef08a', borderTop: '1px solid #ca8a04', padding: '4px 10px', fontSize: '11px', color: '#713f12', flexShrink: 0 }}>
-        🔍 {dbg}
-      </div>
 
       <style>{`
         .mobile-editor {
