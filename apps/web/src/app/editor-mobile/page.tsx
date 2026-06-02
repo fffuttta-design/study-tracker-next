@@ -60,11 +60,16 @@ const PageLinkStub = TiptapNode.create({
       const raw   = node.attrs.icon  || '📄';
       const title = node.attrs.title || 'Untitled';
       const href  = node.attrs.href  || '';
-      const isUrl = raw.startsWith('http') || raw.startsWith('data:');
-      const iconHtml = isUrl
-        ? `<img src="${raw}" style="width:20px;height:20px;border-radius:4px;object-fit:cover;flex-shrink:0;" />`
-        : `<span style="font-size:18px;line-height:1;flex-shrink:0;">${raw}</span>`;
-      dom.innerHTML = `${iconHtml}<span style="color:#1d4ed8;text-decoration:underline;font-size:15px;">${title}</span>`;
+      // window.__pagesMap から最新タイトル・アイコンを取得（古い attrs より優先）
+      const pageId = href.match(/\/notion-plus\/([^/?#]+)/)?.[1] ?? '';
+      const live = pageId ? (window as any).__pagesMap?.[pageId] : null;
+      const displayTitle = live?.title || title || 'Untitled';
+      const displayRaw   = live?.icon  || raw;
+      const displayIsUrl = displayRaw.startsWith('http') || displayRaw.startsWith('data:');
+      const displayIcon  = displayIsUrl
+        ? `<img src="${displayRaw}" style="width:20px;height:20px;border-radius:4px;object-fit:cover;flex-shrink:0;" />`
+        : `<span style="font-size:18px;line-height:1;flex-shrink:0;">${displayRaw}</span>`;
+      dom.innerHTML = `${displayIcon}<span style="color:#1d4ed8;text-decoration:underline;font-size:15px;">${displayTitle}</span>`;
       // タップでRNにナビゲーションを依頼
       dom.addEventListener('click', () => {
         if (href) window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'navigate', href }));

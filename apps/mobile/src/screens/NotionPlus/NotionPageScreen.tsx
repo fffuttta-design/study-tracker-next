@@ -22,6 +22,11 @@ export default function NotionPageScreen({ route, navigation }: any) {
 
   const page = pages.find(p => p.id === pageId);
 
+  // pageId → { title, icon } のマップ（ページリンクの最新タイトル表示用）
+  const pagesMap = Object.fromEntries(
+    pages.map(p => [p.id, { title: p.title, icon: p.icon ?? '📄' }])
+  );
+
   const [content, setContent] = useState(page?.content ?? '');
   const [title, setTitle] = useState(page?.title ?? '');
   const [editing, setEditing] = useState(false);
@@ -93,6 +98,7 @@ export default function NotionPageScreen({ route, navigation }: any) {
           content={content}
           title={title}
           readOnly={!editing}
+          pagesMap={pagesMap}
           onSave={(newContent, newTitle) => {
             setContent(newContent);
             if (newTitle) setTitle(newTitle);

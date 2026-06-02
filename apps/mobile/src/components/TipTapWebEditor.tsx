@@ -6,16 +6,19 @@ const EDITOR_URL = __DEV__
   ? 'http://10.0.2.2:3000/editor-mobile'
   : 'https://study-tracker-next-web.vercel.app/editor-mobile';
 
+interface PageMeta { title: string; icon: string; }
+
 interface Props {
   content: string;
   title: string;
   readOnly?: boolean;
+  pagesMap?: Record<string, PageMeta>;  // pageId → 最新タイトル/アイコン
   onSave?: (content: string, title: string) => void;
   onNavigate?: (href: string) => void;
   style?: object;
 }
 
-export function TipTapWebEditor({ content, title, readOnly = false, onSave, onNavigate, style }: Props) {
+export function TipTapWebEditor({ content, title, readOnly = false, pagesMap, onSave, onNavigate, style }: Props) {
   const webViewRef = useRef<WebView>(null);
   const readyRef = useRef(false);
   const [contentReady, setContentReady] = useState(false);
@@ -27,6 +30,7 @@ export function TipTapWebEditor({ content, title, readOnly = false, onSave, onNa
         window.__rnContent = ${JSON.stringify(c)};
         window.__rnTitle = ${JSON.stringify(t)};
         window.__rnReadOnly = ${JSON.stringify(ro)};
+        window.__pagesMap = ${JSON.stringify(pagesMap ?? {})};
         if (typeof window.__applyEditorContent === 'function') {
           window.__applyEditorContent(window.__rnContent, window.__rnTitle, window.__rnReadOnly);
         }
