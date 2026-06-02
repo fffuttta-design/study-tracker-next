@@ -441,6 +441,11 @@ function NotionPageSidebar({ user }: { user: User }) {
   const pathname = usePathname();
   const router = useRouter();
   const { pages, add, remove, loading, update } = useNotionPageStore();
+
+  // NotionEditorモジュールをバックグラウンドでプリロード（ページを開いたとき一瞬で表示）
+  useEffect(() => {
+    import('@/components/editor/NotionEditor').catch(() => {});
+  }, []);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; page: NotionPage } | null>(null);
   const [open, setOpen] = useState(true);
   const [sidebarWidth, setSidebarWidth] = useState(() => {

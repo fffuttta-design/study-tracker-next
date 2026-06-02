@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../store/authStore';
 import { useLearningStore } from '../../store/learningStore';
 import { useNotionStore } from '../../store/notionStore';
+import { EditorPreloader } from '../../components/EditorPreloader';
 import { LearningItem, hasDueReview, isFullyCompleted, localDateKey, REVIEW_STAGE_LABELS, toggleTipTapTask } from '../../types';
 
 const STAGE_COLORS = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'] as const;
@@ -88,6 +89,8 @@ export default function HomeScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={styles.safe}>
+      {/* editor-mobile URLをバックグラウンドでプリロード */}
+      <EditorPreloader />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         {/* ヘッダー */}
         <View style={styles.header}>
