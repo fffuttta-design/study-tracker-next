@@ -3,6 +3,7 @@ import {
   View,
   Text,
   FlatList,
+  SectionList,
   TouchableOpacity,
   StyleSheet,
   Alert,
@@ -15,13 +16,15 @@ import {
   hasDueReview,
   isFullyCompleted,
   localDateKey,
-  importanceColor,
-  importanceLabel,
   REVIEW_STAGE_LABELS,
 } from '../../types';
 import { ContentRenderer } from '../../components/ContentRenderer';
 
 type Tab = 'today' | 'review' | 'all';
+
+// ステージごとの色（Web版と同じ）
+const STAGE_COLORS = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'] as const;
+const STAGE_BG     = ['#fef2f2', '#fffbeb', '#f0fdf4', '#eff6ff', '#faf5ff'] as const;
 
 export default function LearningScreen({ navigation, route }: any) {
   const { user } = useAuthStore();
@@ -32,7 +35,6 @@ export default function LearningScreen({ navigation, route }: any) {
   const [focusedItemId, setFocusedItemId] = useState<string | undefined>(params?.itemId);
   const flatListRef = useRef<FlatList>(null);
 
-  // ホーム画面からのナビゲーション時にタブ切替・フォーカス更新
   useEffect(() => {
     if (!params?.initialTab) return;
     setTab(params.initialTab);
@@ -41,13 +43,30 @@ export default function LearningScreen({ navigation, route }: any) {
 
   const today = localDateKey();
 
+  // today / all タブ用フラットリスト
   const filtered = useMemo(() => {
     switch (tab) {
       case 'today':  return items.filter(i => i.dateKey === today);
-      case 'review': return items.filter(i => !isFullyCompleted(i) && hasDueReview(i));
       case 'all':    return items;
+      default:       return [];
     }
   }, [items, tab, today]);
+
+  // review タブ用セクションリスト（ステージごとにグループ化）
+  const reviewSections = useMemo(() => {
+    const dueItems = items.filter(i => !isFullyCompleted(i) && hasDueReview(i));
+    return REVIEW_STAGE_LABELS.map((label, i) => ({
+      key:        String(i),
+      label,
+      stageIndex: i,
+      color:      STAGE_COLORS[i],
+      bg:         STAGE_BG[i],
+      data:       dueItems.filter(item => {
+        const next = item.reviews?.find(r => !r.completed);
+        return next?.stageIndex === i;
+      }),
+    })).filter(s => s.data.length > 0);
+  }, [items]);
 
   const reviewCount = useMemo(
     () => items.filter(i => !isFullyCompleted(i) && hasDueReview(i)).length,
@@ -101,38 +120,64 @@ export default function LearningScreen({ navigation, route }: any) {
         ))}
       </View>
 
-      {/* リスト */}
-      <FlatList
-        ref={flatListRef}
-        data={filtered}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.list}
-        renderItem={({ item }) => (
-          <LearningItemCard
-            item={item}
-            categoryName={getCategoryName(item.categoryId)}
-            onCompleteReview={handleCompleteReview}
-            onDelete={() => handleDelete(item)}
-            initialExpanded={item.id === focusedItemId}
-          />
-        )}
-        onLayout={() => {
-          if (!focusedItemId) return;
-          const idx = filtered.findIndex(i => i.id === focusedItemId);
-          if (idx >= 0) flatListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.1 });
-        }}
-        onScrollToIndexFailed={({ index }) => {
-          // 未描画アイテム（古いデータ等、リスト末尾）へのスクロール失敗を安全にリトライ
-          setTimeout(() => {
-            flatListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.1 });
-          }, 300);
-        }}
-        ListEmptyComponent={
-          <Text style={styles.empty}>
-            {tab === 'today' ? '今日の記録はまだありません' : tab === 'review' ? '復習の必要なアイテムはありません 🎉' : 'アイテムがありません'}
-          </Text>
-        }
-      />
+      {/* リスト: review タブはセクション分け、他はフラット */}
+      {tab === 'review' ? (
+        <SectionList
+          sections={reviewSections}
+          keyExtractor={item => item.id}
+          contentContainerStyle={styles.list}
+          renderSectionHeader={({ section }) => (
+            <View style={[styles.sectionHeader, { backgroundColor: section.bg, borderLeftColor: section.color }]}>
+              <Text style={[styles.sectionTitle, { color: section.color }]}>{section.label}</Text>
+              <Text style={[styles.sectionCount, { color: section.color }]}>{section.data.length}件</Text>
+            </View>
+          )}
+          renderItem={({ item }) => (
+            <LearningItemCard
+              item={item}
+              categoryName={getCategoryName(item.categoryId)}
+              onCompleteReview={handleCompleteReview}
+              onDelete={() => handleDelete(item)}
+              initialExpanded={item.id === focusedItemId}
+            />
+          )}
+          ListEmptyComponent={
+            <Text style={styles.empty}>復習の必要なアイテムはありません 🎉</Text>
+          }
+          stickySectionHeadersEnabled={false}
+        />
+      ) : (
+        <FlatList
+          ref={flatListRef}
+          data={filtered}
+          keyExtractor={item => item.id}
+          contentContainerStyle={styles.list}
+          renderItem={({ item }) => (
+            <LearningItemCard
+              item={item}
+              categoryName={getCategoryName(item.categoryId)}
+              onCompleteReview={handleCompleteReview}
+              onDelete={() => handleDelete(item)}
+              initialExpanded={item.id === focusedItemId}
+            />
+          )}
+          onLayout={() => {
+            if (!focusedItemId) return;
+            const idx = filtered.findIndex(i => i.id === focusedItemId);
+            if (idx >= 0) flatListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.1 });
+          }}
+          onScrollToIndexFailed={({ index }) => {
+            setTimeout(() => {
+              flatListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.1 });
+            }, 300);
+          }}
+          ListEmptyComponent={
+            <Text style={styles.empty}>
+              {tab === 'today' ? '今日の記録はまだありません' : 'アイテムがありません'}
+            </Text>
+          }
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -149,9 +194,6 @@ function LearningItemCard({
   const [expanded, setExpanded] = useState(initialExpanded ?? false);
   const completed = isFullyCompleted(item);
   const due = hasDueReview(item);
-
-  // 次の未完了ステージ
-  const nextReview = item.reviews?.find(r => !r.completed);
 
   return (
     <TouchableOpacity
@@ -222,12 +264,15 @@ const styles = StyleSheet.create({
   tabTextActive: { color: '#111827', fontWeight: '600' },
   list: { padding: 16, paddingTop: 8, gap: 10 },
   empty: { color: '#9ca3af', textAlign: 'center', marginTop: 40, fontSize: 14 },
+  // セクションヘッダー
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderLeftWidth: 3, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, marginBottom: 6, marginTop: 4 },
+  sectionTitle: { fontSize: 13, fontWeight: '700' },
+  sectionCount: { fontSize: 12, fontWeight: '600' },
+  // カード
   card: { backgroundColor: '#ffffff', borderRadius: 10, padding: 14, borderLeftWidth: 3, borderLeftColor: '#e5e7eb', elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3 },
   cardCompleted: { opacity: 0.6, borderLeftColor: '#10b981' },
   cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
   cardMeta: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  importanceBadge: { borderWidth: 1, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
-  importanceText: { fontSize: 11, fontWeight: '600' },
   category: { fontSize: 11, color: '#6b7280', backgroundColor: '#f3f4f6', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   dueBadge: { backgroundColor: '#fef2f2', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
   dueText: { fontSize: 11, color: '#ef4444', fontWeight: '600' },
@@ -237,7 +282,6 @@ const styles = StyleSheet.create({
   deleteBtnText: { fontSize: 16 },
   cardTitle: { fontSize: 15, fontWeight: '600', color: '#111827', marginBottom: 4 },
   cardTitleDone: { textDecorationLine: 'line-through', color: '#9ca3af' },
-  cardContent: { fontSize: 13, color: '#6b7280', marginBottom: 8 },
   reviewRow: { flexDirection: 'row', gap: 4, marginTop: 8, flexWrap: 'wrap' },
   reviewDot: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
   reviewDotDone: { backgroundColor: '#10b981' },
