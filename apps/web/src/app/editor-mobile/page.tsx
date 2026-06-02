@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor, EditorContent, Node as TiptapNode } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import TaskList from '@tiptap/extension-task-list';
@@ -11,6 +11,70 @@ import TextAlign from '@tiptap/extension-text-align';
 import Link from '@tiptap/extension-link';
 import { TextStyle, Color } from '@tiptap/extension-text-style';
 import Underline from '@tiptap/extension-underline';
+
+// ── カスタムノードのスタブ（モバイルで未対応の拡張を保持・表示するため） ──
+function makeStubNode(name: string, isInline = false) {
+  return TiptapNode.create({
+    name,
+    group: isInline ? 'inline' : 'block',
+    inline: isInline,
+    atom: true,
+    addAttributes() {
+      return {
+        href:   { default: null },
+        title:  { default: '' },
+        icon:   { default: '📄' },
+        favicon:{ default: '' },
+        level:  { default: 1 },
+        isOpen: { default: true },
+        background: { default: '#FEF9CD' },
+      };
+    },
+    parseHTML() { return [{ tag: `[data-type="${name}"]` }]; },
+    renderHTML({ HTMLAttributes }) {
+      return ['div', { ...HTMLAttributes, 'data-type': name }];
+    },
+  });
+}
+
+// pageLink: ページリンクノード（クリッカブルリンクとして表示）
+const PageLinkStub = TiptapNode.create({
+  name: 'pageLink',
+  group: 'block',
+  atom: true,
+  addAttributes() {
+    return {
+      href:  { default: null },
+      title: { default: '' },
+      icon:  { default: '📄' },
+    };
+  },
+  parseHTML() { return [{ tag: 'div[data-type="page-link"]' }]; },
+  renderHTML({ node }) {
+    const icon  = node.attrs.icon  || '📄';
+    const title = node.attrs.title || 'Untitled';
+    return ['div', {
+      'data-type': 'page-link',
+      style: 'display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;margin:3px 0;color:#1d4ed8;',
+    }, `${icon} ${title}`];
+  },
+});
+
+const UrlMentionStub = makeStubNode('urlMention', true);
+const CalloutStub    = TiptapNode.create({
+  name: 'callout', group: 'block', content: 'block+', defining: true,
+  addAttributes() { return { background: { default: '#FEF9CD' } }; },
+  parseHTML() { return [{ tag: 'div[data-type="callout"]' }]; },
+  renderHTML({ HTMLAttributes }) { return ['div', { ...HTMLAttributes, 'data-type': 'callout', style: 'border-left:4px solid #f59e0b;padding:8px 12px;background:#fffbeb;border-radius:4px;margin:4px 0;' }, 0]; },
+});
+const ToggleHeadingStub = TiptapNode.create({
+  name: 'toggleHeading', group: 'block', content: 'block+', defining: true,
+  addAttributes() { return { level: { default: 1 }, isOpen: { default: true } }; },
+  parseHTML() { return [{ tag: 'div[data-type="toggle-heading"]' }]; },
+  renderHTML({ HTMLAttributes }) { return ['div', { ...HTMLAttributes, 'data-type': 'toggle-heading' }, 0]; },
+});
+const TocStub            = makeStubNode('toc');
+const InlineDatabaseStub = makeStubNode('inlineDatabase');
 
 // ── 型定義 ──────────────────────────────────────────────────
 type RNMessage =
@@ -103,6 +167,13 @@ export default function EditorMobilePage() {
       TextStyle,
       Color,
       Underline,
+      // カスタムノードのスタブ（Web版で作成されたコンテンツを消さずに保持・表示）
+      PageLinkStub,
+      UrlMentionStub,
+      CalloutStub,
+      ToggleHeadingStub,
+      TocStub,
+      InlineDatabaseStub,
     ],
     editorProps: {
       attributes: { class: 'mobile-editor' },
