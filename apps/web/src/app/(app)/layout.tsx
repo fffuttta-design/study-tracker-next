@@ -75,17 +75,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (!loading && !user) router.replace('/login');
   }, [user, loading, router]);
 
+  const uid = user?.uid;
   useEffect(() => {
-    if (!user) return;
-    const unsub1 = subscribeCategories(user.uid);
-    const unsub2 = subscribeItems(user.uid);
-    const unsub3 = subscribePages(user.uid);
-    const unsub4 = subscribeTasks(user.uid);
-    const unsub5 = subscribeGoals(user.uid);
-    const unsub6 = subscribeMemos(user.uid);
-    const unsub7 = subscribeDailyMemos(user.uid);
+    if (!uid) return;
+    const unsub1 = subscribeCategories(uid);
+    const unsub2 = subscribeItems(uid);
+    const unsub3 = subscribePages(uid);
+    const unsub4 = subscribeTasks(uid);
+    const unsub5 = subscribeGoals(uid);
+    const unsub6 = subscribeMemos(uid);
+    const unsub7 = subscribeDailyMemos(uid);
     return () => { unsub1(); unsub2(); unsub3(); unsub4(); unsub5(); unsub6(); unsub7(); };
-  }, [user, subscribeCategories, subscribeItems, subscribePages, subscribeTasks, subscribeGoals, subscribeMemos, subscribeDailyMemos]);
+  // subscribe 関数は Zustand の安定した参照のため deps 不要。uid が変わった時だけ再登録する
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uid]);
 
   // Electron に復習件数・通知時刻を送信
   useEffect(() => {
