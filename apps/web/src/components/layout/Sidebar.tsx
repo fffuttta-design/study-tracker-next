@@ -582,8 +582,13 @@ function NotionPageSidebar({ user }: { user: User }) {
             <span>ホームに戻る</span>
           </Link>
         </div>
-        {/* 右：新規作成 + 閉じる（設定は削除→メインコンテンツ側へ） */}
+        {/* 右：設定 + 新規作成 + 閉じる */}
         <div className="flex items-center gap-0.5">
+          <Link
+            href="/notion-plus/settings"
+            title="NotionPlus設定（Notionインポートなど）"
+            className="rounded p-1 text-sm text-gray-400 hover:bg-gray-200 hover:text-gray-600"
+          >⚙️</Link>
           <div ref={addMenuRef} className="relative">
             <button
               onClick={() => setAddMenuOpen((v) => !v)}
