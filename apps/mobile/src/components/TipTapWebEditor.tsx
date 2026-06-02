@@ -9,16 +9,17 @@ const EDITOR_URL = __DEV__
 interface Props {
   content: string;
   title: string;
-  onSave: (content: string, title: string) => void;
+  readOnly?: boolean;
+  onSave?: (content: string, title: string) => void;
   style?: object;
 }
 
-export function TipTapWebEditor({ content, title, onSave, style }: Props) {
+export function TipTapWebEditor({ content, title, readOnly = false, onSave, style }: Props) {
   const webViewRef = useRef<WebView>(null);
   const readyRef = useRef(false);
 
   const sendInit = (c: string, t: string) => {
-    webViewRef.current?.postMessage(JSON.stringify({ type: 'init', content: c, title: t }));
+    webViewRef.current?.postMessage(JSON.stringify({ type: 'init', content: c, title: t, readOnly }));
   };
 
   const handleMessage = (event: WebViewMessageEvent) => {
@@ -27,7 +28,7 @@ export function TipTapWebEditor({ content, title, onSave, style }: Props) {
       if (data.type === 'ready') {
         readyRef.current = true;
         sendInit(content, title);
-      } else if (data.type === 'change') {
+      } else if (data.type === 'change' && !readOnly && onSave) {
         onSave(data.content ?? '', data.title ?? '');
       }
     } catch {

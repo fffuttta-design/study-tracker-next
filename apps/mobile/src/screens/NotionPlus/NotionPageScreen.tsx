@@ -114,17 +114,23 @@ export default function NotionPageScreen({ route, navigation }: any) {
           />
         )
       ) : (
-        <ScrollView style={styles.preview} contentContainerStyle={styles.previewContent}>
-          {content ? (
-            isTipTapContent(content) ? (
-              <Text style={styles.plainText}>{extractTextFromTipTap(content)}</Text>
-            ) : (
+        isTipTapContent(content) ? (
+          // TipTapコンテンツはプレビューもWebViewで表示（読み取り専用）
+          <TipTapWebEditor
+            content={content}
+            title={title}
+            readOnly
+            style={styles.webEditor}
+          />
+        ) : (
+          <ScrollView style={styles.preview} contentContainerStyle={styles.previewContent}>
+            {content ? (
               <Markdown style={markdownStyles}>{content}</Markdown>
-            )
-          ) : (
-            <Text style={styles.emptyText}>編集タブをタップして書き始めましょう</Text>
-          )}
-        </ScrollView>
+            ) : (
+              <Text style={styles.emptyText}>編集タブをタップして書き始めましょう</Text>
+            )}
+          </ScrollView>
+        )
       )}
     </KeyboardAvoidingView>
   );

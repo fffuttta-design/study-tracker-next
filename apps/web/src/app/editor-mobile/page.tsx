@@ -17,6 +17,7 @@ interface InitMessage {
   type: 'init';
   content: string;
   title: string;
+  readOnly?: boolean;
 }
 
 declare global {
@@ -86,6 +87,7 @@ export default function EditorMobilePage() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const titleRef = useRef('');
   const readyPostedRef = useRef(false);
+  const readOnlyRef = useRef(false);
 
   const editor = useEditor({
     extensions: [
@@ -136,11 +138,12 @@ export default function EditorMobilePage() {
 
         if (data.type === 'init' && editor) {
           titleRef.current = data.title ?? '';
+          readOnlyRef.current = !!data.readOnly;
+          editor.setEditable(!data.readOnly);
           try {
             const parsed = JSON.parse(data.content);
             editor.commands.setContent(parsed, { emitUpdate: false });
           } catch {
-            // プレーンテキストとしてセット
             editor.commands.setContent(data.content ?? '', { emitUpdate: false });
           }
         }
@@ -158,15 +161,15 @@ export default function EditorMobilePage() {
 
   if (!editor) return null;
 
-  // ── ツールバー定義 ──
   const tb = editor;
+  const isReadOnly = readOnlyRef.current;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: '#fff' }}>
-      {/* ツールバー */}
+      {/* ツールバー（readOnly時は非表示） */}
       <div
         style={{
-          display: 'flex',
+          display: isReadOnly ? 'none' : 'flex',
           flexDirection: 'row',
           alignItems: 'center',
           gap: 4,

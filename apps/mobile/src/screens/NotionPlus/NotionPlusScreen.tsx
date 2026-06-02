@@ -29,7 +29,8 @@ export default function NotionPlusScreen({ navigation }: any) {
     return subscribePages(user.uid);
   }, [user]);
 
-  const rootPages = pages.filter(p => !p.parentId);
+  // workspace（システムページ）とブックを除外
+  const rootPages = pages.filter(p => !p.parentId && p.id !== 'workspace' && p.type !== 'book');
 
   const handleAdd = async () => {
     if (!newTitle.trim() || !user) return;
