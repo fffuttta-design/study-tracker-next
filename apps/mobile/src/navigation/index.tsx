@@ -11,7 +11,7 @@ import LearningScreen from '../screens/Learning/LearningScreen';
 import AddLearningScreen from '../screens/Learning/AddLearningScreen';
 import NotionPlusScreen from '../screens/NotionPlus/NotionPlusScreen';
 import NotionPageScreen from '../screens/NotionPlus/NotionPageScreen';
-import QuickMemoScreen from '../screens/QuickMemo/QuickMemoScreen';
+
 import SettingsScreen from '../screens/Settings/SettingsScreen';
 import LoginScreen from '../screens/Settings/LoginScreen';
 import { useAuthStore } from '../store/authStore';
@@ -23,7 +23,7 @@ function TabIcon({ name, color }: { name: string; color: string }) {
   const icons: Record<string, string> = {
     Home: '🏠',
     Learning: '📚',
-    QuickMemo: '📓',
+
     NotionPlus: '📝',
     Settings: '⚙️',
   };
@@ -45,7 +45,7 @@ function MainTabs() {
       })}>
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'ホーム' }} />
       <Tab.Screen name="Learning" component={LearningScreen} options={{ title: '学習リスト' }} />
-      <Tab.Screen name="QuickMemo" component={QuickMemoScreen} options={{ title: '学習メモ' }} />
+
       <Tab.Screen name="NotionPlus" component={NotionPlusScreen} options={{ title: 'NotionPlus' }} />
       <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: '設定' }} />
     </Tab.Navigator>

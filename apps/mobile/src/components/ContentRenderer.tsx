@@ -11,19 +11,32 @@ import Markdown from 'react-native-markdown-display';
 import { TipTapRenderer } from './TipTapRenderer';
 import { isTipTapContent } from '../types';
 
+// rgb(r,g,b) → 6桁 hex に変換
+function rgbToHex(r: number, g: number, b: number): string {
+  return [r, g, b]
+    .map((v) => Math.min(255, Math.max(0, v)).toString(16).padStart(2, '0'))
+    .join('');
+}
+
 // <span style="color:#EF4444">text</span> → [text](colorhex:EF4444)
 // に変換してから Markdown パーサーに渡す。
 //
-// ⚠️ 注意: markdown-it は URL 内の "#" をフラグメントとして除去するため、
-//   `color:#EF4444` と書くと href が `color:` になってしまいカラーが消える。
-//   そのため "#" を除去して `colorhex:EF4444` という独自スキームで保持する。
+// ⚠️ 注意1: markdown-it は URL 内の "#" をフラグメントとして除去するため "#" を省く。
+// ⚠️ 注意2: rgb(r, g, b) は括弧がMarkdownリンク構文を壊すため hex に変換して使う。
 function preprocessMarkdown(content: string): string {
   return content
     .replace(
-      /<span[^>]*style=["'][^"']*color:\s*([^;'">\s]+)[^>]*>([\s\S]*?)<\/span>/gi,
+      // rgba?() または通常の色値を捕捉する正規表現
+      /<span[^>]*style=["'][^"']*color:\s*(rgba?\([^)]*\)|[^;'">\s]+)[^>]*>([\s\S]*?)<\/span>/gi,
       (_, color: string, text: string) => {
-        // # を除去して独自スキーム colorhex: に格納（markdown-it のフラグメント除去対策）
-        const safeColor = color.trim().replace(/^#/, '');
+        let safeColor = color.trim();
+        // rgb(r, g, b) / rgba(r, g, b, a) → hex 変換（URLに括弧が入るのを防ぐ）
+        const rgbMatch = safeColor.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+        if (rgbMatch) {
+          safeColor = rgbToHex(parseInt(rgbMatch[1], 10), parseInt(rgbMatch[2], 10), parseInt(rgbMatch[3], 10));
+        } else {
+          safeColor = safeColor.replace(/^#/, '');
+        }
         return `[${text}](colorhex:${safeColor})`;
       },
     )
