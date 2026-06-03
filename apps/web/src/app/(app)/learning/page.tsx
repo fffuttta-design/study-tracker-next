@@ -321,7 +321,7 @@ function DashboardTab({ todayItems, dueItems, inboxItems, uid, onAdd, onQuickAdd
                         <div className="border-t border-amber-100 bg-white px-3 py-2">
                           {item.content && (
                             <p className="mb-2 whitespace-pre-wrap text-xs text-gray-600 leading-relaxed">
-                              {item.content.replace(/[#\*`_~>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 300)}
+                              {item.content.replace(/[#\*`_~>]/g, '').replace(/[^\S\n]+/g, ' ').trim().slice(0, 300)}
                             </p>
                           )}
                           <div className="flex items-center justify-end">
