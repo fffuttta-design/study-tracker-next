@@ -5,6 +5,9 @@ import {
   ScrollView,
   StyleSheet,
   TouchableOpacity,
+  Modal,
+  TextInput,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../store/authStore';
@@ -19,7 +22,7 @@ import { ContentRenderer } from '../../components/ContentRenderer';
 
 export default function HomeScreen({ navigation }: any) {
   const { user } = useAuthStore();
-  const { items, subscribeItems, subscribeCategories, completeReview, updateItemContent } = useLearningStore();
+  const { items, subscribeItems, subscribeCategories, completeReview, updateItemContent, addItem } = useLearningStore();
   const { subscribePages: subscribeNotionPages } = useNotionStore();
 
   useEffect(() => {
@@ -70,6 +73,20 @@ export default function HomeScreen({ navigation }: any) {
 
   // 今日の復習: 展開中カードID
   const [expandedDueId, setExpandedDueId] = useState<string | null>(null);
+  // ⚡ 特急クイック入力
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [quickTitle, setQuickTitle] = useState('');
+
+  const handleQuickSave = async () => {
+    if (!quickTitle.trim() || !user) return;
+    try {
+      await addItem(user.uid, { title: quickTitle.trim(), content: '', dateKey: localDateKey() });
+      setQuickTitle('');
+      setQuickOpen(false);
+    } catch (e: any) {
+      Alert.alert('エラー', e.message);
+    }
+  };
 
   const handleToggleTask = async (item: LearningItem, taskIndex: number) => {
     if (!user) return;
@@ -98,9 +115,40 @@ export default function HomeScreen({ navigation }: any) {
             <Text style={styles.greeting}>こんにちは、{displayName} さん 👋</Text>
             <Text style={styles.date}>{today}</Text>
           </View>
-          <TouchableOpacity style={styles.recordBtn} onPress={() => navigation.navigate('AddLearning')}>
-            <Text style={styles.recordBtnText}>＋ 記録</Text>
-          </TouchableOpacity>
+          <View style={styles.headerBtns}>
+            <TouchableOpacity style={styles.quickBtn} onPress={() => setQuickOpen(true)}>
+              <Text style={styles.quickBtnText}>⚡ 特急</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.recordBtn} onPress={() => navigation.navigate('AddLearning')}>
+              <Text style={styles.recordBtnText}>＋ 記録</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* ⚡ 特急クイック入力モーダル */}
+          <Modal visible={quickOpen} transparent animationType="fade">
+            <View style={styles.quickOverlay}>
+              <View style={styles.quickModal}>
+                <Text style={styles.quickLabel}>⚡ 特急メモ</Text>
+                <TextInput
+                  style={styles.quickInput}
+                  value={quickTitle}
+                  onChangeText={setQuickTitle}
+                  placeholder="タイトルを入力..."
+                  placeholderTextColor="#9ca3af"
+                  autoFocus
+                  onSubmitEditing={handleQuickSave}
+                />
+                <View style={styles.quickBtns}>
+                  <TouchableOpacity style={styles.quickCancel} onPress={() => { setQuickOpen(false); setQuickTitle(''); }}>
+                    <Text style={styles.quickCancelText}>キャンセル</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.quickSave} onPress={handleQuickSave}>
+                    <Text style={styles.quickSaveText}>記録</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
         </View>
 
         {/* 統計（今週 + 累計）*/}
@@ -282,8 +330,21 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
   greeting: { fontSize: 18, fontWeight: 'bold', color: '#111827' },
   date: { fontSize: 12, color: '#6b7280', marginTop: 2 },
+  headerBtns: { flexDirection: 'row', gap: 8 },
+  quickBtn: { backgroundColor: '#fef3c7', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#F59E0B' },
+  quickBtnText: { color: '#92400e', fontWeight: '700', fontSize: 14 },
   recordBtn: { backgroundColor: '#F59E0B', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8 },
   recordBtnText: { color: '#111827', fontWeight: '700', fontSize: 14 },
+  // 特急モーダル
+  quickOverlay: { flex: 1, backgroundColor: '#00000055', justifyContent: 'center', padding: 24 },
+  quickModal: { backgroundColor: '#fff', borderRadius: 14, padding: 20, gap: 12 },
+  quickLabel: { fontSize: 16, fontWeight: 'bold', color: '#92400e' },
+  quickInput: { borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, padding: 12, fontSize: 15, color: '#111827' },
+  quickBtns: { flexDirection: 'row', gap: 10 },
+  quickCancel: { flex: 1, padding: 12, borderRadius: 8, backgroundColor: '#f3f4f6', alignItems: 'center' },
+  quickCancelText: { color: '#374151', fontWeight: '600' },
+  quickSave: { flex: 1, padding: 12, borderRadius: 8, backgroundColor: '#F59E0B', alignItems: 'center' },
+  quickSaveText: { color: '#111827', fontWeight: 'bold' },
 
   statsRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
   statMini: {

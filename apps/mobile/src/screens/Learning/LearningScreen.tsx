@@ -99,11 +99,18 @@ export default function LearningScreen({ navigation, route }: any) {
       {/* ヘッダー */}
       <View style={styles.header}>
         <Text style={styles.title}>学習リスト</Text>
-        <TouchableOpacity
-          style={styles.addBtn}
-          onPress={() => navigation.navigate('AddLearning')}>
-          <Text style={styles.addBtnText}>＋ 追加</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity
+            style={styles.quickBtn}
+            onPress={() => navigation.navigate('AddLearning', { quick: true })}>
+            <Text style={styles.quickBtnText}>⚡</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.addBtn}
+            onPress={() => navigation.navigate('AddLearning')}>
+            <Text style={styles.addBtnText}>＋ 追加</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* タブ */}
@@ -262,6 +269,8 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f9fafb' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, paddingBottom: 8 },
   title: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
+  quickBtn: { backgroundColor: '#fef3c7', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#F59E0B' },
+  quickBtnText: { color: '#92400e', fontWeight: '700', fontSize: 14 },
   addBtn: { backgroundColor: '#F59E0B', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 },
   addBtnText: { color: '#111827', fontWeight: '600', fontSize: 14 },
   tabs: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 8 },
