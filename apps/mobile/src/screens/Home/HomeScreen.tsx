@@ -36,10 +36,10 @@ export default function HomeScreen({ navigation }: any) {
 
   const today = localDateKey();
 
-  const todayItems = useMemo(
-    () => items.filter(i => i.dateKey === today),
-    [items, today],
-  );
+  const todayItems  = useMemo(() => items.filter(i => i.dateKey === today), [items, today]);
+  // 消化済み（通常記録）と特急メモを分離
+  const digestedItems = useMemo(() => todayItems.filter(i => !!i.notionPageId), [todayItems]);
+  const inboxItems    = useMemo(() => todayItems.filter(i => !i.notionPageId),  [todayItems]);
 
   const dueItems = useMemo(
     () => items.filter(i => !isFullyCompleted(i) && hasDueReview(i)),
@@ -76,12 +76,14 @@ export default function HomeScreen({ navigation }: any) {
   // ⚡ 特急クイック入力
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickTitle, setQuickTitle] = useState('');
+  const [quickContent, setQuickContent] = useState('');
 
   const handleQuickSave = async () => {
     if (!quickTitle.trim() || !user) return;
     try {
-      await addItem(user.uid, { title: quickTitle.trim(), content: '', dateKey: localDateKey() });
+      await addItem(user.uid, { title: quickTitle.trim(), content: quickContent.trim(), dateKey: localDateKey() });
       setQuickTitle('');
+      setQuickContent('');
       setQuickOpen(false);
     } catch (e: any) {
       Alert.alert('エラー', e.message);
@@ -136,7 +138,15 @@ export default function HomeScreen({ navigation }: any) {
                   placeholder="タイトルを入力..."
                   placeholderTextColor="#9ca3af"
                   autoFocus
-                  onSubmitEditing={handleQuickSave}
+                />
+                <TextInput
+                  style={[styles.quickInput, { minHeight: 72, marginTop: 8 }]}
+                  value={quickContent}
+                  onChangeText={setQuickContent}
+                  placeholder="内容・メモ（任意）"
+                  placeholderTextColor="#9ca3af"
+                  multiline
+                  textAlignVertical="top"
                 />
                 <View style={styles.quickBtns}>
                   <TouchableOpacity style={styles.quickCancel} onPress={() => { setQuickOpen(false); setQuickTitle(''); }}>
@@ -157,17 +167,36 @@ export default function HomeScreen({ navigation }: any) {
           <StatMini label="累計" value={items.length} color="#6366f1" />
         </View>
 
-        {/* 今日の登録 */}
+        {/* ⚡ 特急メモ（未消化） */}
+        {inboxItems.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>⚡ 特急メモ（未消化）</Text>
+              <View style={[styles.badge, { backgroundColor: '#F59E0B' }]}>
+                <Text style={styles.badgeText}>{inboxItems.length}</Text>
+              </View>
+            </View>
+            {inboxItems.map(item => (
+              <HomeItemChip
+                key={item.id}
+                item={item}
+                onPress={() => navigation.navigate('Learning', { itemId: item.id, initialTab: 'today' })}
+              />
+            ))}
+          </View>
+        )}
+
+        {/* 今日の登録（消化済み・通常記録のみ） */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>今日の登録</Text>
             <View style={[styles.badge, { backgroundColor: '#F59E0B' }]}>
-              <Text style={styles.badgeText}>{todayItems.length}</Text>
+              <Text style={styles.badgeText}>{digestedItems.length}</Text>
             </View>
           </View>
-          {todayItems.length === 0
+          {digestedItems.length === 0
             ? <Text style={styles.empty}>まだありません</Text>
-            : todayItems.map(item => (
+            : digestedItems.map(item => (
                 <HomeItemChip
                   key={item.id}
                   item={item}
