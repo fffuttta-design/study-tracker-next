@@ -8,6 +8,7 @@ import {
   Alert,
   ActivityIndicator,
   View,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../store/authStore';
@@ -16,6 +17,15 @@ import { useNotionStore } from '../../store/notionStore';
 import { localDateKey } from '../../types';
 
 const WORKSPACE_ID = 'workspace';
+
+// URLアイコンと絵文字アイコンを適切に表示するヘルパー
+function PageIcon({ icon, size = 20 }: { icon?: string; size?: number }) {
+  const isUrl = icon && (icon.startsWith('http') || icon.startsWith('data:'));
+  if (isUrl) {
+    return <Image source={{ uri: icon }} style={{ width: size, height: size, borderRadius: 4 }} />;
+  }
+  return <Text style={{ fontSize: size * 0.9, lineHeight: size }}>{icon ?? '📄'}</Text>;
+}
 
 export default function AddLearningScreen({ navigation }: any) {
   const { user } = useAuthStore();
@@ -72,9 +82,14 @@ export default function AddLearningScreen({ navigation }: any) {
           style={styles.pageSelector}
           onPress={() => setPagePickerOpen(v => !v)}
         >
-          <Text style={notionPageId ? styles.pageSelectorText : styles.pageSelectorPlaceholder}>
-            {selectedPage ? `${selectedPage.icon ?? '📄'} ${selectedPage.title}` : '選択しない（特急メモ）'}
-          </Text>
+          {selectedPage ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+              <PageIcon icon={selectedPage.icon} size={20} />
+              <Text style={styles.pageSelectorText}>{selectedPage.title}</Text>
+            </View>
+          ) : (
+            <Text style={styles.pageSelectorPlaceholder}>選択しない（特急メモ）</Text>
+          )}
           <Text style={styles.pageChevron}>{pagePickerOpen ? '▲' : '▼'}</Text>
         </TouchableOpacity>
         {pagePickerOpen && (
@@ -91,7 +106,10 @@ export default function AddLearningScreen({ navigation }: any) {
                 style={[styles.pageItem, notionPageId === p.id && styles.pageItemActive]}
                 onPress={() => { setNotionPageId(p.id); setPagePickerOpen(false); }}
               >
-                <Text style={styles.pageItemText}>{p.icon ?? '📄'} {p.title || 'Untitled'}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <PageIcon icon={p.icon} size={18} />
+                <Text style={styles.pageItemText}>{p.title || 'Untitled'}</Text>
+              </View>
               </TouchableOpacity>
             ))}
           </View>
