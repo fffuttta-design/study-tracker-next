@@ -46,13 +46,13 @@ export default function AddLearningScreen({ navigation }: any) {
     if (!user) return;
     setSaving(true);
     try {
+      // undefined は Firestore 非対応のため null に変換または省略
       await addItem(user.uid, {
         title: title.trim(),
         content: content.trim(),
-        categoryId,
+        ...(categoryId   ? { categoryId }                         : {}),
+        ...(notionPageId ? { notionPageId, notionPagePath: selectedPage?.title ?? '' } : {}),
         dateKey: localDateKey(),
-        notionPageId,
-        notionPagePath: selectedPage?.title,
       });
       navigation.goBack();
     } catch (e: any) {
