@@ -22,7 +22,7 @@ import { ContentRenderer } from '../../components/ContentRenderer';
 
 export default function HomeScreen({ navigation }: any) {
   const { user } = useAuthStore();
-  const { items, subscribeItems, subscribeCategories, completeReview, updateItemContent, addItem } = useLearningStore();
+  const { items, loading: itemsLoading, subscribeItems, subscribeCategories, completeReview, updateItemContent, addItem } = useLearningStore();
   const { subscribePages: subscribeNotionPages } = useNotionStore();
 
   useEffect(() => {
@@ -161,11 +161,13 @@ export default function HomeScreen({ navigation }: any) {
           </Modal>
         </View>
 
-        {/* 統計（今週 + 累計）*/}
-        <View style={styles.statsRow}>
-          <StatMini label="今週" value={weekCount} color="#10b981" />
-          <StatMini label="累計" value={items.length} color="#6366f1" />
-        </View>
+        {/* 統計（今週 + 累計）※ ローディング中は表示しない */}
+        {!itemsLoading && (
+          <View style={styles.statsRow}>
+            <StatMini label="今週" value={weekCount} color="#10b981" />
+            <StatMini label="累計" value={items.length} color="#6366f1" />
+          </View>
+        )}
 
         {/* ⚡ 特急メモ（未消化） */}
         {inboxItems.length > 0 && (
@@ -185,6 +187,9 @@ export default function HomeScreen({ navigation }: any) {
             ))}
           </View>
         )}
+
+        {/* 今日の登録・復習はロード完了後のみ表示 */}
+        {itemsLoading ? null : <>
 
         {/* 今日の登録（消化済み・通常記録のみ） */}
         <View style={styles.section}>
@@ -239,6 +244,8 @@ export default function HomeScreen({ navigation }: any) {
               ))
           }
         </View>
+
+        </> /* itemsLoading ここまで */}
       </ScrollView>
     </SafeAreaView>
   );
