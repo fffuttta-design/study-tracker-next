@@ -34,12 +34,40 @@ export default function AddLearningScreen({ navigation }: any) {
 
   const selectedPage = pages.find(p => p.id === notionPageId);
 
-  // ページ一覧（ワークスペース・ブック除外）フラットリスト
+  // 親ページのTipTap content からPageLinkNodeの出現順を取り出す
+  const pageLinkOrderMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const page of pages) {
+      if (!page.content) continue;
+      try {
+        const doc = JSON.parse(page.content);
+        let pos = 0;
+        const walk = (nodes: any[]) => {
+          for (const node of nodes) {
+            if (node.type === 'pageLink' && node.attrs?.href) {
+              const id = node.attrs.href.match(/\/notion-plus\/([^/?#]+)/)?.[1];
+              if (id && !(id in map)) map[id] = pos++;
+            }
+            if (Array.isArray(node.content)) walk(node.content);
+          }
+        };
+        if (Array.isArray(doc.content)) walk(doc.content);
+      } catch { /* JSON でない場合は無視 */ }
+    }
+    return map;
+  }, [pages]);
+
+  // ページ一覧（ワークスペース・ブック除外）
+  // PageLinkNode の出現順を優先、なければ order フィールドでフォールバック
   const pageOptions = useMemo(() =>
     pages
       .filter(p => p.id !== WORKSPACE_ID && p.type !== 'book')
-      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
-    [pages]
+      .sort((a, b) => {
+        const posA = pageLinkOrderMap[a.id] ?? (a.order ?? 9999);
+        const posB = pageLinkOrderMap[b.id] ?? (b.order ?? 9999);
+        return posA - posB;
+      }),
+    [pages, pageLinkOrderMap]
   );
 
   const handleSave = async () => {
