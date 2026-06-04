@@ -255,7 +255,7 @@ function DashboardTab({ todayItems, dueItems, inboxItems, uid, onAdd, onQuickAdd
   const yesterdayDueItems = useMemo(
     () => dueItems.filter((item) => {
       const next = item.reviews.find((r) => !r.completed);
-      return next?.stageIndex === 0 && item.dateKey === yesterday;
+      return next?.stageIndex === 0 && item.dateKey === yesterday && !!item.notionPageId;
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [dueItems],
