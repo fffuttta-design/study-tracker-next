@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 
-export type DbPropertyType = 'title' | 'text' | 'number' | 'select' | 'checkbox' | 'date';
+export type DbPropertyType = 'title' | 'text' | 'number' | 'select' | 'multiselect' | 'checkbox' | 'date' | 'url';
 
 export interface DbSelectOption {
   id: string;
@@ -16,8 +16,11 @@ export interface DbProperty {
   width?: number;
 }
 
+export type AggregationType = 'count' | 'sum' | 'avg' | 'min' | 'max';
+
 export interface DbSchema {
   properties: DbProperty[];
+  aggregations?: Record<string, AggregationType>;
 }
 
 export interface DbRow {

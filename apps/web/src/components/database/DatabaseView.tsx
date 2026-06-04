@@ -8,6 +8,7 @@ import {
   type DbPropertyType,
   type DbRow,
   type DbSelectOption,
+  type AggregationType,
   parseDbSchema,
 } from '@study-tracker/core';
 import { useDbRowStore } from '@/stores/notionDatabaseRowStore';
@@ -30,9 +31,32 @@ const TYPE_ICONS: Record<DbPropertyType, string> = {
   text: '📝',
   number: '#',
   select: '◯',
+  multiselect: '☰',
   checkbox: '☑',
   date: '📅',
+  url: '🔗',
 };
+
+// ─── フィルター・ソート型 ─────────────────────────────────────────────────────
+
+type FilterOperator =
+  | 'contains' | 'not_contains' | 'equals' | 'is_empty' | 'is_not_empty'
+  | 'gte' | 'lte' | 'gt' | 'lt'
+  | 'date_gte' | 'date_lte' | 'date_eq'
+  | 'checked' | 'unchecked';
+
+interface FilterItem {
+  id: string;
+  propId: string;
+  operator: FilterOperator;
+  value: string;
+}
+
+interface SortItem {
+  id: string;
+  propId: string;
+  dir: 'asc' | 'desc';
+}
 
 const COLOR_NAMES = Object.keys(SELECT_COLORS);
 
@@ -255,6 +279,160 @@ function DateCell({ value, onSave }: { value: string; onSave: (v: string) => voi
   );
 }
 
+function UrlCell({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
+
+  const commit = () => {
+    setEditing(false);
+    if (draft !== value) onSave(draft);
+  };
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit();
+          if (e.key === 'Escape') { setDraft(value); setEditing(false); }
+        }}
+        className="w-full bg-transparent outline-none text-sm px-1"
+        placeholder="https://"
+      />
+    );
+  }
+
+  return (
+    <div className="w-full min-h-[22px] flex items-center px-1">
+      {value ? (
+        <a
+          href={value}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="text-sm text-blue-500 hover:text-blue-700 underline truncate max-w-full"
+        >
+          {value}
+        </a>
+      ) : (
+        <span
+          onClick={() => { setDraft(value); setEditing(true); }}
+          className="text-gray-300 text-sm select-none cursor-text w-full min-h-[22px] flex items-center"
+        >
+        </span>
+      )}
+      {value && (
+        <button
+          onClick={() => { setDraft(value); setEditing(true); }}
+          className="shrink-0 ml-1 text-[10px] text-gray-300 hover:text-gray-500"
+          title="URLを編集"
+        >
+          ✎
+        </button>
+      )}
+    </div>
+  );
+}
+
+function MultiSelectCell({
+  value,
+  options,
+  onSave,
+}: {
+  value: string;
+  options: DbSelectOption[];
+  onSave: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const parseIds = (v: string): string[] => {
+    if (!v) return [];
+    try { return JSON.parse(v) as string[]; } catch { return []; }
+  };
+
+  const selectedIds = parseIds(value);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const toggle = (id: string) => {
+    const next = selectedIds.includes(id)
+      ? selectedIds.filter((x) => x !== id)
+      : [...selectedIds, id];
+    onSave(next.length > 0 ? JSON.stringify(next) : '');
+  };
+
+  return (
+    <div ref={ref} className="relative w-full">
+      <div
+        onClick={() => setOpen((v) => !v)}
+        className="w-full min-h-[22px] cursor-pointer flex flex-wrap items-center gap-0.5 px-1"
+      >
+        {selectedIds.length > 0 ? (
+          selectedIds.map((id) => {
+            const opt = options.find((o) => o.id === id);
+            if (!opt) return null;
+            return (
+              <span key={id} className={`inline-flex items-center rounded border px-1.5 py-0.5 text-xs font-medium ${SELECT_COLORS[opt.color] ?? SELECT_COLORS.gray}`}>
+                {opt.name}
+              </span>
+            );
+          })
+        ) : (
+          <span className="text-gray-300 text-sm select-none"></span>
+        )}
+      </div>
+      {open && (
+        <div className="absolute left-0 top-full z-30 mt-0.5 min-w-[160px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+          {selectedIds.length > 0 && (
+            <button
+              onClick={() => { onSave(''); setOpen(false); }}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-400 hover:bg-gray-50"
+            >
+              ✕ すべてクリア
+            </button>
+          )}
+          {options.map((opt) => {
+            const checked = selectedIds.includes(opt.id);
+            return (
+              <button
+                key={opt.id}
+                onClick={() => toggle(opt.id)}
+                className={`flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-gray-50 ${checked ? 'bg-brand-50' : ''}`}
+              >
+                <span className={`flex h-3.5 w-3.5 items-center justify-center rounded border text-[10px] ${checked ? 'border-brand-500 bg-brand-500 text-white' : 'border-gray-300'}`}>
+                  {checked && '✓'}
+                </span>
+                <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-xs font-medium ${SELECT_COLORS[opt.color] ?? SELECT_COLORS.gray}`}>
+                  {opt.name}
+                </span>
+              </button>
+            );
+          })}
+          {options.length === 0 && (
+            <p className="px-3 py-1.5 text-xs text-gray-400">オプションなし（列ヘッダーで追加）</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── プロパティヘッダー ──────────────────────────────────────────────────────
 
 function PropertyHeader({
@@ -343,7 +521,7 @@ function PropertyHeader({
             タイプ: {TYPE_ICONS[prop.type]} {prop.type}
           </p>
 
-          {prop.type === 'select' && (
+          {(prop.type === 'select' || prop.type === 'multiselect') && (
             <div className="mt-2">
               <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">オプション</p>
               <div className="space-y-1 max-h-32 overflow-y-auto mb-2">
@@ -463,11 +641,17 @@ function RowPageModal({
                   {prop.type === 'select' && (
                     <SelectCell value={typeof raw === 'string' ? raw : ''} options={prop.options ?? []} onSave={(v) => onSaveCells(prop.id, v)} />
                   )}
+                  {prop.type === 'multiselect' && (
+                    <MultiSelectCell value={typeof raw === 'string' ? raw : ''} options={prop.options ?? []} onSave={(v) => onSaveCells(prop.id, v)} />
+                  )}
                   {prop.type === 'checkbox' && (
                     <CheckboxCell value={typeof raw === 'boolean' ? raw : false} onSave={(v) => onSaveCells(prop.id, v)} />
                   )}
                   {prop.type === 'date' && (
                     <DateCell value={typeof raw === 'string' ? raw : ''} onSave={(v) => onSaveCells(prop.id, v)} />
+                  )}
+                  {prop.type === 'url' && (
+                    <UrlCell value={typeof raw === 'string' ? raw : ''} onSave={(v) => onSaveCells(prop.id, v)} />
                   )}
                 </div>
               </div>
@@ -543,6 +727,13 @@ function RowDetailPanel({
                     onSave={(v) => onSave(prop.id, v)}
                   />
                 )}
+                {prop.type === 'multiselect' && (
+                  <MultiSelectCell
+                    value={typeof raw === 'string' ? raw : ''}
+                    options={prop.options ?? []}
+                    onSave={(v) => onSave(prop.id, v)}
+                  />
+                )}
                 {prop.type === 'checkbox' && (
                   <CheckboxCell
                     value={typeof raw === 'boolean' ? raw : false}
@@ -551,6 +742,12 @@ function RowDetailPanel({
                 )}
                 {prop.type === 'date' && (
                   <DateCell
+                    value={typeof raw === 'string' ? raw : ''}
+                    onSave={(v) => onSave(prop.id, v)}
+                  />
+                )}
+                {prop.type === 'url' && (
+                  <UrlCell
                     value={typeof raw === 'string' ? raw : ''}
                     onSave={(v) => onSave(prop.id, v)}
                   />
@@ -564,22 +761,339 @@ function RowDetailPanel({
   );
 }
 
-// ─── フィルターバー ──────────────────────────────────────────────────────────
+// ─── フィルター・ソートパネル ────────────────────────────────────────────────
 
-function FilterBar({
+function getOperatorsForType(type: DbPropertyType): { value: FilterOperator; label: string }[] {
+  if (type === 'number') return [
+    { value: 'equals', label: '等しい' },
+    { value: 'gte', label: '以上' },
+    { value: 'lte', label: '以下' },
+    { value: 'gt', label: 'より大きい' },
+    { value: 'lt', label: 'より小さい' },
+    { value: 'is_empty', label: '空' },
+    { value: 'is_not_empty', label: '空でない' },
+  ];
+  if (type === 'date') return [
+    { value: 'date_eq', label: '等しい' },
+    { value: 'date_gte', label: '以降' },
+    { value: 'date_lte', label: '以前' },
+    { value: 'is_empty', label: '空' },
+    { value: 'is_not_empty', label: '空でない' },
+  ];
+  if (type === 'checkbox') return [
+    { value: 'checked', label: 'チェック済み' },
+    { value: 'unchecked', label: '未チェック' },
+  ];
+  return [
+    { value: 'contains', label: '含む' },
+    { value: 'not_contains', label: '含まない' },
+    { value: 'equals', label: '等しい' },
+    { value: 'is_empty', label: '空' },
+    { value: 'is_not_empty', label: '空でない' },
+  ];
+}
+
+function FilterPanel({
   schema,
-  filter,
-  onChange,
-  onClear,
+  filters,
+  filterLogic,
+  onChangeFilters,
+  onChangeLogic,
 }: {
   schema: { properties: DbProperty[] };
-  filter: { propId: string; value: string } | null;
-  onChange: (f: { propId: string; value: string }) => void;
+  filters: FilterItem[];
+  filterLogic: 'and' | 'or';
+  onChangeFilters: (f: FilterItem[]) => void;
+  onChangeLogic: (l: 'and' | 'or') => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const active = filters.length > 0;
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const addFilter = () => {
+    const firstProp = schema.properties[0];
+    if (!firstProp) return;
+    const ops = getOperatorsForType(firstProp.type);
+    onChangeFilters([
+      ...filters,
+      { id: uuidv4(), propId: firstProp.id, operator: ops[0].value, value: '' },
+    ]);
+  };
+
+  const updateFilter = (id: string, patch: Partial<FilterItem>) => {
+    onChangeFilters(filters.map((f) => {
+      if (f.id !== id) return f;
+      const updated = { ...f, ...patch };
+      // プロパティ変更時はオペレーターをリセット
+      if (patch.propId) {
+        const prop = schema.properties.find((p) => p.id === patch.propId);
+        if (prop) updated.operator = getOperatorsForType(prop.type)[0].value;
+        updated.value = '';
+      }
+      return updated;
+    }));
+  };
+
+  const removeFilter = (id: string) => {
+    onChangeFilters(filters.filter((f) => f.id !== id));
+  };
+
+  const needsValueInput = (op: FilterOperator) =>
+    !['is_empty', 'is_not_empty', 'checked', 'unchecked'].includes(op);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`flex items-center gap-1 rounded px-2.5 py-1 text-xs transition ${active ? 'bg-brand-50 text-brand-600 border border-brand-200' : 'text-gray-500 hover:bg-gray-100'}`}
+      >
+        <span>⊟</span>
+        <span>フィルター</span>
+        {active && <span className="ml-0.5 rounded-full bg-brand-500 text-white text-[9px] px-1">{filters.length}</span>}
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-1 w-[480px] rounded-xl border border-gray-200 bg-white p-3 shadow-xl">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">フィルター条件</p>
+            {filters.length > 1 && (
+              <div className="flex items-center gap-1 text-xs">
+                <span className="text-gray-400">論理:</span>
+                <button
+                  onClick={() => onChangeLogic('and')}
+                  className={`rounded px-2 py-0.5 ${filterLogic === 'and' ? 'bg-brand-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                >AND</button>
+                <button
+                  onClick={() => onChangeLogic('or')}
+                  className={`rounded px-2 py-0.5 ${filterLogic === 'or' ? 'bg-brand-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                >OR</button>
+              </div>
+            )}
+          </div>
+
+          {filters.length === 0 && (
+            <p className="mb-2 text-xs text-gray-400">フィルターがありません</p>
+          )}
+
+          <div className="space-y-2 mb-2">
+            {filters.map((f, idx) => {
+              const prop = schema.properties.find((p) => p.id === f.propId);
+              const ops = prop ? getOperatorsForType(prop.type) : [];
+              return (
+                <div key={f.id} className="flex items-center gap-1.5 rounded-lg bg-gray-50 px-2 py-1.5">
+                  {idx > 0 && (
+                    <span className="shrink-0 text-[10px] font-medium text-gray-400 w-6 text-center">
+                      {filterLogic === 'and' ? 'AND' : 'OR'}
+                    </span>
+                  )}
+                  {/* 列選択 */}
+                  <select
+                    value={f.propId}
+                    onChange={(e) => updateFilter(f.id, { propId: e.target.value })}
+                    className="rounded border border-gray-200 px-1.5 py-1 text-xs outline-none focus:border-brand-400 min-w-[100px]"
+                  >
+                    {schema.properties.map((p) => (
+                      <option key={p.id} value={p.id}>{TYPE_ICONS[p.type]} {p.name}</option>
+                    ))}
+                  </select>
+                  {/* 条件選択 */}
+                  <select
+                    value={f.operator}
+                    onChange={(e) => updateFilter(f.id, { operator: e.target.value as FilterOperator })}
+                    className="rounded border border-gray-200 px-1.5 py-1 text-xs outline-none focus:border-brand-400 min-w-[90px]"
+                  >
+                    {ops.map((op) => (
+                      <option key={op.value} value={op.value}>{op.label}</option>
+                    ))}
+                  </select>
+                  {/* 値入力 */}
+                  {needsValueInput(f.operator) && (
+                    <input
+                      value={f.value}
+                      onChange={(e) => updateFilter(f.id, { value: e.target.value })}
+                      placeholder="値"
+                      className="min-w-0 flex-1 rounded border border-gray-200 px-1.5 py-1 text-xs outline-none focus:border-brand-400"
+                    />
+                  )}
+                  <button
+                    onClick={() => removeFilter(f.id)}
+                    className="shrink-0 rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-400 text-xs"
+                  >✕</button>
+                </div>
+              );
+            })}
+          </div>
+
+          <button
+            onClick={addFilter}
+            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-100"
+          >
+            <span className="font-semibold">+</span>
+            <span>フィルターを追加</span>
+          </button>
+
+          {filters.length > 0 && (
+            <div className="mt-2 border-t border-gray-100 pt-2">
+              <button
+                onClick={() => { onChangeFilters([]); setOpen(false); }}
+                className="text-xs text-gray-400 hover:text-red-400"
+              >
+                すべてクリア
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── ソートパネル ────────────────────────────────────────────────────────────
+
+function SortPanel({
+  schema,
+  sorts,
+  onChangeSorts,
+}: {
+  schema: { properties: DbProperty[] };
+  sorts: SortItem[];
+  onChangeSorts: (s: SortItem[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const active = sorts.length > 0;
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const addSort = () => {
+    const firstProp = schema.properties[0];
+    if (!firstProp) return;
+    onChangeSorts([...sorts, { id: uuidv4(), propId: firstProp.id, dir: 'asc' }]);
+  };
+
+  const updateSort = (id: string, patch: Partial<SortItem>) => {
+    onChangeSorts(sorts.map((s) => s.id === id ? { ...s, ...patch } : s));
+  };
+
+  const removeSort = (id: string) => {
+    onChangeSorts(sorts.filter((s) => s.id !== id));
+  };
+
+  const moveSort = (id: string, direction: -1 | 1) => {
+    const idx = sorts.findIndex((s) => s.id === id);
+    if (idx < 0) return;
+    const next = [...sorts];
+    const target = idx + direction;
+    if (target < 0 || target >= next.length) return;
+    [next[idx], next[target]] = [next[target], next[idx]];
+    onChangeSorts(next);
+  };
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`flex items-center gap-1 rounded px-2.5 py-1 text-xs transition ${active ? 'bg-brand-50 text-brand-600 border border-brand-200' : 'text-gray-500 hover:bg-gray-100'}`}
+      >
+        <span>↕</span>
+        <span>ソート</span>
+        {active && <span className="ml-0.5 rounded-full bg-brand-500 text-white text-[9px] px-1">{sorts.length}</span>}
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-1 w-80 rounded-xl border border-gray-200 bg-white p-3 shadow-xl">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">並び替え</p>
+
+          {sorts.length === 0 && (
+            <p className="mb-2 text-xs text-gray-400">ソートが設定されていません</p>
+          )}
+
+          <div className="space-y-2 mb-2">
+            {sorts.map((s, idx) => (
+              <div key={s.id} className="flex items-center gap-1.5 rounded-lg bg-gray-50 px-2 py-1.5">
+                <span className="shrink-0 text-[10px] text-gray-400 w-4 text-center">{idx + 1}</span>
+                <select
+                  value={s.propId}
+                  onChange={(e) => updateSort(s.id, { propId: e.target.value })}
+                  className="min-w-0 flex-1 rounded border border-gray-200 px-1.5 py-1 text-xs outline-none focus:border-brand-400"
+                >
+                  {schema.properties.map((p) => (
+                    <option key={p.id} value={p.id}>{TYPE_ICONS[p.type]} {p.name}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => updateSort(s.id, { dir: s.dir === 'asc' ? 'desc' : 'asc' })}
+                  className="shrink-0 rounded border border-gray-200 px-2 py-1 text-xs hover:bg-gray-100"
+                  title="昇順/降順切替"
+                >
+                  {s.dir === 'asc' ? '▲ 昇順' : '▼ 降順'}
+                </button>
+                <div className="flex flex-col">
+                  <button onClick={() => moveSort(s.id, -1)} disabled={idx === 0} className="text-[9px] text-gray-300 hover:text-gray-500 disabled:opacity-20 leading-none">▲</button>
+                  <button onClick={() => moveSort(s.id, 1)} disabled={idx === sorts.length - 1} className="text-[9px] text-gray-300 hover:text-gray-500 disabled:opacity-20 leading-none">▼</button>
+                </div>
+                <button
+                  onClick={() => removeSort(s.id)}
+                  className="shrink-0 rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-400 text-xs"
+                >✕</button>
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={addSort}
+            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-100"
+          >
+            <span className="font-semibold">+</span>
+            <span>ソートを追加</span>
+          </button>
+
+          {sorts.length > 0 && (
+            <div className="mt-2 border-t border-gray-100 pt-2">
+              <button
+                onClick={() => { onChangeSorts([]); setOpen(false); }}
+                className="text-xs text-gray-400 hover:text-red-400"
+              >
+                すべてクリア
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── 集計セル ────────────────────────────────────────────────────────────────
+
+function AggregationCell({
+  aggType,
+  aggValue,
+  options,
+  onSelect,
+  onClear,
+}: {
+  aggType: AggregationType | null;
+  aggValue: string;
+  options: { value: AggregationType; label: string }[];
+  onSelect: (t: AggregationType) => void;
   onClear: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [propId, setPropId] = useState(schema.properties[0]?.id ?? '');
-  const [value, setValue] = useState('');
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -591,48 +1105,42 @@ function FilterBar({
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
-  const apply = () => {
-    if (value.trim()) { onChange({ propId, value: value.trim() }); }
-    setOpen(false);
-  };
+  const aggLabel = options.find((o) => o.value === aggType)?.label ?? '';
 
   return (
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className={`flex items-center gap-1 rounded px-2.5 py-1 text-xs transition ${filter ? 'bg-brand-50 text-brand-600 border border-brand-200' : 'text-gray-500 hover:bg-gray-100'}`}
+        className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] transition hover:bg-gray-100 ${aggType ? 'text-gray-600 font-medium' : 'text-gray-300'}`}
       >
-        <span>⊟</span>
-        <span>フィルター</span>
-        {filter && <span className="ml-0.5 text-[10px]">●</span>}
+        {aggType ? (
+          <>
+            <span className="text-gray-400">{aggLabel}</span>
+            <span className="font-semibold text-gray-700">{aggValue}</span>
+          </>
+        ) : (
+          <span>計算</span>
+        )}
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 w-64 rounded-xl border border-gray-200 bg-white p-3 shadow-xl">
-          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">列</p>
-          <select
-            value={propId}
-            onChange={(e) => setPropId(e.target.value)}
-            className="w-full rounded border border-gray-200 px-2 py-1 text-sm outline-none focus:border-brand-400 mb-2"
-          >
-            {schema.properties.map((p) => (
-              <option key={p.id} value={p.id}>{TYPE_ICONS[p.type]} {p.name}</option>
-            ))}
-          </select>
-          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">値を含む</p>
-          <input
-            autoFocus
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') apply(); if (e.key === 'Escape') setOpen(false); }}
-            placeholder="フィルター値"
-            className="w-full rounded border border-gray-200 px-2 py-1 text-sm outline-none focus:border-brand-400 mb-2"
-          />
-          <div className="flex gap-2">
-            <button onClick={apply} className="flex-1 rounded bg-brand-500 py-1.5 text-xs text-white hover:bg-brand-600">適用</button>
-            {filter && (
-              <button onClick={() => { onClear(); setValue(''); setOpen(false); }} className="flex-1 rounded border border-gray-200 py-1.5 text-xs text-gray-500 hover:bg-gray-50">クリア</button>
-            )}
-          </div>
+        <div className="absolute left-0 top-full z-30 mt-0.5 min-w-[100px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+          {aggType && (
+            <button
+              onClick={() => { onClear(); setOpen(false); }}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-400 hover:bg-gray-50"
+            >
+              ✕ なし
+            </button>
+          )}
+          {options.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => { onSelect(opt.value); setOpen(false); }}
+              className={`flex w-full items-center px-3 py-1.5 text-xs hover:bg-gray-50 ${aggType === opt.value ? 'bg-brand-50 text-brand-600 font-medium' : 'text-gray-600'}`}
+            >
+              {opt.label}
+            </button>
+          ))}
         </div>
       )}
     </div>
@@ -645,6 +1153,8 @@ function defaultWidth(type: DbPropertyType): number {
   if (type === 'checkbox') return 80;
   if (type === 'number') return 100;
   if (type === 'date') return 140;
+  if (type === 'url') return 220;
+  if (type === 'multiselect') return 200;
   return 180;
 }
 
@@ -660,8 +1170,9 @@ export function DatabaseView({ page, uid, onSaveSchema }: DatabaseViewProps) {
   const [newPropType, setNewPropType] = useState<DbPropertyType>('text');
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
-  const [sortState, setSortState] = useState<{ propId: string; dir: 'asc' | 'desc' } | null>(null);
-  const [filterState, setFilterState] = useState<{ propId: string; value: string } | null>(null);
+  const [sorts, setSorts] = useState<SortItem[]>([]);
+  const [filters, setFilters] = useState<FilterItem[]>([]);
+  const [filterLogic, setFilterLogic] = useState<'and' | 'or'>('and');
   const addPropRef = useRef<HTMLTableHeaderCellElement>(null);
 
   useEffect(() => {
@@ -744,7 +1255,7 @@ export function DatabaseView({ page, uid, onSaveSchema }: DatabaseViewProps) {
       id: uuidv4(),
       name: newPropName.trim(),
       type: newPropType,
-      options: newPropType === 'select' ? [] : undefined,
+      options: (newPropType === 'select' || newPropType === 'multiselect') ? [] : undefined,
     };
     saveSchema({ properties: [...schema.properties, newProp] });
     setNewPropName('');
@@ -760,10 +1271,6 @@ export function DatabaseView({ page, uid, onSaveSchema }: DatabaseViewProps) {
     await addRow(uid, page.id);
   };
 
-  const handleSort = (propId: string, dir: 'asc' | 'desc' | null) => {
-    setSortState(dir === null ? null : { propId, dir });
-  };
-
   const getCellValue = (row: DbRow, propId: string) => row.cells[propId] ?? null;
 
   const getCellText = (row: DbRow, propId: string): string => {
@@ -773,28 +1280,87 @@ export function DatabaseView({ page, uid, onSaveSchema }: DatabaseViewProps) {
     return String(val);
   };
 
-  // フィルタリング
-  let displayRows = filterState
+  // フィルタリング（複数・AND/OR）
+  const matchFilter = (row: DbRow, f: FilterItem): boolean => {
+    const prop = schema.properties.find((p) => p.id === f.propId);
+    if (!prop) return true;
+    const raw = row.cells[f.propId];
+    const strVal = getCellText(row, f.propId);
+
+    if (f.operator === 'is_empty') return !raw && raw !== 0 && raw !== false;
+    if (f.operator === 'is_not_empty') return raw != null && raw !== '';
+    if (f.operator === 'checked') return raw === true;
+    if (f.operator === 'unchecked') return raw !== true;
+
+    // select: IDからname解決
+    const resolvedText = (prop.type === 'select')
+      ? (prop.options?.find((o) => o.id === raw)?.name ?? '')
+      : strVal;
+
+    if (f.operator === 'contains') return resolvedText.toLowerCase().includes(f.value.toLowerCase());
+    if (f.operator === 'not_contains') return !resolvedText.toLowerCase().includes(f.value.toLowerCase());
+    if (f.operator === 'equals') return resolvedText.toLowerCase() === f.value.toLowerCase();
+
+    // 数値
+    const numRaw = typeof raw === 'number' ? raw : parseFloat(strVal);
+    const numVal = parseFloat(f.value);
+    if (!isNaN(numRaw) && !isNaN(numVal)) {
+      if (f.operator === 'gte') return numRaw >= numVal;
+      if (f.operator === 'lte') return numRaw <= numVal;
+      if (f.operator === 'gt') return numRaw > numVal;
+      if (f.operator === 'lt') return numRaw < numVal;
+    }
+
+    // 日付
+    if (f.operator === 'date_eq') return strVal === f.value;
+    if (f.operator === 'date_gte') return strVal >= f.value;
+    if (f.operator === 'date_lte') return strVal <= f.value;
+
+    return true;
+  };
+
+  let displayRows = filters.length > 0
     ? rows.filter((row) => {
-        const text = getCellText(row, filterState.propId).toLowerCase();
-        const prop = schema.properties.find((p) => p.id === filterState.propId);
-        if (prop?.type === 'select') {
-          const opt = prop.options?.find((o) => o.id === row.cells[filterState.propId]);
-          return (opt?.name ?? '').toLowerCase().includes(filterState.value.toLowerCase());
-        }
-        return text.includes(filterState.value.toLowerCase());
+        if (filterLogic === 'and') return filters.every((f) => matchFilter(row, f));
+        return filters.some((f) => matchFilter(row, f));
       })
     : rows;
 
-  // ソート
-  if (sortState) {
-    const { propId, dir } = sortState;
+  // ソート（複数・優先順位順）
+  if (sorts.length > 0) {
     displayRows = [...displayRows].sort((a, b) => {
-      const av = getCellText(a, propId);
-      const bv = getCellText(b, propId);
-      return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+      for (const s of sorts) {
+        const av = getCellText(a, s.propId);
+        const bv = getCellText(b, s.propId);
+        const cmp = av.localeCompare(bv, 'ja');
+        if (cmp !== 0) return s.dir === 'asc' ? cmp : -cmp;
+      }
+      return 0;
     });
   }
+
+  // 集計行の計算
+  const computeAggregation = (propId: string, type: AggregationType): string => {
+    const prop = schema.properties.find((p) => p.id === propId);
+    if (!prop) return '';
+    const values = displayRows.map((r) => r.cells[propId]);
+    if (type === 'count') {
+      return String(values.filter((v) => v != null && v !== '').length);
+    }
+    const nums = values.map((v) => typeof v === 'number' ? v : parseFloat(String(v ?? ''))).filter((n) => !isNaN(n));
+    if (nums.length === 0) return '';
+    if (type === 'sum') return String(nums.reduce((a, b) => a + b, 0));
+    if (type === 'avg') return (nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(2);
+    if (type === 'min') return String(Math.min(...nums));
+    if (type === 'max') return String(Math.max(...nums));
+    return '';
+  };
+
+  const handleSetAggregation = (propId: string, type: AggregationType | null) => {
+    const aggs = { ...(schema.aggregations ?? {}) };
+    if (type === null) { delete aggs[propId]; } else { aggs[propId] = type; }
+    saveSchema({ ...schema, aggregations: aggs });
+  };
 
   const selectedRow = selectedRowId ? rows.find((r) => r.id === selectedRowId) ?? null : null;
 
@@ -804,22 +1370,18 @@ export function DatabaseView({ page, uid, onSaveSchema }: DatabaseViewProps) {
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* ツールバー */}
         <div className="flex items-center gap-2 border-b border-gray-100 px-6 py-2">
-          <FilterBar
+          <FilterPanel
             schema={schema}
-            filter={filterState}
-            onChange={setFilterState}
-            onClear={() => setFilterState(null)}
+            filters={filters}
+            filterLogic={filterLogic}
+            onChangeFilters={setFilters}
+            onChangeLogic={setFilterLogic}
           />
-          {sortState && (
-            <button
-              onClick={() => setSortState(null)}
-              className="flex items-center gap-1 rounded px-2.5 py-1 text-xs bg-brand-50 text-brand-600 border border-brand-200"
-            >
-              <span>{sortState.dir === 'asc' ? '▲' : '▼'}</span>
-              <span>{schema.properties.find((p) => p.id === sortState.propId)?.name}</span>
-              <span className="ml-0.5 text-[10px]">✕</span>
-            </button>
-          )}
+          <SortPanel
+            schema={schema}
+            sorts={sorts}
+            onChangeSorts={setSorts}
+          />
           <span className="ml-auto text-[11px] text-gray-400">{displayRows.length} 件</span>
         </div>
 
@@ -827,26 +1389,43 @@ export function DatabaseView({ page, uid, onSaveSchema }: DatabaseViewProps) {
           <table className="border-collapse text-sm w-full min-w-max">
             <thead>
               <tr className="border-b border-gray-200">
-                {schema.properties.map((prop) => (
-                  <th
-                    key={prop.id}
-                    className="relative group border-r border-gray-100 bg-gray-50 text-left font-normal min-w-[60px]"
-                    style={{ width: prop.width ?? defaultWidth(prop.type) }}
-                  >
-                    <PropertyHeader
-                      prop={prop}
-                      sortState={sortState}
-                      onRename={(name) => handleRenameProp(prop.id, name)}
-                      onDelete={() => handleDeleteProp(prop.id)}
-                      onUpdateOptions={(opts) => handleUpdateOptions(prop.id, opts)}
-                      onSort={handleSort}
-                    />
-                    <div
-                      className="absolute right-0 top-0 h-full w-1 cursor-col-resize opacity-0 hover:opacity-100 hover:bg-brand-400 group-hover:opacity-30"
-                      onMouseDown={(e) => handleColResizeStart(e, prop.id, prop.width ?? defaultWidth(prop.type))}
-                    />
-                  </th>
-                ))}
+                {schema.properties.map((prop) => {
+                  const activeSortIdx = sorts.findIndex((s) => s.propId === prop.id);
+                  // PropertyHeader は単一ソート互換のダミーを渡す（ヘッダークリックは無効化）
+                  const dummySortState = activeSortIdx >= 0
+                    ? { propId: prop.id, dir: sorts[activeSortIdx].dir }
+                    : null;
+                  return (
+                    <th
+                      key={prop.id}
+                      className="relative group border-r border-gray-100 bg-gray-50 text-left font-normal min-w-[60px]"
+                      style={{ width: prop.width ?? defaultWidth(prop.type) }}
+                    >
+                      <PropertyHeader
+                        prop={prop}
+                        sortState={dummySortState}
+                        onRename={(name) => handleRenameProp(prop.id, name)}
+                        onDelete={() => handleDeleteProp(prop.id)}
+                        onUpdateOptions={(opts) => handleUpdateOptions(prop.id, opts)}
+                        onSort={(pid, dir) => {
+                          if (dir === null) {
+                            setSorts((prev) => prev.filter((s) => s.propId !== pid));
+                          } else {
+                            setSorts((prev) => {
+                              const exists = prev.find((s) => s.propId === pid);
+                              if (exists) return prev.map((s) => s.propId === pid ? { ...s, dir } : s);
+                              return [...prev, { id: uuidv4(), propId: pid, dir }];
+                            });
+                          }
+                        }}
+                      />
+                      <div
+                        className="absolute right-0 top-0 h-full w-1 cursor-col-resize opacity-0 hover:opacity-100 hover:bg-brand-400 group-hover:opacity-30"
+                        onMouseDown={(e) => handleColResizeStart(e, prop.id, prop.width ?? defaultWidth(prop.type))}
+                      />
+                    </th>
+                  );
+                })}
                 <th className="relative bg-gray-50 px-2 py-1 w-10" ref={addPropRef}>
                   <button
                     onClick={() => setAddingProp((v) => !v)}
@@ -904,7 +1483,7 @@ export function DatabaseView({ page, uid, onSaveSchema }: DatabaseViewProps) {
                   {schema.properties.map((prop, propIdx) => {
                     const raw = getCellValue(row, prop.id);
                     return (
-                      <td key={prop.id} className="border-r border-gray-100 px-1 py-1 align-middle">
+                      <td key={prop.id} className="border-r border-gray-100 px-1 py-1.5 align-middle">
                         {propIdx === 0 && (
                           <div className="flex items-center">
                             <div className="flex-1 min-w-0">
@@ -942,6 +1521,13 @@ export function DatabaseView({ page, uid, onSaveSchema }: DatabaseViewProps) {
                             onSave={(v) => handleCellSave(row, prop.id, v)}
                           />
                         )}
+                        {prop.type === 'multiselect' && (
+                          <MultiSelectCell
+                            value={typeof raw === 'string' ? raw : ''}
+                            options={prop.options ?? []}
+                            onSave={(v) => handleCellSave(row, prop.id, v)}
+                          />
+                        )}
                         {prop.type === 'checkbox' && (
                           <CheckboxCell
                             value={typeof raw === 'boolean' ? raw : false}
@@ -954,11 +1540,17 @@ export function DatabaseView({ page, uid, onSaveSchema }: DatabaseViewProps) {
                             onSave={(v) => handleCellSave(row, prop.id, v)}
                           />
                         )}
+                        {prop.type === 'url' && (
+                          <UrlCell
+                            value={typeof raw === 'string' ? raw : ''}
+                            onSave={(v) => handleCellSave(row, prop.id, v)}
+                          />
+                        )}
                       </td>
                     );
                   })}
                   <td className="border-r border-gray-100" />
-                  <td className="px-1 py-1 text-center align-middle w-8">
+                  <td className="px-1 py-1.5 text-center align-middle w-8">
                     <button
                       onClick={() => removeRow(uid, row.id)}
                       className={`text-gray-300 hover:text-red-400 text-sm transition ${hoveredRow === row.id ? 'opacity-100' : 'opacity-0'}`}
@@ -970,6 +1562,40 @@ export function DatabaseView({ page, uid, onSaveSchema }: DatabaseViewProps) {
                 </tr>
               ))}
             </tbody>
+
+            {/* 集計行 */}
+            <tfoot>
+              <tr className="border-t border-gray-200 bg-gray-50">
+                {schema.properties.map((prop) => {
+                  const aggType = schema.aggregations?.[prop.id] ?? null;
+                  const aggValue = aggType ? computeAggregation(prop.id, aggType) : '';
+                  const isNumber = prop.type === 'number';
+                  const aggOptions: { value: AggregationType; label: string }[] = isNumber
+                    ? [
+                        { value: 'count', label: '件数' },
+                        { value: 'sum', label: '合計' },
+                        { value: 'avg', label: '平均' },
+                        { value: 'min', label: '最小' },
+                        { value: 'max', label: '最大' },
+                      ]
+                    : [{ value: 'count', label: '件数' }];
+
+                  return (
+                    <td key={prop.id} className="border-r border-gray-100 px-2 py-1 align-middle">
+                      <AggregationCell
+                        aggType={aggType}
+                        aggValue={aggValue}
+                        options={aggOptions}
+                        onSelect={(t) => handleSetAggregation(prop.id, t)}
+                        onClear={() => handleSetAggregation(prop.id, null)}
+                      />
+                    </td>
+                  );
+                })}
+                <td className="border-r border-gray-100" />
+                <td className="w-8" />
+              </tr>
+            </tfoot>
           </table>
 
           <button
