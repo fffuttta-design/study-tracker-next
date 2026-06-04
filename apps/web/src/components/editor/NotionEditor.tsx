@@ -1583,6 +1583,18 @@ export function NotionEditor({
     }
   }, [editor, user, addPage, onSave, router, onPageNavigate]);
 
+  const handleCtxCreateDatabase = useCallback(async () => {
+    setCtxMenu(null);
+    if (!editor || !user) return;
+    const newDb = await addPage(user.uid, { type: 'database' });
+    // インラインデータベースノードを挿入
+    editor.chain().focus().insertContent({
+      type: 'inlineDatabase',
+      attrs: { databaseId: newDb.id, title: newDb.title || 'データベース' },
+    }).run();
+    await onSave(titleValue.current, JSON.stringify(editor.getJSON()));
+  }, [editor, user, addPage, onSave]);
+
   const handleCtxCallout = useCallback(() => {
     setCtxMenu(null);
     editor?.chain().focus().insertContent({ type: 'callout', attrs: { background: '#FEF9CD' }, content: [{ type: 'paragraph' }] }).run();
@@ -1838,6 +1850,9 @@ export function NotionEditor({
                   <span className="text-base">📖</span>ブックを作成
                 </button>
               )}
+              <button onClick={handleCtxCreateDatabase} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
+                <span className="text-base">📊</span>データベースを作成
+              </button>
               <button onClick={handleCtxCallout} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
                 <span className="text-base">💡</span>コールアウトを挿入
               </button>
