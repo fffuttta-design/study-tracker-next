@@ -54,7 +54,7 @@ export default function LearningScreen({ navigation, route }: any) {
 
   // review タブ用セクションリスト（ステージごとにグループ化）
   const reviewSections = useMemo(() => {
-    const dueItems = items.filter(i => !isFullyCompleted(i) && hasDueReview(i));
+    const dueItems = items.filter(i => !!i.notionPageId && !isFullyCompleted(i) && hasDueReview(i));
     return REVIEW_STAGE_LABELS.map((label, i) => ({
       key:        String(i),
       label,
@@ -69,7 +69,7 @@ export default function LearningScreen({ navigation, route }: any) {
   }, [items]);
 
   const reviewCount = useMemo(
-    () => items.filter(i => !isFullyCompleted(i) && hasDueReview(i)).length,
+    () => items.filter(i => !!i.notionPageId && !isFullyCompleted(i) && hasDueReview(i)).length,
     [items],
   );
 

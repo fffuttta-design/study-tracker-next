@@ -42,7 +42,7 @@ export default function HomeScreen({ navigation }: any) {
   const inboxItems    = useMemo(() => todayItems.filter(i => !i.notionPageId),  [todayItems]);
 
   const dueItems = useMemo(
-    () => items.filter(i => !isFullyCompleted(i) && hasDueReview(i)),
+    () => items.filter(i => !!i.notionPageId && !isFullyCompleted(i) && hasDueReview(i)),
     [items],
   );
 
@@ -73,6 +73,8 @@ export default function HomeScreen({ navigation }: any) {
 
   // 今日の復習: 展開中カードID
   const [expandedDueId, setExpandedDueId] = useState<string | null>(null);
+  // ⚡ 特急メモ詳細表示
+  const [selectedInboxItem, setSelectedInboxItem] = useState<LearningItem | null>(null);
   // ⚡ 特急クイック入力
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickTitle, setQuickTitle] = useState('');
@@ -161,6 +163,44 @@ export default function HomeScreen({ navigation }: any) {
           </Modal>
         </View>
 
+        {/* ⚡ 特急メモ詳細モーダル */}
+        {selectedInboxItem && (
+          <Modal visible={true} transparent animationType="fade" onRequestClose={() => setSelectedInboxItem(null)}>
+            <View style={styles.quickOverlay}>
+              <View style={[styles.quickModal, { maxHeight: '80%' }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <Text style={[styles.quickLabel, { flex: 1 }]} numberOfLines={2}>{selectedInboxItem.title}</Text>
+                  <TouchableOpacity onPress={() => setSelectedInboxItem(null)} style={{ padding: 4 }}>
+                    <Text style={{ fontSize: 18, color: '#9ca3af' }}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+                <ScrollView style={{ maxHeight: 320 }} keyboardShouldPersistTaps="handled">
+                  {selectedInboxItem.content ? (
+                    <ContentRenderer content={selectedInboxItem.content} baseTextColor="#374151" />
+                  ) : (
+                    <Text style={{ color: '#9ca3af', fontSize: 13 }}>内容なし</Text>
+                  )}
+                </ScrollView>
+                <View style={[styles.quickBtns, { marginTop: 12 }]}>
+                  <TouchableOpacity style={styles.quickCancel} onPress={() => setSelectedInboxItem(null)}>
+                    <Text style={styles.quickCancelText}>閉じる</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.quickSave}
+                    onPress={() => {
+                      const id = selectedInboxItem.id;
+                      setSelectedInboxItem(null);
+                      navigation.navigate('Learning', { itemId: id, initialTab: 'today' });
+                    }}
+                  >
+                    <Text style={styles.quickSaveText}>リストで開く</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+        )}
+
         {/* 統計（今週 + 累計）※ ローディング中は表示しない */}
         {!itemsLoading && (
           <View style={styles.statsRow}>
@@ -182,7 +222,7 @@ export default function HomeScreen({ navigation }: any) {
               <HomeItemChip
                 key={item.id}
                 item={item}
-                onPress={() => navigation.navigate('Learning', { itemId: item.id, initialTab: 'today' })}
+                onPress={() => setSelectedInboxItem(item)}
               />
             ))}
           </View>
