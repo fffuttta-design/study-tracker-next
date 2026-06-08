@@ -17,7 +17,7 @@ interface LearningState {
   // actions
   subscribeItems: (uid: string) => () => void;
   subscribeCategories: (uid: string) => () => void;
-  addItem: (uid: string, item: Omit<LearningItem, 'id' | 'reviews' | 'sortOrder' | 'createdAt'>) => Promise<void>;
+  addItem: (uid: string, item: Omit<LearningItem, 'id' | 'reviews' | 'sortOrder' | 'createdAt'>, skipReviews?: boolean) => Promise<void>;
   completeReview: (uid: string, itemId: string, stageIndex: number) => Promise<void>;
   deleteItem: (uid: string, itemId: string) => Promise<void>;
   updateItemContent: (uid: string, itemId: string, content: string) => Promise<void>;
@@ -61,9 +61,10 @@ export const useLearningStore = create<LearningState>(set => ({
     return unsub;
   },
 
-  addItem: async (uid, itemData) => {
+  addItem: async (uid, itemData, skipReviews = false) => {
     const dateKey = itemData.dateKey || localDateKey();
-    const reviews = createReviews(dateKey);
+    // skipReviews=true（特急メモ）はレビューを作らない → 復習ルーティンに上がらない
+    const reviews = skipReviews ? [] : createReviews(dateKey);
     const snap = await firestore()
       .collection(COLLECTIONS.learningItems(uid))
       .orderBy('sortOrder', 'desc')

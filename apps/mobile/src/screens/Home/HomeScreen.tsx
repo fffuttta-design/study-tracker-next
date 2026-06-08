@@ -83,7 +83,8 @@ export default function HomeScreen({ navigation }: any) {
   const handleQuickSave = async () => {
     if (!quickTitle.trim() || !user) return;
     try {
-      await addItem(user.uid, { title: quickTitle.trim(), content: quickContent.trim(), dateKey: localDateKey() });
+      // skipReviews=true: 特急メモは最初からレビュースケジュールを作らない
+      await addItem(user.uid, { title: quickTitle.trim(), content: quickContent.trim(), dateKey: localDateKey() }, true);
       setQuickTitle('');
       setQuickContent('');
       setQuickOpen(false);

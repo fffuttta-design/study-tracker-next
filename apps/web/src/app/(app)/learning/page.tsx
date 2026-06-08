@@ -117,7 +117,8 @@ function LearningPageContent() {
     () => items.filter((i) => i.dateKey === dateKey).sort((a, b) => a.sortOrder - b.sortOrder),
     [items, dateKey]
   );
-  const dueItems = useMemo(() => items.filter(hasDueReview), [items]);
+  // notionPageId なし（特急メモ）は復習ルーティンに含めない
+  const dueItems = useMemo(() => items.filter(i => !!i.notionPageId && hasDueReview(i)), [items]);
   // 特急メモ = notionPageId が未設定のアイテム（インボックス）
   const inboxItems = useMemo(
     () => items.filter((i) => !i.notionPageId).sort((a, b) =>

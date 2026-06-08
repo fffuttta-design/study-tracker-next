@@ -93,7 +93,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   // Electron に復習件数・通知時刻を送信
   useEffect(() => {
     if (!user || typeof window === 'undefined') return;
-    window.electronAPI?.setReviewCount?.(items.filter(hasDueReview).length);
+    // notionPageId なし（特急メモ）は復習件数に含めない
+    window.electronAPI?.setReviewCount?.(items.filter(i => !!i.notionPageId && hasDueReview(i)).length);
   }, [items, user]);
 
   useEffect(() => {
