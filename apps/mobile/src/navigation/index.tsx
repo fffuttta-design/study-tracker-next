@@ -1,4 +1,5 @@
 import React, { createRef } from 'react';
+import { View, ActivityIndicator } from 'react-native';
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 
 export const navigationRef = createRef<NavigationContainerRef<any>>();
@@ -55,7 +56,12 @@ function MainTabs() {
 export default function AppNavigator() {
   const { user, loading } = useAuthStore();
 
-  if (loading) return null;
+  // ローディング中はスピナー表示（null だと真っ暗なまま）
+  if (loading) return (
+    <View style={{ flex: 1, backgroundColor: '#f9fafb', alignItems: 'center', justifyContent: 'center' }}>
+      <ActivityIndicator size="large" color="#F59E0B" />
+    </View>
+  );
 
   return (
     <NavigationContainer ref={navigationRef}>
