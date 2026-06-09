@@ -37,9 +37,15 @@ export default function HomeScreen({ navigation }: any) {
   const today = localDateKey();
 
   const todayItems  = useMemo(() => items.filter(i => i.dateKey === today), [items, today]);
-  // 消化済み（通常記録）と特急メモを分離
+  // 今日の登録（通常記録のみ）
   const digestedItems = useMemo(() => todayItems.filter(i => !!i.notionPageId), [todayItems]);
-  const inboxItems    = useMemo(() => todayItems.filter(i => !i.notionPageId),  [todayItems]);
+  // 特急メモ = notionPageId未設定のアイテム全件（日付問わず）
+  const inboxItems = useMemo(
+    () => items.filter(i => !i.notionPageId).sort((a, b) =>
+      new Date(b.createdAt ?? b.dateKey).getTime() - new Date(a.createdAt ?? a.dateKey).getTime()
+    ),
+    [items]
+  );
 
   const dueItems = useMemo(
     () => items.filter(i => !!i.notionPageId && !isFullyCompleted(i) && hasDueReview(i)),
