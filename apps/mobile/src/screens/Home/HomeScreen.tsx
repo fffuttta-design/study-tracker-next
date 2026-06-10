@@ -12,7 +12,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../store/authStore';
 import { useLearningStore } from '../../store/learningStore';
-import { useNotionStore } from '../../store/notionStore';
 import { EditorPreloader } from '../../components/EditorPreloader';
 import { LearningItem, hasDueReview, isFullyCompleted, localDateKey, REVIEW_STAGE_LABELS, toggleTipTapTask } from '../../types';
 
@@ -22,17 +21,8 @@ import { ContentRenderer } from '../../components/ContentRenderer';
 
 export default function HomeScreen({ navigation }: any) {
   const { user } = useAuthStore();
-  const { items, loading: itemsLoading, subscribeItems, subscribeCategories, completeReview, updateItemContent, addItem } = useLearningStore();
-  const { subscribePages: subscribeNotionPages } = useNotionStore();
-
-  useEffect(() => {
-    if (!user) return;
-    const unsub1 = subscribeItems(user.uid);
-    const unsub2 = subscribeCategories(user.uid);
-    // HomeScreenで常時購読することでタブ切替時のフラッシュを防ぐ
-    const unsub3 = subscribeNotionPages(user.uid);
-    return () => { unsub1(); unsub2(); unsub3(); };
-  }, [user]);
+  // Firestore購読はApp.tsx AuthListenerで認証直後に開始済み（先行取得）
+  const { items, loading: itemsLoading, completeReview, updateItemContent, addItem } = useLearningStore();
 
   const today = localDateKey();
 
