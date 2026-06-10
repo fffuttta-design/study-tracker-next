@@ -6,12 +6,31 @@
 
 import { Alert, Platform } from 'react-native';
 import RNBlobUtil from 'react-native-blob-util';
+import RNFS from 'react-native-fs';
+
+// 「後で」を押したビルド番号を保存し、同一バージョンでは自動アラートを再表示しない
+const PREFS_PATH = `${RNFS.DocumentDirectoryPath}/update_prefs.json`;
+
+async function getDismissedBuild(): Promise<number> {
+  try {
+    const content = await RNFS.readFile(PREFS_PATH, 'utf8');
+    return JSON.parse(content).dismissedBuild ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function saveDismissedBuild(buildNumber: number): Promise<void> {
+  try {
+    await RNFS.writeFile(PREFS_PATH, JSON.stringify({ dismissedBuild: buildNumber }), 'utf8');
+  } catch {}
+}
 
 const GITHUB_VERSION_URL =
   'https://api.github.com/repos/fffuttta-design/study-tracker-next/contents/apps/mobile/version.json';
 
-export const CURRENT_BUILD_NUMBER = 209;
-export const CURRENT_VERSION      = '1.0.189';
+export const CURRENT_BUILD_NUMBER = 210;
+export const CURRENT_VERSION      = '1.0.190';
 
 async function fetchVersionJson(): Promise<
   { ok: true; data: { version: string; buildNumber: number; builtAt: string; apkUrl: string } } |
@@ -110,6 +129,12 @@ export async function checkForUpdate(
     return;
   }
 
+  // 自動チェック時: 同一バージョンで「後で」済みならスキップ
+  if (!manual) {
+    const dismissed = await getDismissedBuild();
+    if (dismissed >= remote.buildNumber) return;
+  }
+
   const doDownload = async (onProgress?: (pct: number) => void) => {
     const apkPath = await downloadApk(remote.apkUrl, onProgress);
     if (!apkPath) {
@@ -123,7 +148,11 @@ export async function checkForUpdate(
     'アップデートがあります 🎉',
     `現在: v${CURRENT_VERSION}\n最新: v${remote.version}\n\n${manual ? '今すぐ更新しますか？' : '設定画面からアップデートできます'}`,
     [
-      { text: '後で', style: 'cancel' },
+      {
+        text: '後で',
+        style: 'cancel',
+        onPress: manual ? undefined : () => { saveDismissedBuild(remote.buildNumber); },
+      },
       {
         text: manual ? '今すぐ更新' : '設定画面へ',
         onPress: () => onConfirmed?.(doDownload),

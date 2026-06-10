@@ -12,17 +12,17 @@ import { navigationRef } from './src/navigation';
  * Firebase Auth リスナー
  *
  * Android コールドスタートでは Native モジュールの初期化が完了する前に
- * auth() が呼ばれるとクラッシュする場合がある（EditorPreloader と同じ問題）。
- * 500ms の遅延を入れることで初期化競合を回避する。
+ * auth() が呼ばれるとクラッシュする場合がある。
+ * 1000ms 待機 + 最大4回リトライ（700ms 間隔）で初期化完了を待つ。
  */
 function AuthListener() {
   const { setUser, setLoading } = useAuthStore();
 
   useEffect(() => {
     let unsubscribeFn: (() => void) | undefined;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
-    // ネイティブモジュールの初期化を待ってから Firebase Auth を開始
-    const timer = setTimeout(() => {
+    const tryInit = (attempt = 0) => {
       try {
         unsubscribeFn = auth().onAuthStateChanged(user => {
           setUser(user);
@@ -35,14 +35,21 @@ function AuthListener() {
           }
         });
       } catch (e) {
-        // 初期化エラー時はローディングを解除してログイン画面へ
-        console.warn('[AuthListener] Firebase auth init error:', e);
-        setLoading(false);
+        console.warn(`[AuthListener] Firebase auth init error (attempt ${attempt + 1}/4):`, e);
+        if (attempt < 3) {
+          retryTimer = setTimeout(() => tryInit(attempt + 1), 700);
+        } else {
+          // 4回失敗したらローディングを解除してログイン画面へ
+          setLoading(false);
+        }
       }
-    }, 500);
+    };
+
+    const timer = setTimeout(() => tryInit(), 1000);
 
     return () => {
       clearTimeout(timer);
+      clearTimeout(retryTimer);
       unsubscribeFn?.();
     };
   }, []);
