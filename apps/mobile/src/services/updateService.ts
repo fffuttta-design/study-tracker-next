@@ -29,8 +29,8 @@ async function saveDismissedBuild(buildNumber: number): Promise<void> {
 const GITHUB_VERSION_URL =
   'https://api.github.com/repos/fffuttta-design/study-tracker-next/contents/apps/mobile/version.json';
 
-export const CURRENT_BUILD_NUMBER = 213;
-export const CURRENT_VERSION      = '1.0.193';
+export const CURRENT_BUILD_NUMBER = 214;
+export const CURRENT_VERSION      = '1.0.194';
 
 async function fetchVersionJson(): Promise<
   { ok: true; data: { version: string; buildNumber: number; builtAt: string; apkUrl: string } } |
