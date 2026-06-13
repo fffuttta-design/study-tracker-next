@@ -150,17 +150,23 @@ try {
   console.log('[build-and-sync] Android Debug ビルド完了 ✓')
 
   // electron-builder が作成した Release (v${newVersion}) に APK を追加アップロード
-  const releaseTag = `v${newVersion}`
+  const releaseTag  = `v${newVersion}`
+  // gh release upload はファイル名をそのまま使う。正しい名前でコピーしてからアップロード
+  const apkFinalPath = path.join(path.dirname(apkDebugPath), 'study-tracker.apk')
   if (existsSync(apkDebugPath) && ghToken) {
     try {
+      const { copyFileSync } = await import('fs')
+      copyFileSync(apkDebugPath, apkFinalPath)
       execSync(
-        `gh release upload "${releaseTag}" "${apkDebugPath}#study-tracker.apk" --clobber`,
+        `gh release upload "${releaseTag}" "${apkFinalPath}" --clobber`,
         { cwd: ROOT, stdio: 'pipe' }
       )
       const downloadUrl = `https://github.com/fffuttta-design/study-tracker-next/releases/download/${releaseTag}/study-tracker.apk`
       const versionJsonWithUrl = JSON.stringify({ ...newBuildInfo, downloadUrl }, null, 2) + '\n'
       writeFileSync(path.join(ROOT, 'apps', 'mobile', 'version.json'), versionJsonWithUrl, 'utf-8')
-      console.log(`[build-and-sync] APK アップロード完了 ✓ (${releaseTag})`)
+      // draft を外して公開（electron-updater は draft を無視するため必須）
+      execSync(`gh release edit "${releaseTag}" --draft=false --latest`, { cwd: ROOT, stdio: 'pipe' })
+      console.log(`[build-and-sync] APK アップロード & Release 公開完了 ✓ (${releaseTag})`)
       console.log(`[build-and-sync] downloadUrl: ${downloadUrl}`)
     } catch (e) {
       console.warn('[build-and-sync] APK アップロード失敗:', e.message)
