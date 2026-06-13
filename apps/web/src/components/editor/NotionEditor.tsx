@@ -29,7 +29,7 @@ import { TextStyle, Color } from '@tiptap/extension-text-style';
 import Underline from '@tiptap/extension-underline';
 import Youtube from '@tiptap/extension-youtube';
 import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
-import { DragHandleExtension } from './DragHandleExtension';
+import { DragHandleExtension, setDragHandleVertOffset } from './DragHandleExtension';
 import { AnnotationMark } from './AnnotationMark';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -1156,6 +1156,8 @@ export function NotionEditor({
   const notionPlusParaLineHeight = useSettingsStore((s) => s.notionPlusParaLineHeight);
   const notionPlusSoftLineHeight = useSettingsStore((s) => s.notionPlusSoftLineHeight);
   const notionPlusBlockOffsets = useSettingsStore((s) => s.notionPlusBlockOffsets);
+  const dragHandleOffset = useSettingsStore((s) => s.dragHandleOffset);
+  useEffect(() => { setDragHandleVertOffset(dragHandleOffset ?? 0); }, [dragHandleOffset]);
   const router = useRouter();
   const titleRef = useRef<HTMLInputElement>(null);
   const titleValue = useRef(initialTitle);

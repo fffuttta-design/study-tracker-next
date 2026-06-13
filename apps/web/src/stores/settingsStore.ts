@@ -44,6 +44,9 @@ interface SettingsState {
   // NotionPlus 前回表示ページ
   lastViewedNotionPageId: string | null;
   setLastViewedNotionPageId: (id: string | null) => void;
+  // ドラッグハンドル縦オフセット (px)
+  dragHandleOffset: number;
+  setDragHandleOffset: (n: number) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -67,6 +70,8 @@ export const useSettingsStore = create<SettingsState>()(
       setQuickMemoDefaultRows: (n) => set({ quickMemoDefaultRows: n }),
       lastViewedNotionPageId: null,
       setLastViewedNotionPageId: (id) => set({ lastViewedNotionPageId: id }),
+      dragHandleOffset: 0,
+      setDragHandleOffset: (n) => set({ dragHandleOffset: n }),
     }),
     { name: 'study-tracker-settings' }
   )

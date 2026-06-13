@@ -120,6 +120,7 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
     notionPlusParaLineHeight, setNotionPlusParaLineHeight,
     notionPlusSoftLineHeight, setNotionPlusSoftLineHeight,
     notionPlusBlockOffsets, setNotionPlusBlockOffsets, resetNotionPlusBlockOffsets,
+    dragHandleOffset, setDragHandleOffset,
     setLastViewedNotionPageId,
   } = useSettingsStore();
   const [saving, setSaving] = useState(false);
@@ -788,8 +789,9 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
       {blockOffsetOpen && (
         <BlockOffsetDialog
           offsets={notionPlusBlockOffsets ?? DEFAULT_BLOCK_OFFSETS}
-          onSave={(o) => { setNotionPlusBlockOffsets(o); setBlockOffsetOpen(false); }}
-          onReset={resetNotionPlusBlockOffsets}
+          dragHandleOffset={dragHandleOffset ?? 0}
+          onSave={(o, dh) => { setNotionPlusBlockOffsets(o); setDragHandleOffset(dh); setBlockOffsetOpen(false); }}
+          onReset={() => { resetNotionPlusBlockOffsets(); setDragHandleOffset(0); }}
           onClose={() => setBlockOffsetOpen(false)}
         />
       )}
@@ -813,22 +815,29 @@ const BLOCK_OFFSET_ROWS: Array<{ key: keyof NotionBlockOffsets; label: string; i
 
 function BlockOffsetDialog({
   offsets,
+  dragHandleOffset,
   onSave,
   onReset,
   onClose,
 }: {
   offsets: NotionBlockOffsets;
-  onSave: (o: NotionBlockOffsets) => void;
+  dragHandleOffset: number;
+  onSave: (o: NotionBlockOffsets, dragHandle: number) => void;
   onReset: () => void;
   onClose: () => void;
 }) {
   const [draft, setDraft] = useState<NotionBlockOffsets>({ ...offsets });
+  const [draftDragHandle, setDraftDragHandle] = useState(dragHandleOffset);
 
   const adjust = (key: keyof NotionBlockOffsets, delta: number) => {
     setDraft((prev) => ({
       ...prev,
       [key]: Math.round((prev[key] + delta) * 10) / 10,
     }));
+  };
+
+  const adjustDragHandle = (delta: number) => {
+    setDraftDragHandle((prev) => Math.round((prev + delta) * 10) / 10);
   };
 
   return (
@@ -878,10 +887,34 @@ function BlockOffsetDialog({
           ))}
         </div>
 
+        {/* ドラッグハンドル行（区切り線で分離） */}
+        <div className="border-t border-gray-100 px-5 pt-3 pb-1">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">ドラッグハンドル</p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 w-40">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-gray-100 text-[10px] font-bold text-gray-500">⋮⋮</span>
+              <span className="text-sm text-gray-700">縦位置</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => adjustDragHandle(-0.5)}
+                className="flex h-6 w-6 items-center justify-center rounded border border-gray-200 text-sm text-gray-500 hover:bg-gray-50"
+              >−</button>
+              <span className="w-10 text-center text-sm tabular-nums text-gray-700">{draftDragHandle.toFixed(1)}</span>
+              <span className="text-xs text-gray-400">px</span>
+              <button
+                onClick={() => adjustDragHandle(0.5)}
+                className="flex h-6 w-6 items-center justify-center rounded border border-gray-200 text-sm text-gray-500 hover:bg-gray-50"
+              >+</button>
+            </div>
+          </div>
+          <p className="mt-1 text-[10px] text-gray-400">0 = 中央揃え基準。上にズレているなら + で下げる</p>
+        </div>
+
         {/* フッター */}
         <div className="flex items-center justify-between border-t border-gray-100 px-5 py-3">
           <button
-            onClick={() => { onReset(); setDraft({ ...DEFAULT_BLOCK_OFFSETS }); }}
+            onClick={() => { onReset(); setDraft({ ...DEFAULT_BLOCK_OFFSETS }); setDraftDragHandle(0); }}
             className="text-xs text-gray-400 hover:text-gray-600 hover:underline"
           >
             ↺ デフォルトに戻す
@@ -894,7 +927,7 @@ function BlockOffsetDialog({
               閉じる
             </button>
             <button
-              onClick={() => onSave(draft)}
+              onClick={() => onSave(draft, draftDragHandle)}
               className="rounded-lg bg-brand-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-600"
             >
               ✓ 確定

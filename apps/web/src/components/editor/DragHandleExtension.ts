@@ -13,6 +13,10 @@ interface PmViewInternal {
 
 const DRAG_HANDLE_KEY = new PluginKey('dragHandle');
 
+// 外部から縦オフセット(px)を設定できる口。NotionEditor から useEffect で呼ぶ
+let _offset = 0;
+export function setDragHandleVertOffset(n: number) { _offset = n; }
+
 function dragHandlePlugin() {
   return new Plugin({
     key: DRAG_HANDLE_KEY,
@@ -146,7 +150,7 @@ function dragHandlePlugin() {
         if (!domEl) { scheduleHide(); return; }
 
         const rect = domEl.getBoundingClientRect();
-        const handleTop = rect.top + rect.height / 2 - 10;
+        const handleTop = rect.top + rect.height / 2 - 8 + _offset;
         const handleLeft = editorRect.left - 28;
 
         handle.style.top = `${handleTop}px`;
