@@ -1548,6 +1548,24 @@ function PageIcon({ icon, size = 'base' }: { icon: string; size?: 'sm' | 'base' 
   return <span className={`shrink-0 leading-none ${size === 'lg' ? 'text-2xl' : size === 'sm' ? 'text-sm' : 'text-base'}`}>{icon}</span>;
 }
 
+function extractPageHeadings(content: string): { level: number; text: string }[] {
+  try {
+    const json = JSON.parse(content) as { content?: unknown[] };
+    const headings: { level: number; text: string }[] = [];
+    function traverse(node: { type?: string; text?: string; content?: unknown[]; attrs?: { level?: number } }) {
+      if (node.type === 'heading' && node.attrs?.level) {
+        const text = ((node.content ?? []) as { text?: string }[]).map((c) => c.text ?? '').join('');
+        if (text.trim()) headings.push({ level: node.attrs.level, text: text.trim() });
+      }
+      if (Array.isArray(node.content)) (node.content as typeof node[]).forEach(traverse);
+    }
+    if (Array.isArray(json?.content)) (json.content as typeof json[]).forEach(traverse);
+    return headings;
+  } catch {
+    return [];
+  }
+}
+
 function AiTriageModal({ item, uid, onClose, onManualDigest }: {
   item: LearningItem;
   uid: string;
@@ -1561,6 +1579,7 @@ function AiTriageModal({ item, uid, onClose, onManualDigest }: {
   const [errorMsg, setErrorMsg] = useState('');
   const [suggestions, setSuggestions] = useState<TriageSuggestion[]>([]);
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
+  const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const [refinedTitle, setRefinedTitle] = useState(item.title);
   const [refinedContent, setRefinedContent] = useState(item.content);
   const [saving, setSaving] = useState(false);
@@ -1611,13 +1630,15 @@ function AiTriageModal({ item, uid, onClose, onManualDigest }: {
     const page = pages.find((p) => p.id === selectedPageId);
     setSaving(true);
     try {
+      const pageTitle = page?.title || '（無題）';
+      const pagePath = selectedSection ? `${pageTitle} > ${selectedSection}` : pageTitle;
       await addItem(uid, {
         dateKey: localDateKey(),
         title: refinedTitle.trim() || item.title,
         content: refinedContent.trim(),
         sortOrder: Date.now(),
         notionPageId: selectedPageId,
-        notionPagePath: page?.title || '（無題）',
+        notionPagePath: pagePath,
       });
       await removeItem(uid, item.id);
       onClose();
@@ -1675,11 +1696,15 @@ function AiTriageModal({ item, uid, onClose, onManualDigest }: {
                     適切なページが見つかりませんでした。手動で選んでください。
                   </p>
                 ) : (
+                  <>
                   <div className="space-y-2">
                     {suggestions.map((s, i) => (
                       <button
                         key={s.pageId}
-                        onClick={() => setSelectedPageId(s.pageId)}
+                        onClick={() => {
+                          if (selectedPageId !== s.pageId) setSelectedSection(null);
+                          setSelectedPageId(s.pageId);
+                        }}
                         className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-all ${
                           selectedPageId === s.pageId
                             ? 'border-purple-400 bg-purple-50 ring-2 ring-purple-300'
@@ -1700,6 +1725,55 @@ function AiTriageModal({ item, uid, onClose, onManualDigest }: {
                       </button>
                     ))}
                   </div>
+
+                  {/* 選択中ページのアウトライン */}
+                  {selectedPageId && (() => {
+                    const selPage = pages.find((p) => p.id === selectedPageId);
+                    if (!selPage) return null;
+                    const headings = extractPageHeadings(selPage.content);
+                    return (
+                      <div className="mt-1 rounded-xl border border-purple-200 bg-purple-50/40 p-3">
+                        <div className="mb-2 flex items-center gap-1.5">
+                          <PageIcon icon={selPage.icon} size="sm" />
+                          <p className="text-xs font-semibold text-purple-700 truncate">{selPage.title || '（無題）'} の構成</p>
+                        </div>
+                        {headings.length === 0 ? (
+                          <p className="text-xs text-gray-400">見出しなし — 末尾に追加されます</p>
+                        ) : (
+                          <div className="space-y-1">
+                            <p className="text-[10px] text-gray-400 mb-1.5">どのセクションに追加しますか？</p>
+                            <button
+                              onClick={() => setSelectedSection(null)}
+                              className={`flex w-full items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-left text-xs transition ${
+                                selectedSection === null
+                                  ? 'bg-purple-500 text-white'
+                                  : 'bg-white text-gray-500 hover:bg-purple-100'
+                              }`}
+                            >
+                              <span>↓</span>
+                              <span>末尾に追加</span>
+                            </button>
+                            {headings.map((h, hi) => (
+                              <button
+                                key={hi}
+                                onClick={() => setSelectedSection(h.text)}
+                                style={{ paddingLeft: `${(h.level - 1) * 10 + 10}px` }}
+                                className={`flex w-full items-center gap-1.5 rounded-lg py-1.5 pr-2.5 text-left text-xs transition ${
+                                  selectedSection === h.text
+                                    ? 'bg-purple-500 text-white'
+                                    : 'bg-white text-gray-500 hover:bg-purple-100'
+                                }`}
+                              >
+                                <span className={`shrink-0 text-[10px] ${selectedSection === h.text ? 'text-purple-200' : 'text-gray-300'}`}>H{h.level}</span>
+                                <span className="truncate">{h.text}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  </>
                 )}
               </div>
 
@@ -1743,7 +1817,9 @@ function AiTriageModal({ item, uid, onClose, onManualDigest }: {
               disabled={status !== 'done' || !selectedPageId || saving}
               className="rounded-lg bg-purple-500 px-4 py-2 text-xs font-medium text-white hover:bg-purple-600 disabled:opacity-40"
             >
-              {saving ? '保存中...' : 'この内容で消化する'}
+              {saving ? '保存中...' : selectedSection
+                ? `「${selectedSection.length > 12 ? selectedSection.slice(0, 12) + '…' : selectedSection}」へ追加`
+                : 'この内容で消化する'}
             </button>
           </div>
         </div>
