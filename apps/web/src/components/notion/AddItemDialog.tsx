@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { Fragment, useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useLearningStore } from '@/stores/learningStore';
 import { useNotionPageStore, WORKSPACE_ID } from '@/stores/notionPageStore';
 import { NotionEditor } from '@/components/editor/NotionEditor';
+import { type NotionPage, parseBookChapters, serializeBookChapters, createBookChapter, type BookChapter } from '@study-tracker/core';
 
 function isImageSrc(s: string) {
   return s.startsWith('http://') || s.startsWith('https://') || s.startsWith('data:');
@@ -93,6 +94,17 @@ function PagePickerIcon({ icon }: { icon: string }) {
   return <span className="shrink-0 text-base leading-none">{icon}</span>;
 }
 
+function buildBreadcrumbs(pages: NotionPage[], currentId: string): NotionPage[] {
+  const map = new Map(pages.map((p) => [p.id, p]));
+  const path: NotionPage[] = [];
+  let cur = map.get(currentId);
+  while (cur) {
+    path.unshift(cur);
+    cur = cur.parentId ? map.get(cur.parentId) : undefined;
+  }
+  return path;
+}
+
 const cls = 'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-500';
 
 // ── 確認ダイアログ ────────────────────────────────────────────────────
@@ -151,21 +163,132 @@ function ConfirmDialog({ text, pageId, onConfirm, onCancel }: {
   );
 }
 
+// ── 新規ページダイアログ ──────────────────────────────────────────────
+
+function NewPageDialog({ onConfirm, onCancel }: {
+  onConfirm: (title: string, icon: string, type: 'note' | 'book') => void;
+  onCancel: () => void;
+}) {
+  const [title, setTitle] = useState('');
+  const [icon, setIcon] = useState('📄');
+  const [pageType, setPageType] = useState<'note' | 'book'>('note');
+  const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  const [iconUrl, setIconUrl] = useState('');
+  const iconRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!iconPickerOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (iconRef.current && !iconRef.current.contains(e.target as Node)) setIconPickerOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [iconPickerOpen]);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={onCancel}>
+      <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <h3 className="mb-4 text-sm font-semibold text-gray-800">📝 新規ページを作成</h3>
+
+        {/* アイコン + タイトル */}
+        <div className="mb-4 flex items-center gap-2">
+          <div className="relative shrink-0" ref={iconRef}>
+            <button
+              onClick={() => setIconPickerOpen((v) => !v)}
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 text-2xl transition hover:bg-gray-50"
+              title="アイコンを変更"
+            >
+              {isImgSrc(icon)
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={icon} alt="" className="h-8 w-8 rounded object-cover" />
+                : icon}
+            </button>
+            {iconPickerOpen && (
+              <div className="absolute left-0 top-full z-50 mt-1 w-64 rounded-xl border border-gray-200 bg-white p-3 shadow-xl">
+                <div className="mb-2 flex gap-1">
+                  <input
+                    value={iconUrl}
+                    onChange={(e) => setIconUrl(e.target.value)}
+                    placeholder="画像URL..."
+                    className="min-w-0 flex-1 rounded border border-gray-200 px-2 py-1 text-xs outline-none"
+                  />
+                  <button
+                    onClick={() => { if (iconUrl) { setIcon(iconUrl); setIconPickerOpen(false); } }}
+                    disabled={!iconUrl}
+                    className="rounded bg-brand-500 px-2 py-1 text-xs text-white disabled:opacity-40"
+                  >設定</button>
+                </div>
+                <div className="grid max-h-40 grid-cols-8 gap-0.5 overflow-y-auto">
+                  {ICON_PRESETS.map((ic) => (
+                    <button
+                      key={ic}
+                      onClick={() => { setIcon(ic); setIconPickerOpen(false); }}
+                      className={`rounded p-1 text-base hover:bg-gray-100 ${icon === ic ? 'bg-brand-50 ring-1 ring-brand-400' : ''}`}
+                    >{ic}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && onConfirm(title.trim(), icon, pageType)}
+            placeholder="タイトル（任意）"
+            autoFocus
+            className="min-w-0 flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-400"
+          />
+        </div>
+
+        {/* タイプ選択 */}
+        <div className="mb-5 flex gap-2">
+          <button
+            onClick={() => { setPageType('note'); if (icon === '📚') setIcon('📄'); }}
+            className={`flex flex-1 flex-col items-center gap-1 rounded-xl border p-3 text-xs transition ${
+              pageType === 'note' ? 'border-brand-400 bg-brand-50 text-brand-600 font-semibold' : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+            }`}
+          >
+            <span className="text-2xl">📄</span>
+            <span>ノート</span>
+          </button>
+          <button
+            onClick={() => { setPageType('book'); if (icon === '📄') setIcon('📚'); }}
+            className={`flex flex-1 flex-col items-center gap-1 rounded-xl border p-3 text-xs transition ${
+              pageType === 'book' ? 'border-brand-400 bg-brand-50 text-brand-600 font-semibold' : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+            }`}
+          >
+            <span className="text-2xl">📚</span>
+            <span>ブック</span>
+            <span className="text-[9px] opacity-60">チャプター管理</span>
+          </button>
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <button onClick={onCancel} className="rounded-lg px-4 py-2 text-sm text-gray-500 hover:bg-gray-100">キャンセル</button>
+          <button
+            onClick={() => onConfirm(title.trim(), icon, pageType)}
+            className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600"
+          >作成する</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── AddItemDialog（左右分割ビュー）────────────────────────────────────
 
 export function AddItemDialog({ uid, onClose, onAfterRecord }: {
   uid: string;
   onClose: () => void;
-  onAfterRecord?: () => void; // 特急メモ消化時：記録完了後に呼ばれる
+  onAfterRecord?: () => void;
 }) {
   const { add: addItem } = useLearningStore();
   const { pages, add: addPage, update } = useNotionPageStore();
   const { user } = useAuthStore();
   const [recordedText, setRecordedText] = useState('');
   const [confirming, setConfirming] = useState(false);
-  const [savedToast, setSavedToast] = useState(false);
-  const savedToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => { if (savedToastTimerRef.current) clearTimeout(savedToastTimerRef.current); }, []);
+  const [bigToast, setBigToast] = useState(false);
+  const bigToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [creating, setCreating] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [pageHistory, setPageHistory] = useState<string[]>([]);
@@ -174,18 +297,33 @@ export function AddItemDialog({ uid, onClose, onAfterRecord }: {
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [iconUrlDraft, setIconUrlDraft] = useState('');
   const iconPickerRef = useRef<HTMLDivElement>(null);
+  const [newPageDialog, setNewPageDialog] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ pageId: string; x: number; y: number } | null>(null);
+  const [bookChapters, setBookChapters] = useState<BookChapter[]>([]);
+  const [activeChapterId, setActiveChapterId] = useState<string>('');
+  const [editorKey, setEditorKey] = useState(0);
+
+  useEffect(() => () => {
+    if (bigToastTimerRef.current) clearTimeout(bigToastTimerRef.current);
+  }, []);
 
   // アイコンピッカーの外クリックで閉じる
   useEffect(() => {
     if (!iconPickerOpen) return;
     const handler = (e: MouseEvent) => {
-      if (iconPickerRef.current && !iconPickerRef.current.contains(e.target as Node)) {
-        setIconPickerOpen(false);
-      }
+      if (iconPickerRef.current && !iconPickerRef.current.contains(e.target as Node)) setIconPickerOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [iconPickerOpen]);
+
+  // コンテキストメニューの外クリックで閉じる
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handler = () => setContextMenu(null);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [contextMenu]);
 
   const searchResults = useMemo(() => {
     const q = searchQuery.trim();
@@ -242,10 +380,44 @@ export function AddItemDialog({ uid, onClose, onAfterRecord }: {
 
   const selectedPage = selectedPageId ? pages.find((p) => p.id === selectedPageId) ?? null : null;
 
+  // ブックの chapters を selectedPage に合わせて初期化
+  useEffect(() => {
+    if (!selectedPage || selectedPage.type !== 'book') {
+      setBookChapters([]);
+      setActiveChapterId('');
+      return;
+    }
+    const chapters = parseBookChapters(selectedPage.content);
+    setBookChapters(chapters);
+    setActiveChapterId((prev) => {
+      const still = chapters.find((c) => c.id === prev);
+      return still ? prev : (chapters[0]?.id ?? '');
+    });
+    setEditorKey((k) => k + 1);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPage?.id, selectedPage?.type]);
+
   const handleSave = useCallback(async (title: string, content: string) => {
     if (!user || !selectedPageId) return;
     await update(user.uid, selectedPageId, { title, content });
   }, [user, selectedPageId, update]);
+
+  const handleBookChapterSave = useCallback(async (_title: string, content: string) => {
+    if (!user || !selectedPageId || !activeChapterId) return;
+    const updated = bookChapters.map((c) => c.id === activeChapterId ? { ...c, content } : c);
+    setBookChapters(updated);
+    await update(user.uid, selectedPageId, { content: serializeBookChapters(updated) });
+  }, [user, selectedPageId, activeChapterId, bookChapters, update]);
+
+  const handleAddBookChapter = useCallback(async () => {
+    if (!user || !selectedPageId) return;
+    const newChapter = createBookChapter(bookChapters.length);
+    const updated = [...bookChapters, newChapter];
+    setBookChapters(updated);
+    setActiveChapterId(newChapter.id);
+    setEditorKey((k) => k + 1);
+    await update(user.uid, selectedPageId, { content: serializeBookChapters(updated) });
+  }, [user, selectedPageId, bookChapters, update]);
 
   const handleIconChange = useCallback(async (icon: string) => {
     if (!user || !selectedPageId) return;
@@ -271,21 +443,42 @@ export function AddItemDialog({ uid, onClose, onAfterRecord }: {
       notionPagePath: page?.title || 'Untitled',
     });
     setConfirming(false);
-    if (savedToastTimerRef.current) clearTimeout(savedToastTimerRef.current);
-    setSavedToast(true);
-    savedToastTimerRef.current = setTimeout(() => setSavedToast(false), 2500);
-    onAfterRecord?.(); // 特急メモ消化時：元アイテムの削除などを実行
+    if (bigToastTimerRef.current) clearTimeout(bigToastTimerRef.current);
+    setBigToast(true);
+    bigToastTimerRef.current = setTimeout(() => setBigToast(false), 1800);
+    onAfterRecord?.();
   };
 
-  const handleCreate = async () => {
+  const handleCreateWithOptions = async (title: string, icon: string, type: 'note' | 'book') => {
+    setNewPageDialog(false);
     setCreating(true);
     try {
-      const page = await addPage(uid);
+      const page = await addPage(uid, { type: type === 'book' ? 'book' : undefined });
+      if (title || icon !== '📄') {
+        await update(uid, page.id, { title: title || 'Untitled', icon });
+      }
       setSelectedPageId(page.id);
     } finally {
       setCreating(false);
     }
   };
+
+  const convertToBook = useCallback(async (pageId: string) => {
+    if (!user) return;
+    await update(user.uid, pageId, { type: 'book' });
+    setContextMenu(null);
+  }, [user, update]);
+
+  const convertToNote = useCallback(async (pageId: string) => {
+    if (!user) return;
+    await update(user.uid, pageId, { type: undefined });
+    setContextMenu(null);
+  }, [user, update]);
+
+  const breadcrumbs = selectedPageId ? buildBreadcrumbs(pages, selectedPageId) : [];
+
+  // ブックのアクティブチャプターコンテンツ
+  const activeChapter = bookChapters.find((c) => c.id === activeChapterId);
 
   return (
     <>
@@ -296,7 +489,7 @@ export function AddItemDialog({ uid, onClose, onAfterRecord }: {
             <div className="flex items-center justify-between border-b border-gray-100 px-3 py-3">
               <span className="text-sm font-semibold text-gray-700">📝 ページを選択</span>
               <button
-                onClick={handleCreate}
+                onClick={() => setNewPageDialog(true)}
                 disabled={creating}
                 title="新規ページ"
                 className="rounded p-1 text-lg leading-none text-gray-400 hover:bg-gray-200 hover:text-brand-500 disabled:opacity-50"
@@ -321,7 +514,6 @@ export function AddItemDialog({ uid, onClose, onAfterRecord }: {
 
             <nav className="flex flex-1 flex-col overflow-hidden">
               {searchResults ? (
-                // ── 検索結果 ──────────────────────────────────────────
                 <div className="flex-1 overflow-y-auto px-1 py-1">
                   <div className="space-y-1 px-1 py-1">
                     {searchResults.titleMatches.length === 0 && searchResults.contentMatches.length === 0 && (
@@ -334,12 +526,14 @@ export function AddItemDialog({ uid, onClose, onAfterRecord }: {
                           <button
                             key={page.id}
                             onClick={() => { setSelectedPageId(page.id); setSearchQuery(''); }}
+                            onContextMenu={(e) => { e.preventDefault(); setContextMenu({ pageId: page.id, x: e.clientX, y: e.clientY }); }}
                             className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors ${selectedPageId === page.id ? 'bg-white font-semibold text-gray-900 shadow-sm' : 'text-gray-600 hover:bg-white hover:text-gray-900'}`}
                           >
                             <PagePickerIcon icon={page.icon} />
                             <span className="min-w-0 flex-1 truncate text-left">
                               <HighlightText text={page.title || 'Untitled'} query={searchQuery} />
                             </span>
+                            {page.type === 'book' && <span className="shrink-0 text-[9px] text-gray-300">本</span>}
                           </button>
                         ))}
                       </>
@@ -351,6 +545,7 @@ export function AddItemDialog({ uid, onClose, onAfterRecord }: {
                           <button
                             key={page.id}
                             onClick={() => { setSelectedPageId(page.id); setSearchQuery(''); }}
+                            onContextMenu={(e) => { e.preventDefault(); setContextMenu({ pageId: page.id, x: e.clientX, y: e.clientY }); }}
                             className={`flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-xs transition-colors ${selectedPageId === page.id ? 'bg-white shadow-sm' : 'text-gray-600 hover:bg-white hover:text-gray-900'}`}
                           >
                             <div className="flex items-center gap-1.5">
@@ -368,7 +563,6 @@ export function AddItemDialog({ uid, onClose, onAfterRecord }: {
                 </div>
               ) : (
                 <>
-                  {/* ── 上セクション: お気に入り ──────────────────── */}
                   {roots.some((p) => p.isFavorite) && (
                     <div className="shrink-0 border-b border-gray-100">
                       <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-yellow-500">★ お気に入り</p>
@@ -377,17 +571,18 @@ export function AddItemDialog({ uid, onClose, onAfterRecord }: {
                           <button
                             key={`fav-${page.id}`}
                             onClick={() => setSelectedPageId(page.id)}
+                            onContextMenu={(e) => { e.preventDefault(); setContextMenu({ pageId: page.id, x: e.clientX, y: e.clientY }); }}
                             className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors ${selectedPageId === page.id ? 'bg-white font-semibold text-gray-900 shadow-sm' : 'text-gray-600 hover:bg-white hover:text-gray-900'}`}
                           >
                             <PagePickerIcon icon={page.icon} />
                             <span className="min-w-0 flex-1 truncate text-left">{page.title || 'Untitled'}</span>
+                            {page.type === 'book' && <span className="shrink-0 text-[9px] text-gray-300">本</span>}
                           </button>
                         ))}
                       </div>
                     </div>
                   )}
 
-                  {/* ── 下セクション: 親ページ ────────────────────── */}
                   <div className="flex min-h-0 flex-1 flex-col">
                     <p className="shrink-0 px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">ページ</p>
                     <div className="flex-1 overflow-y-auto px-1 pb-2">
@@ -413,10 +608,12 @@ export function AddItemDialog({ uid, onClose, onAfterRecord }: {
                                 >▶</button>
                                 <button
                                   onClick={() => setSelectedPageId(page.id)}
+                                  onContextMenu={(e) => { e.preventDefault(); setContextMenu({ pageId: page.id, x: e.clientX, y: e.clientY }); }}
                                   className={`flex flex-1 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors ${selectedPageId === page.id ? 'bg-white font-semibold text-gray-900 shadow-sm' : 'text-gray-600 hover:bg-white hover:text-gray-900'}`}
                                 >
                                   <PagePickerIcon icon={page.icon} />
                                   <span className="min-w-0 flex-1 truncate text-left">{page.title || 'Untitled'}</span>
+                                  {page.type === 'book' && <span className="shrink-0 text-[9px] text-gray-300">本</span>}
                                 </button>
                               </div>
                               {isExpanded && children.length > 0 && (
@@ -425,10 +622,12 @@ export function AddItemDialog({ uid, onClose, onAfterRecord }: {
                                     <button
                                       key={child.id}
                                       onClick={() => setSelectedPageId(child.id)}
+                                      onContextMenu={(e) => { e.preventDefault(); setContextMenu({ pageId: child.id, x: e.clientX, y: e.clientY }); }}
                                       className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors ${selectedPageId === child.id ? 'bg-white font-semibold text-gray-800 shadow-sm' : 'text-gray-500 hover:bg-white hover:text-gray-700'}`}
                                     >
                                       <PagePickerIcon icon={child.icon} />
                                       <span className="min-w-0 flex-1 truncate text-left">{child.title || 'Untitled'}</span>
+                                      {child.type === 'book' && <span className="shrink-0 text-[9px] text-gray-300">本</span>}
                                     </button>
                                   ))}
                                 </div>
@@ -455,96 +654,170 @@ export function AddItemDialog({ uid, onClose, onAfterRecord }: {
 
           {/* 右パネル: エディタ */}
           <div className="flex flex-1 flex-col">
-            <div className="flex items-center justify-between border-b border-amber-100 bg-amber-50 px-4 py-2.5">
-              <div className="flex items-center gap-2">
-                {/* アイコン設定ボタン */}
-                {selectedPage && (
-                  <div className="relative" ref={iconPickerRef}>
-                    <button
-                      onClick={() => setIconPickerOpen((v) => !v)}
-                      className="flex items-center justify-center rounded p-1 hover:bg-amber-100"
-                      title="アイコンを変更"
-                    >
-                      {isImageSrc(selectedPage.icon) ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={selectedPage.icon} alt="" className="h-6 w-6 rounded object-cover" />
-                      ) : (
-                        <span className="text-lg leading-none">{selectedPage.icon}</span>
-                      )}
-                    </button>
-                    {iconPickerOpen && (
-                      <div className="absolute left-0 top-full z-50 w-64 rounded-xl border border-gray-200 bg-white p-3 shadow-xl">
-                        <p className="mb-1 text-xs font-medium text-gray-400">画像URL</p>
-                        <div className="flex gap-1">
-                          <input
-                            type="text"
-                            value={iconUrlDraft}
-                            onChange={(e) => setIconUrlDraft(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && iconUrlDraft && handleIconChange(iconUrlDraft)}
-                            placeholder="https://..."
-                            className="min-w-0 flex-1 rounded border border-gray-200 px-2 py-1 text-xs outline-none focus:border-brand-400"
-                          />
-                          <button
-                            onClick={() => iconUrlDraft && handleIconChange(iconUrlDraft)}
-                            disabled={!iconUrlDraft}
-                            className="rounded bg-brand-500 px-2 py-1 text-xs text-white hover:bg-brand-600 disabled:opacity-40"
-                          >設定</button>
-                        </div>
-                        <p className="mb-1 mt-3 text-xs font-medium text-gray-400">絵文字</p>
-                        <div className="grid max-h-40 grid-cols-8 gap-0.5 overflow-y-auto">
-                          {ICON_PRESETS.map((icon) => (
-                            <button
-                              key={icon}
-                              onClick={() => handleIconChange(icon)}
-                              className={`rounded p-1 text-base hover:bg-gray-100 ${selectedPage.icon === icon ? 'bg-brand-50 ring-1 ring-brand-400' : ''}`}
-                            >{icon}</button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+            {/* ヘッダー */}
+            <div className="flex items-center justify-between border-b border-amber-100 bg-amber-50 px-4 py-2">
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                {/* パンくず */}
+                {breadcrumbs.length > 0 && (
+                  <div className="flex items-center gap-0.5 overflow-x-auto whitespace-nowrap text-[10px] text-amber-500">
+                    {breadcrumbs.map((p, i) => (
+                      <Fragment key={p.id}>
+                        {i > 0 && <span className="shrink-0 text-amber-300 mx-0.5">/</span>}
+                        <button
+                          onClick={() => setSelectedPageId(p.id)}
+                          className="flex items-center gap-0.5 rounded px-0.5 hover:bg-amber-100 hover:text-amber-700 transition-colors"
+                        >
+                          {isImgSrc(p.icon)
+                            // eslint-disable-next-line @next/next/no-img-element
+                            ? <img src={p.icon} alt="" className="h-3 w-3 rounded object-cover" />
+                            : <span className="text-[11px]">{p.icon}</span>
+                          }
+                          <span className="max-w-[80px] truncate">{p.title || 'Untitled'}</span>
+                        </button>
+                      </Fragment>
+                    ))}
                   </div>
                 )}
-                {pageHistory.length > 0 && (
-                  <button onClick={handleBack} className="flex items-center gap-1 rounded px-2 py-1 text-xs text-amber-700 hover:bg-amber-100">
-                    ← 戻る
-                  </button>
-                )}
-                <span className="text-sm text-amber-700">テキストを選択して 🔥 ボタンで登録</span>
+                {/* 操作バー */}
+                <div className="flex items-center gap-2">
+                  {/* アイコン */}
+                  {selectedPage && (
+                    <div className="relative shrink-0" ref={iconPickerRef}>
+                      <button
+                        onClick={() => setIconPickerOpen((v) => !v)}
+                        className="flex items-center justify-center rounded p-1 hover:bg-amber-100"
+                        title="アイコンを変更"
+                      >
+                        {isImageSrc(selectedPage.icon) ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={selectedPage.icon} alt="" className="h-6 w-6 rounded object-cover" />
+                        ) : (
+                          <span className="text-lg leading-none">{selectedPage.icon}</span>
+                        )}
+                      </button>
+                      {iconPickerOpen && (
+                        <div className="absolute left-0 top-full z-50 w-64 rounded-xl border border-gray-200 bg-white p-3 shadow-xl">
+                          <p className="mb-1 text-xs font-medium text-gray-400">画像URL</p>
+                          <div className="flex gap-1">
+                            <input
+                              type="text"
+                              value={iconUrlDraft}
+                              onChange={(e) => setIconUrlDraft(e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && iconUrlDraft && handleIconChange(iconUrlDraft)}
+                              placeholder="https://..."
+                              className="min-w-0 flex-1 rounded border border-gray-200 px-2 py-1 text-xs outline-none focus:border-brand-400"
+                            />
+                            <button
+                              onClick={() => iconUrlDraft && handleIconChange(iconUrlDraft)}
+                              disabled={!iconUrlDraft}
+                              className="rounded bg-brand-500 px-2 py-1 text-xs text-white hover:bg-brand-600 disabled:opacity-40"
+                            >設定</button>
+                          </div>
+                          <p className="mb-1 mt-3 text-xs font-medium text-gray-400">絵文字</p>
+                          <div className="grid max-h-40 grid-cols-8 gap-0.5 overflow-y-auto">
+                            {ICON_PRESETS.map((icon) => (
+                              <button
+                                key={icon}
+                                onClick={() => handleIconChange(icon)}
+                                className={`rounded p-1 text-base hover:bg-gray-100 ${selectedPage.icon === icon ? 'bg-brand-50 ring-1 ring-brand-400' : ''}`}
+                              >{icon}</button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {pageHistory.length > 0 && (
+                    <button onClick={handleBack} className="flex items-center gap-1 rounded px-2 py-1 text-xs text-amber-700 hover:bg-amber-100">
+                      ← 戻る
+                    </button>
+                  )}
+                  <span className="text-xs text-amber-700">テキストを選択して 🔥 で登録</span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                {savedToast && (
-                  <span className="flex items-center gap-1 rounded-lg bg-green-100 px-3 py-1.5 text-sm font-medium text-green-700">
-                    ✅ 登録しました
-                  </span>
-                )}
+              <div className="flex shrink-0 items-center gap-2">
                 <button
                   onClick={() => recordTriggerRef.current?.()}
                   disabled={!selectedPageId}
                   className="rounded-lg bg-brand-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-40"
                 >
-                  📚 学習アイテムとして記録
+                  📚 記録
                 </button>
                 <button onClick={onClose} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100" title="閉じる">
                   ✕
                 </button>
               </div>
             </div>
+
+            {/* ブックのチャプタータブ */}
+            {selectedPage?.type === 'book' && bookChapters.length > 0 && (
+              <div className="flex items-center gap-1 overflow-x-auto border-b border-gray-100 bg-gray-50 px-3 py-1.5">
+                {bookChapters.map((chapter) => (
+                  <button
+                    key={chapter.id}
+                    onClick={() => { if (activeChapterId !== chapter.id) { setActiveChapterId(chapter.id); setEditorKey((k) => k + 1); } }}
+                    className={`shrink-0 rounded-md px-3 py-1 text-xs font-medium transition ${
+                      activeChapterId === chapter.id
+                        ? 'bg-white text-brand-600 shadow-sm ring-1 ring-gray-200'
+                        : 'text-gray-400 hover:bg-white hover:text-gray-600'
+                    }`}
+                  >
+                    {chapter.title}
+                  </button>
+                ))}
+                <button
+                  onClick={handleAddBookChapter}
+                  className="shrink-0 rounded-md px-2 py-1 text-xs text-gray-400 hover:bg-white hover:text-brand-500"
+                  title="チャプターを追加"
+                >＋</button>
+              </div>
+            )}
+
+            {/* エディタエリア */}
             <div className="flex min-h-0 flex-1 flex-col">
               {selectedPage ? (
-                <NotionEditor
-                  key={selectedPageId ?? ''}
-                  initialTitle={selectedPage.title}
-                  initialContent={selectedPage.content}
-                  onSave={handleSave}
-                  onCreateSubPage={handleCreateSubPageInModal}
-                  recordTriggerRef={recordTriggerRef}
-                  onRecordText={handleRecord}
-                  notionPageId={selectedPageId ?? ''}
-                  onPageNavigate={(href) => {
-                    const id = href.match(/\/notion-plus\/([^/?#]+)/)?.[1];
-                    if (id) navigateTo(id);
-                  }}
-                />
+                selectedPage.type === 'book' ? (
+                  activeChapter ? (
+                    <NotionEditor
+                      key={`book-${selectedPageId}-${activeChapterId}-${editorKey}`}
+                      initialTitle=""
+                      initialContent={activeChapter.content}
+                      onSave={handleBookChapterSave}
+                      onCreateSubPage={handleCreateSubPageInModal}
+                      recordTriggerRef={recordTriggerRef}
+                      onRecordText={handleRecord}
+                      notionPageId={selectedPageId ?? ''}
+                      hideTitle
+                      onPageNavigate={(href) => {
+                        const id = href.match(/\/notion-plus\/([^/?#]+)/)?.[1];
+                        if (id) navigateTo(id);
+                      }}
+                    />
+                  ) : (
+                    <div className="flex h-full flex-col items-center justify-center gap-2">
+                      <span className="text-3xl">📚</span>
+                      <p className="text-sm text-gray-400">チャプターがありません</p>
+                      <button onClick={handleAddBookChapter} className="mt-1 rounded-lg bg-brand-500 px-3 py-1.5 text-xs text-white hover:bg-brand-600">
+                        ＋ 最初のチャプターを作成
+                      </button>
+                    </div>
+                  )
+                ) : (
+                  <NotionEditor
+                    key={selectedPageId ?? ''}
+                    initialTitle={selectedPage.title}
+                    initialContent={selectedPage.content}
+                    onSave={handleSave}
+                    onCreateSubPage={handleCreateSubPageInModal}
+                    recordTriggerRef={recordTriggerRef}
+                    onRecordText={handleRecord}
+                    notionPageId={selectedPageId ?? ''}
+                    onPageNavigate={(href) => {
+                      const id = href.match(/\/notion-plus\/([^/?#]+)/)?.[1];
+                      if (id) navigateTo(id);
+                    }}
+                  />
+                )
               ) : (
                 <div className="flex h-full flex-col items-center justify-center gap-2">
                   <span className="text-3xl">📝</span>
@@ -556,6 +829,17 @@ export function AddItemDialog({ uid, onClose, onAfterRecord }: {
         </div>
       </div>
 
+      {/* 登録完了ビッグトースト */}
+      {bigToast && (
+        <div className="pointer-events-none fixed inset-0 z-[70] flex items-center justify-center">
+          <div className="animate-bounce flex flex-col items-center gap-3 rounded-3xl bg-gradient-to-br from-brand-500 to-purple-500 px-14 py-10 shadow-2xl text-white">
+            <span className="text-6xl">🎉</span>
+            <p className="text-2xl font-bold tracking-tight">登録しました！</p>
+            <p className="text-sm opacity-75">学習リストに追加されました</p>
+          </div>
+        </div>
+      )}
+
       {confirming && selectedPageId && (
         <ConfirmDialog
           text={recordedText}
@@ -564,6 +848,42 @@ export function AddItemDialog({ uid, onClose, onAfterRecord }: {
           onCancel={() => setConfirming(false)}
         />
       )}
+
+      {newPageDialog && (
+        <NewPageDialog
+          onConfirm={handleCreateWithOptions}
+          onCancel={() => setNewPageDialog(false)}
+        />
+      )}
+
+      {/* 右クリックコンテキストメニュー */}
+      {contextMenu && (() => {
+        const ctxPage = pages.find((p) => p.id === contextMenu.pageId);
+        if (!ctxPage) return null;
+        return (
+          <div
+            className="fixed z-[60] min-w-[160px] rounded-xl border border-gray-200 bg-white py-1 shadow-xl"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {ctxPage.type === 'book' ? (
+              <button
+                className="flex w-full items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50"
+                onClick={() => convertToNote(contextMenu.pageId)}
+              >
+                📄 ノートに変換
+              </button>
+            ) : (
+              <button
+                className="flex w-full items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50"
+                onClick={() => convertToBook(contextMenu.pageId)}
+              >
+                📚 ブックに変換
+              </button>
+            )}
+          </div>
+        );
+      })()}
     </>
   );
 }

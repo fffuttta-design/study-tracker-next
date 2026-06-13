@@ -5,8 +5,7 @@ import Link from 'next/link';
 import { useAuthStore } from '@/stores/authStore';
 import { useLearningStore } from '@/stores/learningStore';
 import { useNotionPageStore } from '@/stores/notionPageStore';
-import { NotionEditor } from '@/components/editor/NotionEditor';
-import { AddItemDialog, extractTextFromTipTap, getSnippet, toDateKey } from '@/components/notion/AddItemDialog';
+import { AddItemDialog, toDateKey } from '@/components/notion/AddItemDialog';
 import {
   type LearningItem,
   hasDueReview,
@@ -75,19 +74,6 @@ function dailyQuote(): string {
   return DAILY_QUOTES[dayOfYear % DAILY_QUOTES.length];
 }
 
-// ローカルで使う stripMarkdown
-function stripMarkdown(s: string): string {
-  return s
-    .replace(/^#{1,6}\s+/, '')
-    .replace(/\*{1,3}([^*]*)\*{1,3}/g, '$1')
-    .replace(/_{1,3}([^_]*)_{1,3}/g, '$1')
-    .replace(/~~([^~]*)~~/g, '$1')
-    .replace(/`[^`]+`/g, '')
-    .replace(/^[>\-*+]\s+/gm, '')
-    .replace(/[◆▶▲▼●○■□★☆◇]/g, '')
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    .trim();
-}
 
 // ── メインページ ─────────────────────────────────────────────────────
 
