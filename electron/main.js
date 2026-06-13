@@ -1,5 +1,6 @@
 import { app, BrowserWindow, shell, Tray, Menu, nativeImage, dialog, ipcMain, Notification } from 'electron'
-import { autoUpdater } from 'electron-updater'
+import updaterPkg from 'electron-updater'
+const { autoUpdater } = updaterPkg
 import { readFile, writeFile, mkdir, readdir, unlink, copyFile, appendFile } from 'fs/promises'
 import { join } from 'path'
 import { fileURLToPath } from 'url'
