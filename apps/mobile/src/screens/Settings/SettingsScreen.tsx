@@ -13,13 +13,20 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import auth from '@react-native-firebase/auth';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useAuthStore } from '../../store/authStore';
-import { checkForUpdate, CURRENT_VERSION, downloadAndInstall } from '../../services/updateService';
+import { checkForUpdate, getCurrentVersion, downloadAndInstall } from '../../services/updateService';
 
 export default function SettingsScreen() {
   const { user } = useAuthStore();
   const [checking, setChecking] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [dlProgress, setDlProgress] = useState(0);
+  const [currentVersion, setCurrentVersion] = useState('');
+
+  React.useEffect(() => {
+    getCurrentVersion().then(({ version, buildNumber }) => {
+      setCurrentVersion(`${version} (build ${buildNumber})`);
+    });
+  }, []);
 
   const handleCheckUpdate = async () => {
     if (Platform.OS !== 'android') return;
@@ -76,7 +83,7 @@ export default function SettingsScreen() {
           <Text style={styles.sectionTitle}>アプリ情報</Text>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>バージョン</Text>
-            <Text style={styles.infoValue}>v{CURRENT_VERSION}</Text>
+            <Text style={styles.infoValue}>v{currentVersion || '...'}</Text>
           </View>
           {Platform.OS === 'android' && (
             <TouchableOpacity

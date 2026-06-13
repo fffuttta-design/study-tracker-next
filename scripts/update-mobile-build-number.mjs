@@ -18,17 +18,24 @@ if (!buildNumber) {
   process.exit(1)
 }
 
+// android/app/build.gradle の versionCode / versionName を更新
+const buildGradlePath = path.join(ROOT, 'apps', 'mobile', 'android', 'app', 'build.gradle')
+let gradle = readFileSync(buildGradlePath, 'utf-8')
+gradle = gradle.replace(/versionCode \d+/, `versionCode ${buildNumber}`)
+gradle = gradle.replace(/versionName "[^"]+"/, `versionName "${version ?? '1.0.0'}"`)
+writeFileSync(buildGradlePath, gradle, 'utf-8')
+console.log(`[update-mobile-build-number] build.gradle → versionCode ${buildNumber}, versionName "${version}"`)
+
+// updateService.ts のフォールバック定数も更新（react-native-device-info 読み取り失敗時用）
 const updateServicePath = path.join(ROOT, 'apps', 'mobile', 'src', 'services', 'updateService.ts')
 let src = readFileSync(updateServicePath, 'utf-8')
-
 src = src.replace(
-  /export const CURRENT_BUILD_NUMBER = \d+/,
-  `export const CURRENT_BUILD_NUMBER = ${buildNumber}`,
+  /export const FALLBACK_BUILD_NUMBER = \d+/,
+  `export const FALLBACK_BUILD_NUMBER = ${buildNumber}`,
 )
 src = src.replace(
-  /export const CURRENT_VERSION\s+=\s+'[^']+'/,
-  `export const CURRENT_VERSION      = '${version ?? '1.0.0'}'`,
+  /export const FALLBACK_VERSION\s+=\s+'[^']+'/,
+  `export const FALLBACK_VERSION      = '${version ?? '1.0.0'}'`,
 )
-
 writeFileSync(updateServicePath, src, 'utf-8')
-console.log(`[update-mobile-build-number] CURRENT_BUILD_NUMBER → ${buildNumber}, version → ${version}`)
+console.log(`[update-mobile-build-number] updateService.ts → FALLBACK_BUILD_NUMBER ${buildNumber}, FALLBACK_VERSION "${version}"`)

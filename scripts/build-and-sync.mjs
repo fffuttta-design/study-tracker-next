@@ -227,7 +227,6 @@ const apkDebugPath   = path.join(androidSrcDir, 'android', 'app', 'build', 'outp
 
 console.log('\n[build-and-sync] Android APK ビルド中...')
 try {
-  // JAVA_HOME を設定してビルド
   const javaHome = 'C:\\Program Files\\Android\\Android Studio\\jbr'
   const androidHome = process.env.LOCALAPPDATA
     ? path.join(process.env.LOCALAPPDATA, 'Android', 'Sdk')
@@ -239,34 +238,36 @@ try {
     Path: `${javaHome}\\bin;${androidHome}\\platform-tools;${process.env.Path ?? ''}`,
   }
   const gradlew = path.join(androidSrcDir, 'android', 'gradlew.bat')
-  // assembleRelease を試みる（署名未設定なら debug にフォールバック）
-  try {
-    execSync(`"${gradlew}" assembleRelease`, {
-      cwd: path.join(androidSrcDir, 'android'),
-      stdio: 'inherit',
-      shell: true,
-      env,
-    })
-    console.log('[build-and-sync] Android Release ビルド完了 ✓')
-  } catch {
-    console.log('[build-and-sync] Release 失敗 → Debug ビルドにフォールバック')
-    execSync(`"${gradlew}" assembleDebug`, {
-      cwd: path.join(androidSrcDir, 'android'),
-      stdio: 'inherit',
-      shell: true,
-      env,
-    })
-    console.log('[build-and-sync] Android Debug ビルド完了 ✓')
+
+  // JS バンドルのキャッシュを削除して必ず最新の JS を再コンパイルさせる
+  const { rmSync } = await import('fs')
+  const bundlePaths = [
+    path.join(androidSrcDir, 'android', 'app', 'src', 'main', 'assets', 'index.android.bundle'),
+    path.join(androidSrcDir, 'android', 'app', 'src', 'main', 'assets', 'index.android.bundle.map'),
+  ]
+  for (const bp of bundlePaths) {
+    if (existsSync(bp)) {
+      rmSync(bp, { force: true })
+      console.log(`[build-and-sync] JS バンドルキャッシュ削除: ${path.basename(bp)}`)
+    }
   }
 
-  // APK を Drive にもコピー（手動インストール用）
-  const apkPath = existsSync(apkSrcPath) ? apkSrcPath : apkDebugPath
+  // assembleDebug のみ（releaseはreanimated ninja loopで失敗するため、debugのみ使用）
+  // proguard無効・debuggableVariants=[]でJSバンドル込み → 機能差なし
+  execSync(`"${gradlew}" assembleDebug`, {
+    cwd: path.join(androidSrcDir, 'android'),
+    stdio: 'inherit',
+    shell: true,
+    env,
+  })
+  console.log('[build-and-sync] Android Debug ビルド完了 ✓')
+
+  const apkPath = apkDebugPath
   if (existsSync(apkPath)) {
     execSync(`if not exist "${androidDestDir}" mkdir "${androidDestDir}"`, { shell: true, stdio: 'pipe' })
     execSync(`copy /Y "${apkPath}" "${path.join(androidDestDir, 'study-tracker.apk')}"`, { shell: true, stdio: 'pipe' })
     console.log(`[build-and-sync] Android APK → Drive コピー完了 ✓`)
 
-    // GitHub Release に APK をアップロード
     const tagName = `build-${newBuildNumber}`
     try {
       try {
@@ -276,17 +277,13 @@ try {
         `gh release create "${tagName}" "${apkPath}#study-tracker.apk" --title "v${newVersion} (build ${newBuildNumber})" --notes "Build ${newBuildNumber}"`,
         { cwd: ROOT, stdio: 'pipe' }
       )
-      // GitHub API アセットIDを取得してAPIエンドポイントURLを生成（リダイレクトなし）
-      const assetId = execSync(
-        `gh api repos/fffuttta-design/study-tracker-next/releases/tags/${tagName} --jq ".assets[0].id"`,
-        { cwd: ROOT, encoding: 'utf-8', stdio: 'pipe' }
-      ).trim()
-      const apkUrl = `https://api.github.com/repos/fffuttta-design/study-tracker-next/releases/assets/${assetId}`
-      console.log(`[build-and-sync] APK asset ID: ${assetId}`)
-      // version.json に apkUrl を追記して上書き
-      const versionJsonWithUrl = JSON.stringify({ ...newBuildInfo, apkUrl }, null, 2) + '\n'
+      // 直接ダウンロードURL（たくはる式・認証不要）
+      const downloadUrl = `https://github.com/fffuttta-design/study-tracker-next/releases/download/${tagName}/study-tracker.apk`
+      // version.json に downloadUrl を書き込む
+      const versionJsonWithUrl = JSON.stringify({ ...newBuildInfo, downloadUrl }, null, 2) + '\n'
       writeFileSync(path.join(ROOT, 'apps', 'mobile', 'version.json'), versionJsonWithUrl, 'utf-8')
       console.log(`[build-and-sync] GitHub Release アップロード完了 ✓ (${tagName})`)
+      console.log(`[build-and-sync] downloadUrl: ${downloadUrl}`)
     } catch (e) {
       console.warn('[build-and-sync] GitHub Release 失敗:', e.message)
     }
