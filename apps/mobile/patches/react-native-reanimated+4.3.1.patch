@@ -1,0 +1,15 @@
+diff --git a/node_modules/react-native-reanimated/android/CMakeLists.txt b/node_modules/react-native-reanimated/android/CMakeLists.txt
+--- a/node_modules/react-native-reanimated/android/CMakeLists.txt
++++ b/node_modules/react-native-reanimated/android/CMakeLists.txt
+@@ -41,8 +41,8 @@ set(COMMON_CPP_DIR "${CMAKE_SOURCE_DIR}/../Common/cpp")
+
+-file(GLOB_RECURSE REANIMATED_COMMON_CPP_SOURCES CONFIGURE_DEPENDS
+-     "${COMMON_CPP_DIR}/reanimated/*.cpp")
+-file(GLOB_RECURSE REANIMATED_ANDROID_CPP_SOURCES CONFIGURE_DEPENDS
+-     "${ANDROID_CPP_DIR}/reanimated/*.cpp")
++file(GLOB_RECURSE REANIMATED_COMMON_CPP_SOURCES
++     "${COMMON_CPP_DIR}/reanimated/*.cpp")
++file(GLOB_RECURSE REANIMATED_ANDROID_CPP_SOURCES
++     "${ANDROID_CPP_DIR}/reanimated/*.cpp")
+
+ find_package(fbjni REQUIRED CONFIG)
