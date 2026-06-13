@@ -1,6 +1,6 @@
 {
   "name": "study-tracker",
-  "version": "1.0.200",
+  "version": "1.0.201",
   "private": true,
   "type": "module",
   "main": "electron/main.js",
@@ -41,6 +41,7 @@
     "nsis": {
       "oneClick": true,
       "perMachine": false,
+      "installDir": "$LOCALAPPDATA\\StudyTracker",
       "deleteAppDataOnUninstall": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
