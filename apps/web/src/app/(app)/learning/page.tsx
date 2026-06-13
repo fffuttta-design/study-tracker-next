@@ -134,28 +134,50 @@ function LearningPageContent() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* 日付ナビ + 格言 */}
-      <div className="border-b border-gray-100 px-6 py-3">
-        <p className="mb-2 text-xs italic text-gray-400">💡 {dailyQuote()}</p>
-        <div className="flex items-center gap-3">
-          <button onClick={() => setSelectedDate((d) => subDays(d, 1))} className="rounded p-1 text-gray-400 hover:bg-gray-100">‹</button>
-          <span className="min-w-[160px] text-center text-sm font-medium text-gray-700">
-            {format(selectedDate, 'yyyy年M月d日（E）', { locale: ja })}
-            {isToday(selectedDate) && <span className="ml-2 rounded bg-brand-500 px-1.5 py-0.5 text-xs text-white">今日</span>}
-          </span>
-          <button onClick={() => setSelectedDate((d) => addDays(d, 1))} className="rounded p-1 text-gray-400 hover:bg-gray-100">›</button>
-          {!isToday(selectedDate) && (
-            <button onClick={() => setSelectedDate(new Date())} className="ml-1 rounded border border-gray-200 px-2 py-0.5 text-xs text-gray-500 hover:bg-gray-50">今日</button>
-          )}
-          {dueItems.length > 0 && (
-            <span className="ml-auto mr-2 text-xs font-medium text-red-500">復習待ち {dueItems.length}件</span>
-          )}
-          <Link
-            href="/settings"
-            className={`${dueItems.length === 0 ? 'ml-auto' : ''} shrink-0 flex items-center gap-1 rounded-md px-2.5 py-1.5 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors`}
-          >
-            設定⚙️
-          </Link>
+      {/* 日付ヘッダー */}
+      <div className={`border-b px-5 py-3 ${isToday(selectedDate) ? 'border-brand-100 bg-gradient-to-r from-brand-50/60 to-white' : 'border-gray-100 bg-white'}`}>
+        <div className="flex items-start justify-between gap-4">
+          {/* 左: 日付ナビ */}
+          <div className="flex items-center gap-1.5 min-w-0">
+            <button onClick={() => setSelectedDate((d) => subDays(d, 1))} className="shrink-0 rounded-lg p-1.5 text-gray-300 hover:bg-gray-100 hover:text-gray-500">‹</button>
+            <div className="min-w-0">
+              <div className="flex items-baseline gap-1.5 flex-wrap">
+                <span className="text-3xl font-black text-gray-900 leading-none tracking-tight">
+                  {format(selectedDate, 'M月d日', { locale: ja })}
+                </span>
+                <span className="text-lg font-semibold text-gray-400 leading-none">
+                  （{format(selectedDate, 'E', { locale: ja })}）
+                </span>
+                {isToday(selectedDate) && (
+                  <span className="rounded-full bg-brand-500 px-2 py-0.5 text-[11px] font-bold text-white leading-none">今日</span>
+                )}
+              </div>
+              <p className="mt-1 text-[11px] text-gray-400 italic truncate">💡 {dailyQuote()}</p>
+            </div>
+            <button onClick={() => setSelectedDate((d) => addDays(d, 1))} className="shrink-0 rounded-lg p-1.5 text-gray-300 hover:bg-gray-100 hover:text-gray-500">›</button>
+            {!isToday(selectedDate) && (
+              <button onClick={() => setSelectedDate(new Date())} className="shrink-0 rounded-full border border-brand-200 px-2.5 py-1 text-xs font-medium text-brand-500 hover:bg-brand-50">今日へ</button>
+            )}
+          </div>
+
+          {/* 右: 今日のスコア */}
+          <div className="flex shrink-0 items-center gap-3">
+            <div className="flex flex-col items-center rounded-xl bg-white/80 px-3 py-1.5 shadow-sm ring-1 ring-gray-100">
+              <span className={`text-3xl font-black leading-none ${todayItems.length > 0 ? 'text-brand-600' : 'text-gray-200'}`}>{todayItems.length}</span>
+              <span className="mt-0.5 text-[10px] font-medium text-gray-400">学習</span>
+            </div>
+            {dueItems.length > 0 && (
+              <div className="flex flex-col items-center rounded-xl bg-red-50 px-3 py-1.5 shadow-sm ring-1 ring-red-100">
+                <span className="text-3xl font-black leading-none text-red-500">{dueItems.length}</span>
+                <span className="mt-0.5 text-[10px] font-medium text-red-400">復習待ち</span>
+              </div>
+            )}
+            <Link
+              href="/settings"
+              className="shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+              title="設定"
+            >⚙️</Link>
+          </div>
         </div>
       </div>
 

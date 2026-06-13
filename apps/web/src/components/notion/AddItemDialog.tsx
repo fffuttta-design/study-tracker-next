@@ -342,13 +342,17 @@ export function AddItemDialog({ uid, onClose, onAfterRecord }: {
     return { titleMatches, contentMatches };
   }, [searchQuery, pages]);
 
+  const favorites = useMemo(() =>
+    pages
+      .filter((p) => p.isFavorite && p.id !== WORKSPACE_ID)
+      .sort((a, b) => a.order - b.order),
+    [pages]
+  );
+
   const roots = useMemo(() =>
     pages
       .filter((p) => !p.parentId && p.id !== WORKSPACE_ID)
-      .sort((a, b) => {
-        if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1;
-        return a.order - b.order;
-      }),
+      .sort((a, b) => a.order - b.order),
     [pages]
   );
 
@@ -563,11 +567,11 @@ export function AddItemDialog({ uid, onClose, onAfterRecord }: {
                 </div>
               ) : (
                 <>
-                  {roots.some((p) => p.isFavorite) && (
+                  {favorites.length > 0 && (
                     <div className="shrink-0 border-b border-gray-100">
                       <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-yellow-500">★ お気に入り</p>
                       <div className="px-1 pb-2">
-                        {roots.filter((p) => p.isFavorite).map((page) => (
+                        {favorites.map((page) => (
                           <button
                             key={`fav-${page.id}`}
                             onClick={() => setSelectedPageId(page.id)}

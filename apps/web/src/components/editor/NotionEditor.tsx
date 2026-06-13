@@ -11,7 +11,7 @@ export const PageNavigationContext = createContext<((href: string) => void) | nu
 // ── エディタUID コンテキスト ──────────────────────────────────────────
 export const EditorUidContext = createContext<string>('');
 
-import { Node as TiptapNode, InputRule, Extension, wrappingInputRule } from '@tiptap/core';
+import { Node as TiptapNode, InputRule, Extension, wrappingInputRule, textblockTypeInputRule } from '@tiptap/core';
 import {
   useEditor, EditorContent,
   NodeViewWrapper, NodeViewContent,
@@ -892,6 +892,23 @@ const MarkdownBulletShortcut = Extension.create({
   },
 });
 
+// ── コードブロック ``` ショートカット ──────────────────────────────────
+// StarterKit の CodeBlock にも同等の InputRule があるが、明示追加で確実に動作させる
+// 行頭に ``` + スペース or Enter でコードブロックに変換
+const MarkdownCodeBlockShortcut = Extension.create({
+  name: 'markdownCodeBlockShortcut',
+  priority: 150,
+  addInputRules() {
+    return [
+      textblockTypeInputRule({
+        find: /^```([a-z]*)\s$/,
+        type: this.editor.schema.nodes.codeBlock,
+        getAttributes: (match) => ({ language: match[1] || null }),
+      }),
+    ];
+  },
+});
+
 // ── Ctrl+B 行全体 bold トグル ──────────────────────────────────────────
 // テキスト未選択時のみ発動。選択中は StarterKit の toggleBold に委譲。
 // ・行のすべてが bold → 全解除
@@ -1228,6 +1245,7 @@ export function NotionEditor({
       InlineDatabaseNode,
       DragHandleExtension,
       MarkdownBulletShortcut,
+      MarkdownCodeBlockShortcut,
       LineBoldShortcut,
       AnnotationMark,
     ],

@@ -58,7 +58,7 @@ interface NotionPageState {
   pages: NotionPage[];
   loading: boolean;
   subscribe: (uid: string) => () => void;
-  add: (uid: string, params?: { parentId?: string; order?: number; type?: 'page' | 'database'; notionId?: string }) => Promise<NotionPage>;
+  add: (uid: string, params?: { parentId?: string; order?: number; type?: 'page' | 'database' | 'book'; notionId?: string; title?: string; icon?: string }) => Promise<NotionPage>;
   update: (uid: string, id: string, data: Partial<NotionPage>) => Promise<void>;
   batchUpdate: (uid: string, updates: Array<{ id: string; content: string }>) => Promise<void>;
   remove: (uid: string, id: string) => Promise<void>;
