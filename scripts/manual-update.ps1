@@ -1,4 +1,4 @@
-# Study Tracker 手動アップデートスクリプト
+﻿# Study Tracker 手動アップデートスクリプト
 # build 209 のアップデーターが失敗する場合に直接実行してください
 
 $ErrorActionPreference = "SilentlyContinue"
