@@ -36,7 +36,7 @@ C:\dev\CoreBusinessTools\Study-Tracker-Next\Study-Tracker-Next仕様書.md
 |---|---|---|
 | Web | Next.js 15 + Firebase | Vercel（GitHub push で自動デプロイ） |
 | Desktop (Windows) | Electron + Next.js | Google Drive 同期（`.sync-dest` パス） |
-| Android | React Native 0.85 | GitHub Release（APK） |
+| Android | React Native 0.85 | GitHub Release（APK・初回インストールも更新も同じ） |
 
 ### モノレポ構成
 
@@ -91,9 +91,8 @@ npm run dist:win:sync
 4. 起動中の `学習トラッカー.exe` を終了（DLLロック解除）
 5. Electron で Windows デスクトップアプリをビルド（`dist-electron/win-unpacked`）
 6. `robocopy` で Google Drive（`.sync-dest` パスに記載）に同期 → デスクトップ配信完了
-7. Android APK をビルド（assembleRelease、失敗時は assembleDebug にフォールバック）
-8. APK を Google Drive にコピー
-9. GitHub Release に APK をアップロード → Android 配信完了
+7. Android APK をビルド（assembleDebug のみ・release は reanimated ninja ループで失敗するため）
+8. GitHub Release に APK をアップロード → Android 配信完了（Drive コピーなし）
 10. `git add -A && git commit && git push origin master` → Vercel が自動デプロイ → Web 配信完了
 
 ### 前提条件

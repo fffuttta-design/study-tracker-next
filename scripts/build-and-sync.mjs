@@ -219,10 +219,8 @@ if (existsSync(exeLaunchPath)) {
   console.log(`[build-and-sync] 起動完了 ✓ (v${newVersion} / build ${newBuildNumber})\n`)
 }
 
-// ── Step 8: Android APK ビルド & Drive 同期 ───────────────────────
+// ── Step 8: Android APK ビルド & GitHub Release ───────────────────
 const androidSrcDir  = path.join(ROOT, 'apps', 'mobile')
-const androidDestDir = path.join(destDir, 'android')
-const apkSrcPath     = path.join(androidSrcDir, 'android', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk')
 const apkDebugPath   = path.join(androidSrcDir, 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk')
 
 console.log('\n[build-and-sync] Android APK ビルド中...')
@@ -264,10 +262,6 @@ try {
 
   const apkPath = apkDebugPath
   if (existsSync(apkPath)) {
-    execSync(`if not exist "${androidDestDir}" mkdir "${androidDestDir}"`, { shell: true, stdio: 'pipe' })
-    execSync(`copy /Y "${apkPath}" "${path.join(androidDestDir, 'study-tracker.apk')}"`, { shell: true, stdio: 'pipe' })
-    console.log(`[build-and-sync] Android APK → Drive コピー完了 ✓`)
-
     const tagName = `build-${newBuildNumber}`
     try {
       try {
