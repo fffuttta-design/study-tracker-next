@@ -24,7 +24,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setAutoLaunch:       (enable) => ipcRenderer.send('set-auto-launch', enable),
   // ビルド情報（インストール済みシェルの実際のバージョン）
   getBuildInfo:        () => ipcRenderer.invoke('get-build-info'),
-  // アップデート
-  checkForUpdate:      () => ipcRenderer.invoke('check-for-update'),
-  applyUpdate:         (arg) => ipcRenderer.send('apply-update', arg),
+  // アップデート（electron-updater が全自動処理）
+  checkForUpdate:       () => ipcRenderer.invoke('check-for-update'),
+  applyUpdate:          () => ipcRenderer.send('apply-update'),
+  onUpdateAvailable:    (cb) => ipcRenderer.on('update-available',         (_, info) => cb(info)),
+  onUpdateDownloaded:   (cb) => ipcRenderer.on('update-downloaded',        (_, info) => cb(info)),
+  onUpdateProgress:     (cb) => ipcRenderer.on('update-download-progress', (_, pct)  => cb(pct)),
 })

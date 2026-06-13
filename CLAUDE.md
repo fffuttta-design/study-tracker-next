@@ -35,7 +35,7 @@ C:\dev\CoreBusinessTools\Study-Tracker-Next\Study-Tracker-Next仕様書.md
 | プラットフォーム | 技術 | 配信先 |
 |---|---|---|
 | Web | Next.js 15 + Firebase | Vercel（GitHub push で自動デプロイ） |
-| Desktop (Windows) | Electron + Next.js | Google Drive 同期（`.sync-dest` パス） |
+| Desktop (Windows) | Electron + Next.js | GitHub Release（ZIP）→ アプリ自身が自動DL・自己置換 |
 | Android | React Native 0.85 | GitHub Release（APK・初回インストールも更新も同じ） |
 
 ### モノレポ構成
@@ -90,18 +90,15 @@ npm run dist:win:sync
 3. Android の `updateService.ts` のビルド番号を更新
 4. 起動中の `学習トラッカー.exe` を終了（DLLロック解除）
 5. Electron で Windows デスクトップアプリをビルド（`dist-electron/win-unpacked`）
-6. `robocopy` で Google Drive（`.sync-dest` パスに記載）に同期 → デスクトップ配信完了
-7. Android APK をビルド（assembleDebug のみ・release は reanimated ninja ループで失敗するため）
-8. GitHub Release に APK をアップロード → Android 配信完了（Drive コピーなし）
+6. `robocopy` で `%LOCALAPPDATA%\StudyTracker` に直コピー → 開発機の起動はここから
+7. `dist-electron/study-tracker-win.zip` を作成（GitHub Release 配布用）
+8. Android APK をビルド（assembleDebug のみ・release は reanimated ninja ループで失敗するため）
+9. GitHub Release `build-XXX` タグに APK と Windows ZIP を両方アップロード
 10. `git add -A && git commit && git push origin master` → Vercel が自動デプロイ → Web 配信完了
 
 ### 前提条件
 
-- `.sync-dest` ファイルにGoogle Driveの同期先パスが記載されていること
-  ```
-  例: H:\マイドライブ\ツール\StudyTracker
-  ```
-- `gh` CLI がインストール済みで認証済みであること（Android APKのGitHub Releaseアップロードに使用）
+- `gh` CLI がインストール済みで認証済みであること（GitHub Releaseアップロードに使用）
 - Android SDK・JAVA_HOME が設定済みであること（スクリプト内でパスを自動設定）
 
 ### Webのみ更新する場合

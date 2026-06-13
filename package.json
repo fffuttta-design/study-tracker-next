@@ -1,6 +1,6 @@
 {
   "name": "study-tracker",
-  "version": "1.0.0",
+  "version": "1.0.200",
   "private": true,
   "type": "module",
   "main": "electron/main.js",
@@ -14,8 +14,7 @@
     "lint": "turbo lint",
     "type-check": "turbo type-check",
     "electron:dev": "electron .",
-    "dist:win:dir": "npx electron-builder --win --dir",
-    "dist:win": "npx electron-builder --win",
+    "dist:win": "npx electron-builder --win --publish never",
     "dist:win:sync": "node scripts/build-and-sync.mjs"
   },
   "build": {
@@ -35,9 +34,25 @@
       }
     ],
     "win": {
-      "target": "dir",
-      "icon": "build/icon.ico"
+      "target": "nsis",
+      "icon": "build/icon.ico",
+      "artifactName": "study-tracker-setup.exe"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "deleteAppDataOnUninstall": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "fffuttta-design",
+      "repo": "study-tracker-next"
     }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
   },
   "devDependencies": {
     "electron": "^36.9.5",

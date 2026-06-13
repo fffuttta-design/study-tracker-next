@@ -1,55 +1,33 @@
 /**
  * build-and-sync.mjs
- * ビルド → Google Drive 同期を一本で行うスクリプト
+ * 全プラットフォーム一括ビルド & 配信スクリプト
  *
  * やること:
- *   0. electron/build-info.json の buildNumber をインクリメント
- *   1. builtAt タイムスタンプを生成
- *   2. electron/build-info.json に version + buildNumber + builtAt を書き込む
- *   3. 起動中のアプリを終了（DLL ロック解除）
- *   4. electron-builder で win-unpacked ビルド（インストーラーなし）
- *   5. win-unpacked/version.json に version + buildNumber + builtAt を書き込む
- *   6. robocopy で Google Drive に同期（version.json も含む）
- *   7. アプリを再起動
- *   8. GitHub へ自動プッシュ
+ *   0. build-info.json の buildNumber / version をインクリメント
+ *   1. version.ts / version.json / updateService.ts / package.json を自動更新
+ *   2. electron-builder NSIS でインストーラーをビルド
+ *      → GH_TOKEN があれば GitHub Release v${version} を自動作成・アップロード
+ *         （electron-updater が latest.yml を参照して自動アップデート）
+ *   3. Android APK をビルド（assembleDebug のみ）
+ *      → 同じ Release に study-tracker.apk を追加アップロード
+ *   4. git push → Vercel 自動デプロイ（Web 配信完了）
  *
  * 前提:
- *   .sync-dest ファイルに Google Drive のフォルダパスを書いておく
- *   例: H:\マイドライブ\ツール\StudyTracker
+ *   $env:GH_TOKEN = "ghp_xxx"  ← ビルド前に設定（PAT: contents:write 権限）
  *
  * 使い方:
  *   npm run dist:win:sync
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'fs'
-import { execSync, spawn } from 'child_process'
+import { execSync } from 'child_process'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
 
-const configFile   = path.join(ROOT, '.sync-dest')
-const srcDir       = path.join(ROOT, 'dist-electron', 'win-unpacked')
 const buildInfoPath = path.join(ROOT, 'electron', 'build-info.json')
-
-// ── .sync-dest チェック ────────────────────────────────────────────
-if (!existsSync(configFile)) {
-  console.log('')
-  console.log('================================================================')
-  console.log('  .sync-dest ファイルが見つかりません')
-  console.log('  プロジェクトルートに同期先パスを書いて作成してください')
-  console.log('  例: H:\\マイドライブ\\ツール\\StudyTracker')
-  console.log('================================================================')
-  console.log('')
-  process.exit(0)
-}
-
-const destDir = readFileSync(configFile, 'utf-8').trim()
-if (!destDir) {
-  console.error('[build-and-sync] .sync-dest が空です')
-  process.exit(1)
-}
 
 // ── Step 0: buildNumber と version をインクリメント ──────────────
 const buildInfo = JSON.parse(readFileSync(buildInfoPath, 'utf-8'))
@@ -99,127 +77,38 @@ try {
   console.warn('[build-and-sync] updateService.ts 更新失敗:', e.message)
 }
 
-// ── Step 2.5: ビルド前にアプリを終了（DLL ロック解除）────────────
-console.log('\n[build-and-sync] 起動中の 学習トラッカー.exe を終了（ビルド前）...')
-try {
-  execSync('taskkill /IM "学習トラッカー.exe" /F /T', { stdio: 'pipe' })
-  console.log('[build-and-sync] アプリを終了しました。プロセス消滅を待機中...')
-  for (let i = 0; i < 20; i++) {
-    await new Promise(r => setTimeout(r, 500))
-    try {
-      const out = execSync('tasklist /FI "IMAGENAME eq 学習トラッカー.exe" /NH', { encoding: 'utf-8', stdio: 'pipe' })
-      if (!out.includes('学習トラッカー.exe')) break
-    } catch { break }
-  }
-  console.log('[build-and-sync] プロセス終了確認 ✓')
-  await new Promise(r => setTimeout(r, 2000))
-} catch {
-  console.log('[build-and-sync] 起動中のアプリなし（スキップ）')
-}
+// ── Step 3: package.json version を同期（electron-updater が参照する）──
+const pkgPath = path.join(ROOT, 'package.json')
+const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
+pkg.version = newVersion
+writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf-8')
+console.log(`[build-and-sync] package.json version 更新: ${newVersion}`)
 
-// win-unpacked を事前削除してロック後を防ぐ
-console.log('[build-and-sync] win-unpacked を事前クリア...')
-try {
-  execSync('if exist "dist-electron\\win-unpacked" rmdir /s /q "dist-electron\\win-unpacked"', {
-    cwd: ROOT, stdio: 'pipe', shell: true,
-  })
-  console.log('[build-and-sync] クリア完了')
-} catch {
-  console.log('[build-and-sync] クリアスキップ（存在しない）')
+// ── Step 4: electron-builder NSIS ビルド & GitHub Release 作成 ───
+const ghToken = process.env.GH_TOKEN
+if (!ghToken) {
+  console.warn('[build-and-sync] ⚠  GH_TOKEN 未設定 → GitHub Release を作成しません')
+  console.warn('              → ビルド前に $env:GH_TOKEN = "ghp_xxx" を設定してください')
 }
-
-// ── Step 3: electron-builder でビルド（win-unpacked のみ）────────
-console.log('\n[build-and-sync] ビルド中...\n')
+const publishFlag = ghToken ? '--publish always' : '--publish never'
+console.log(`\n[build-and-sync] Windows NSIS ビルド中 (${publishFlag})...\n`)
+const setupPath = path.join(ROOT, 'dist-electron', 'study-tracker-setup.exe')
 try {
-  execSync('npx electron-builder --win --dir', {
-    cwd: ROOT,
-    stdio: 'inherit',
-    shell: true,
+  execSync(`npx electron-builder --win ${publishFlag}`, {
+    cwd: ROOT, stdio: 'inherit', shell: true,
+    env: { ...process.env },  // GH_TOKEN を引き継ぐ
   })
-} catch {
-  const exePath = path.join(srcDir, '学習トラッカー.exe')
-  if (!existsSync(exePath)) {
-    console.error('[build-and-sync] ビルド失敗（学習トラッカー.exe が存在しない）')
+} catch (e) {
+  if (!existsSync(setupPath)) {
+    console.error('[build-and-sync] ビルド失敗（study-tracker-setup.exe が存在しない）')
     process.exit(1)
   }
-  console.log('[build-and-sync] electron-builder がログエラーで終了しましたが exe は存在します。続行します。')
+  console.log('[build-and-sync] electron-builder がログエラーで終了しましたが Setup.exe は存在します。続行します。')
 }
-console.log('\n[build-and-sync] ビルド完了 ✓')
+console.log('\n[build-and-sync] Windows ビルド & Release 完了 ✓')
+console.log(`[build-and-sync] Setup.exe: ${setupPath}`)
 
-// ── Step 3.5: rcedit でカスタムアイコンを明示的に埋め込む ──────────
-// electron-builder の rcedit 呼び出しが symlink エラーで失敗する場合に備え、
-// winCodeSign キャッシュ内の rcedit を直接実行してアイコンを上書きする
-const exePath = path.join(srcDir, '学習トラッカー.exe')
-const iconSrc = path.join(ROOT, 'build', 'icon.ico')
-const rceditCacheDir = path.join(process.env.LOCALAPPDATA || '', 'electron-builder', 'Cache', 'winCodeSign')
-let rceditPath = null
-if (existsSync(rceditCacheDir)) {
-  const { readdirSync } = await import('fs')
-  for (const dir of readdirSync(rceditCacheDir)) {
-    const candidate = path.join(rceditCacheDir, dir, 'rcedit-x64.exe')
-    if (existsSync(candidate)) { rceditPath = candidate; break }
-  }
-}
-if (rceditPath && existsSync(iconSrc)) {
-  try {
-    execSync(`"${rceditPath}" "${exePath}" --set-icon "${iconSrc}"`, { stdio: 'pipe' })
-    console.log('[build-and-sync] アイコン埋め込み完了 ✓ (rcedit)')
-  } catch (e) {
-    console.warn('[build-and-sync] アイコン埋め込み失敗（スキップ）:', e.message)
-  }
-} else {
-  console.warn('[build-and-sync] rcedit が見つからないためアイコン埋め込みをスキップ')
-}
-
-// ── Step 4: version.json を win-unpacked に書き込む ───────────────
-writeFileSync(
-  path.join(srcDir, 'version.json'),
-  JSON.stringify(newBuildInfo, null, 2) + '\n',
-  'utf-8'
-)
-console.log(`[build-and-sync] version.json 書き込み完了 (build ${newBuildNumber})`)
-
-// ── Step 5: robocopy で Google Drive に同期 ───────────────────────
-console.log(`\n[build-and-sync] 同期開始`)
-console.log(`  FROM: ${srcDir}`)
-console.log(`  TO  : ${destDir}\n`)
-try {
-  execSync(
-    `robocopy "${srcDir}" "${destDir}" /MIR /R:0 /W:0 /NFL /NDL /NJH /NJS /NC /NS /NP`,
-    { stdio: 'inherit' }
-  )
-} catch (e) {
-  if ((e.status ?? 0) >= 8) {
-    console.error(`[build-and-sync] 同期に失敗しました (exit code ${e.status})`)
-    process.exit(1)
-  }
-}
-console.log('[build-and-sync] 同期完了 ✓')
-
-// version.json を Node.js で直接コピー（Drive 仮想FSで robocopy がスキップする場合の保険）
-try {
-  const { copyFileSync } = await import('fs')
-  copyFileSync(path.join(srcDir, 'version.json'), path.join(destDir, 'version.json'))
-  console.log('[build-and-sync] version.json 直接コピー完了 ✓')
-} catch (e) {
-  console.warn('[build-and-sync] version.json 直接コピー失敗:', e.message)
-}
-
-// ── Step 7: アプリを再起動（AppData 優先）────────────────────────────
-// AppData は更新ダイアログ経由で全PCと同じフローで更新する（開発機も例外なし）
-const localInstallDir = path.join(process.env.LOCALAPPDATA || '', 'StudyTracker')
-const localExePath    = path.join(localInstallDir, '学習トラッカー.exe')
-const driveExePath    = path.join(destDir, '学習トラッカー.exe')
-const exeLaunchPath   = existsSync(localExePath) ? localExePath : driveExePath
-
-if (existsSync(exeLaunchPath)) {
-  const launchFrom = existsSync(localExePath) ? 'ローカル (AppData)' : 'Drive (初回)'
-  console.log(`[build-and-sync] アプリを再起動 [${launchFrom}]...`)
-  spawn(exeLaunchPath, [], { detached: true, stdio: 'ignore' }).unref()
-  console.log(`[build-and-sync] 起動完了 ✓ (v${newVersion} / build ${newBuildNumber})\n`)
-}
-
-// ── Step 8: Android APK ビルド & GitHub Release ───────────────────
+// ── Step 5: Android APK ビルド & 既存 Release に追加 ─────────────
 const androidSrcDir  = path.join(ROOT, 'apps', 'mobile')
 const apkDebugPath   = path.join(androidSrcDir, 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk')
 
@@ -260,27 +149,24 @@ try {
   })
   console.log('[build-and-sync] Android Debug ビルド完了 ✓')
 
-  const apkPath = apkDebugPath
-  if (existsSync(apkPath)) {
-    const tagName = `build-${newBuildNumber}`
+  // electron-builder が作成した Release (v${newVersion}) に APK を追加アップロード
+  const releaseTag = `v${newVersion}`
+  if (existsSync(apkDebugPath) && ghToken) {
     try {
-      try {
-        execSync(`gh release delete "${tagName}" --yes --cleanup-tag`, { cwd: ROOT, stdio: 'pipe' })
-      } catch {}
       execSync(
-        `gh release create "${tagName}" "${apkPath}#study-tracker.apk" --title "v${newVersion} (build ${newBuildNumber})" --notes "Build ${newBuildNumber}"`,
+        `gh release upload "${releaseTag}" "${apkDebugPath}#study-tracker.apk" --clobber`,
         { cwd: ROOT, stdio: 'pipe' }
       )
-      // 直接ダウンロードURL（たくはる式・認証不要）
-      const downloadUrl = `https://github.com/fffuttta-design/study-tracker-next/releases/download/${tagName}/study-tracker.apk`
-      // version.json に downloadUrl を書き込む
+      const downloadUrl = `https://github.com/fffuttta-design/study-tracker-next/releases/download/${releaseTag}/study-tracker.apk`
       const versionJsonWithUrl = JSON.stringify({ ...newBuildInfo, downloadUrl }, null, 2) + '\n'
       writeFileSync(path.join(ROOT, 'apps', 'mobile', 'version.json'), versionJsonWithUrl, 'utf-8')
-      console.log(`[build-and-sync] GitHub Release アップロード完了 ✓ (${tagName})`)
+      console.log(`[build-and-sync] APK アップロード完了 ✓ (${releaseTag})`)
       console.log(`[build-and-sync] downloadUrl: ${downloadUrl}`)
     } catch (e) {
-      console.warn('[build-and-sync] GitHub Release 失敗:', e.message)
+      console.warn('[build-and-sync] APK アップロード失敗:', e.message)
     }
+  } else if (!ghToken) {
+    console.warn('[build-and-sync] GH_TOKEN 未設定のため APK アップロードをスキップ')
   } else {
     console.warn('[build-and-sync] APK ファイルが見つかりません（スキップ）')
   }

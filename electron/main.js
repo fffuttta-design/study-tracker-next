@@ -1,9 +1,9 @@
 import { app, BrowserWindow, shell, Tray, Menu, nativeImage, dialog, ipcMain, Notification } from 'electron'
+import { autoUpdater } from 'electron-updater'
 import { readFile, writeFile, mkdir, readdir, unlink, copyFile, appendFile } from 'fs/promises'
-import { join, dirname } from 'path'
+import { join } from 'path'
 import { fileURLToPath } from 'url'
 import { existsSync } from 'fs'
-import { exec, spawn as spawnChild, execFileSync } from 'child_process'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const isDev = !app.isPackaged
@@ -16,11 +16,6 @@ function debugLog(msg) {
   const logPath = join(app.getPath('userData'), 'debug.log')
   appendFile(logPath, line).catch(() => {})
 }
-
-// ── ローカルインストール先 ────────────────────────────────────────────
-// Drive から起動した場合に自動で AppData にインストールし、以降はそこから起動する
-const LOCAL_INSTALL_DIR = join(process.env.LOCALAPPDATA || '', 'StudyTracker')
-const LOCAL_EXE         = join(LOCAL_INSTALL_DIR, '学習トラッカー.exe')
 
 // ── URL ───────────────────────────────────────────────────────────
 // デプロイ後に VERCEL_URL を実際の URL に書き換えてください
@@ -196,7 +191,7 @@ function createTray() {
     { type: 'separator' },
     {
       label: '最新版を確認',
-      click: () => checkForUpdateManual(),
+      click: () => autoUpdater.checkForUpdates().catch(() => {}),
     },
     { type: 'separator' },
     {
@@ -321,343 +316,44 @@ function createWindow() {
   if (isDev) mainWin.webContents.openDevTools()
 }
 
-// ── ローカルインストール設定の永続化 ─────────────────────────────────
-const UPDATE_SOURCE_CONFIG = () => join(app.getPath('userData'), 'update-source.json')
+// ── electron-updater 設定 ──────────────────────────────────────────
+// DEV モードではチェックしない（GitHub Release がないため）
+if (!isDev) {
+  autoUpdater.autoDownload = true         // バックグラウンドで自動ダウンロード
+  autoUpdater.autoInstallOnAppQuit = true // 終了時に自動インストール
 
-async function getUpdateSourcePath() {
-  try {
-    const cfg = JSON.parse(await readFile(UPDATE_SOURCE_CONFIG(), 'utf-8'))
-    return typeof cfg.sourcePath === 'string' ? cfg.sourcePath : null
-  } catch { return null }
-}
+  autoUpdater.on('update-available', (info) => {
+    debugLog(`[update] 新バージョン検知: v${info.version}`)
+    mainWin?.webContents.send('update-available', { version: info.version })
+  })
 
-async function saveUpdateSourcePath(sourcePath) {
-  const cfgPath = UPDATE_SOURCE_CONFIG()
-  await mkdir(dirname(cfgPath), { recursive: true })
-  await writeFile(cfgPath, JSON.stringify({ sourcePath }, null, 2), 'utf-8')
-}
+  autoUpdater.on('update-not-available', () => {
+    debugLog('[update] 最新版です')
+  })
 
-// ── PowerShell スクリプトを生成して wscript.exe 経由でウィンドウなし実行
-// powershell.exe を spawn で直接起動すると detached:true と windowsHide:true が
-// Windows 内部フラグ (DETACHED_PROCESS vs CREATE_NO_WINDOW) で競合してコンソールが出る。
-// wscript.exe //B（コンソールサブシステムを持たない GUI プロセス）経由で起動することで
-// コンソールウィンドウを完全に排除する。
-async function launchPS1(scriptLines) {
-  debugLog(`[launchPS1] called, stack=${new Error().stack.split('\n')[2]?.trim()}`)
-  const ts     = Date.now()
-  const tmpPs1 = join(app.getPath('temp'), `st-update-${ts}.ps1`)
-  const tmpVbs = join(app.getPath('temp'), `st-update-${ts}.vbs`)
+  autoUpdater.on('download-progress', (progress) => {
+    mainWin?.webContents.send('update-download-progress', Math.round(progress.percent))
+  })
 
-  const bom    = '﻿'
-  const header = [
-    '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
-    '$OutputEncoding = [System.Text.Encoding]::UTF8',
-    '',
-  ]
-  await writeFile(tmpPs1, bom + [...header, ...scriptLines].join('\n'), 'utf-8')
-
-  // VBScript: Run の第2引数 0 = ウィンドウ非表示, 第3引数 False = 非同期
-  const vbs = [
-    'Set oShell = CreateObject("WScript.Shell")',
-    `oShell.Run "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -NonInteractive -NoProfile -File " & Chr(34) & "${tmpPs1}" & Chr(34), 0, False`,
-  ].join('\r\n')
-  await writeFile(tmpVbs, vbs, 'utf-8')
-
-  debugLog(`[launchPS1] spawning wscript.exe //B ${tmpVbs}`)
-  spawnChild('wscript.exe', ['//B', tmpVbs], {
-    detached: true,
-    windowsHide: true,
-    stdio: 'ignore',
-  }).unref()
-}
-
-// ── アップデート適用（GoalManager と同仕様の進捗ログウィンドウ）──────────
-// パスは環境変数経由で渡す → PS1 内に日本語を含めない → 文字化けなし
-// -EncodedCommand (UTF-16LE + Base64) でファイル書き出し不要
-async function applyUpdate(sourcePath, newVersion, _newBuildNum) {
-  const script = [
-    // SilentlyContinue: PS5.1 で taskkill の stderr が NativeCommandError になって
-    // Stop が暴発するのを防ぐ。robocopy の失敗は $LASTEXITCODE で手動チェック。
-    '$ErrorActionPreference = "SilentlyContinue"',
-    // ログファイルはウィンドウが閉じても残るので後からエラーを確認できる
-    '$logFile = "$env:TEMP\\study-tracker-update.log"',
-    '"" | Out-File $logFile -Encoding UTF8 -Force',
-    'function wl { param($m, $c = "White"); $line = (Get-Date).ToString("HH:mm:ss") + " " + $m; Write-Host $line -ForegroundColor $c; Add-Content -Path $logFile -Value $line -Encoding UTF8 }',
-    'try {',
-    '  wl "===== Study Tracker アップデート =====" "Cyan"',
-    `  wl "バージョン: v${newVersion}"`,
-    '  wl "元: $env:ST_SRC" "Gray"',
-    '  wl "先: $env:ST_DST" "Gray"',
-    '  wl ""',
-    '  wl "[1/3] アプリを終了中..." "Green"',
-    '  Start-Sleep -Seconds 1',
-    // $null = & で stdout/stderr を捨てる（2>$null は PS5.1 では危険）
-    '  $null = & taskkill /IM "学習トラッカー.exe" /F /T',
-    '  $i = 0; while ((Get-Process -Name "学習トラッカー" -ErrorAction SilentlyContinue) -and ($i -lt 15)) { Start-Sleep -Seconds 1; $i++ }',
-    '  wl "    プロセス終了確認 ✓" "Green"',
-    `  wl "[2/3] v${newVersion} をコピー中..." "Yellow"`,
-    '  wl "  元: $env:ST_SRC" "Gray"',
-    '  wl "  先: $env:ST_DST" "Gray"',
-    '  robocopy $env:ST_SRC $env:ST_DST /MIR /R:30 /W:2 /NFL /NDL /NJH /NJS /NC /NS /NP',
-    '  $rc = $LASTEXITCODE; wl "    robocopy 終了コード: $rc" "Gray"',
-    '  if ($rc -ge 8) { throw "robocopy 失敗 (code=$rc)" }',
-    '  wl "    コピー完了 ✓" "Green"',
-    '  Start-Sleep -Seconds 2',
-    '  wl "[3/3] アプリを起動します..." "Cyan"',
-    '  Start-Sleep -Seconds 1',
-    '  & cmd.exe /c start "" $env:ST_EXE',
-    '  wl "アップデート完了！" "Cyan"',
-    '  wl "ログ: $logFile" "Gray"',
-    '  Start-Sleep -Seconds 2',
-    '} catch {',
-    '  wl ""',
-    '  wl "========== エラー詳細 ==========" "Red"',
-    '  wl "  $($_.Exception.Message)" "Red"',
-    '  wl "  元フォルダ: $env:ST_SRC" "Yellow"',
-    '  wl "  先フォルダ: $env:ST_DST" "Yellow"',
-    '  wl "  ログ保存先: $logFile" "Yellow"',
-    '  wl ""',
-    '  Read-Host "  Enterキーで閉じる"',
-    '  exit 1',
-    '}',
-  ].join('\r\n')
-
-  const encoded = Buffer.from(script, 'utf16le').toString('base64')
-
-  spawnChild('cmd.exe', [
-    '/c', 'start', 'powershell.exe',
-    '-ExecutionPolicy', 'Bypass',
-    '-NoProfile',
-    '-EncodedCommand', encoded,
-  ], {
-    detached: true,
-    stdio: 'ignore',
-    shell: false,
-    env: {
-      ...process.env,
-      ST_SRC: sourcePath,
-      ST_DST: LOCAL_INSTALL_DIR,
-      ST_EXE: LOCAL_EXE,
-    },
-  }).unref()
-
-  setTimeout(() => app.exit(0), 300)
-}
-
-// ── 初回: Drive から起動された場合に AppData へ自動インストール ───────
-async function autoInstallIfNeeded() {
-  if (isDev) return false
-
-  const exeDir = dirname(app.getPath('exe'))
-
-  // すでに AppData から起動している → 何もしない
-  if (exeDir.toLowerCase().startsWith(LOCAL_INSTALL_DIR.toLowerCase())) return false
-
-  console.log(`[install] Drive実行を検知 → ローカルインストール開始`)
-  console.log(`[install]   元: ${exeDir}`)
-  console.log(`[install]   先: ${LOCAL_INSTALL_DIR}`)
-
-  // 次回アップデート時の参照先として保存
-  await saveUpdateSourcePath(exeDir)
-
-  // PS1 を使わず Node.js から直接 robocopy（日本語パスの文字コード問題を回避）
-  try {
-    execFileSync('robocopy', [
-      exeDir, LOCAL_INSTALL_DIR,
-      '/MIR', '/R:2', '/W:1',
-      '/NFL', '/NDL', '/NJH', '/NJS', '/NC', '/NS', '/NP',
-    ], { stdio: 'ignore', windowsHide: true })
-  } catch (e) {
-    if ((e.status ?? 0) >= 8) {
-      dialog.showErrorBox('Study Tracker インストールエラー',
-        `インストールに失敗しました (code: ${e.status})`)
-      app.exit(1)
-      return true
-    }
-  }
-
-  spawnChild(LOCAL_EXE, [], { detached: true, stdio: 'ignore' }).unref()
-  setTimeout(() => app.exit(0), 500)
-  return true
-}
-
-// ── トレイメニューから手動チェック（結果を必ずダイアログで通知）────────
-async function checkForUpdateManual() {
-  try {
-    const sourcePath = await getUpdateSourcePath()
-    if (!sourcePath) {
-      dialog.showMessageBox(mainWin, {
-        type: 'info', title: '最新版を確認',
-        message: 'アップデート元が設定されていません',
-        detail: 'Drive からインストールし直してください。',
-        buttons: ['OK'],
-      })
-      return
-    }
-
-    const versionJsonPath = join(sourcePath, 'version.json')
-    if (!existsSync(versionJsonPath)) {
-      dialog.showMessageBox(mainWin, {
-        type: 'warning', title: '最新版を確認',
-        message: 'version.json が見つかりません',
-        detail: `確認先: ${sourcePath}`,
-        buttons: ['OK'],
-      })
-      return
-    }
-
-    const [remote, local] = await Promise.all([
-      readFile(versionJsonPath,                   'utf-8').then(JSON.parse),
-      readFile(join(__dirname, 'build-info.json'), 'utf-8').then(JSON.parse),
-    ])
-
-    const remoteNum = remote.buildNumber ?? 0
-    const localNum  = local.buildNumber  ?? 0
-
-    if (remoteNum <= localNum) {
-      dialog.showMessageBox(mainWin, {
-        type: 'info', title: '最新版を確認',
-        message: '✅ 最新版です',
-        detail: `v${local.version} (build ${localNum})`,
-        buttons: ['OK'],
-      })
-      return
-    }
-
-    const { response } = await dialog.showMessageBox(mainWin, {
-      type: 'info', title: '学習トラッカー - アップデート',
-      message: '新しいバージョンが利用可能です 🎉',
-      detail: [
-        `現在 : v${local.version} (build ${localNum})`,
-        `最新 : v${remote.version} (build ${remoteNum})`,
-        '',
-        '今すぐ更新しますか？',
-      ].join('\n'),
-      buttons: ['今すぐ更新', '後で'],
-      defaultId: 0, cancelId: 1,
-    })
-
-    if (response === 0) {
-      await applyUpdate(sourcePath, remote.version ?? '?', remoteNum)
-    }
-  } catch (e) {
+  autoUpdater.on('update-downloaded', (info) => {
+    debugLog(`[update] ダウンロード完了: v${info.version}`)
+    mainWin?.webContents.send('update-downloaded', { version: info.version })
     dialog.showMessageBox(mainWin, {
-      type: 'error', title: '最新版を確認',
-      message: 'チェックに失敗しました',
-      detail: e.message,
-      buttons: ['OK'],
-    })
-  }
-}
-
-// ── 起動時チェック（buildNumber と builtAt 両方で比較）────────────────
-async function checkForUpdateOnStartup() {
-  if (isDev) return
-  try {
-    const sourcePath = await getUpdateSourcePath()
-    if (!sourcePath) return
-
-    const versionJsonPath = join(sourcePath, 'version.json')
-    if (!existsSync(versionJsonPath)) return
-
-    const [remote, local] = await Promise.all([
-      readFile(versionJsonPath,                   'utf-8').then(JSON.parse),
-      readFile(join(__dirname, 'build-info.json'), 'utf-8').then(JSON.parse),
-    ])
-
-    const remoteNum = remote.buildNumber ?? 0
-    const localNum  = local.buildNumber  ?? 0
-    // buildNumber が同じでも builtAt が違えば更新あり（開発中の再ビルド対応）
-    const newerByNum = remoteNum > localNum
-    const newerByAt  = remoteNum === localNum && remote.builtAt && local.builtAt && remote.builtAt !== local.builtAt
-
-    if (!newerByNum && !newerByAt) return
-
-    if (updateDialogShown) return
-    updateDialogShown = true
-    console.log(`[update] 起動時に新バージョン検知: build ${localNum} → ${remoteNum}`)
-
-    const { response } = await dialog.showMessageBox(mainWin, {
       type: 'info',
-      title: '学習トラッカー - アップデート',
-      message: '新しいバージョンが利用可能です 🎉',
-      detail: [
-        `現在 : v${local.version  ?? '?'} (build ${localNum})`,
-        `最新 : v${remote.version ?? '?'} (build ${remoteNum})`,
-        '',
-        '今すぐ更新しますか？',
-      ].join('\n'),
-      buttons: ['今すぐ更新', '後で'],
-      defaultId: 0, cancelId: 1,
-    })
-
-    if (response === 0) {
-      await applyUpdate(sourcePath, remote.version ?? '?', remoteNum)
-    } else {
-      updateDialogShown = false  // 「後で」→ 次回チェック時にまた出せる
-    }
-  } catch (e) {
-    console.warn('[update] 起動時チェック失敗:', e.message)
-  }
-}
-
-// ── 更新ダイアログの重複表示防止フラグ ────────────────────────────────
-let updateDialogShown = false
-
-// ── バージョンチェック（update-source.json の Drive パスと比較）────────
-async function checkForUpdate() {
-  if (isDev) return
-  try {
-    const sourcePath = await getUpdateSourcePath()
-    if (!sourcePath) { console.log('[update] update-source.json なし → スキップ'); return }
-
-    const versionJsonPath = join(sourcePath, 'version.json')
-    if (!existsSync(versionJsonPath)) { console.log('[update] version.json が Drive に見つかりません'); return }
-
-    const buildInfoPath = join(__dirname, 'build-info.json')
-    debugLog(`[checkForUpdate] __dirname="${__dirname}"`)
-    debugLog(`[checkForUpdate] buildInfoPath="${buildInfoPath}"`)
-
-    const [remote, local] = await Promise.all([
-      readFile(versionJsonPath, 'utf-8').then(JSON.parse),
-      readFile(buildInfoPath,   'utf-8').then(JSON.parse),
-    ])
-
-    debugLog(`[checkForUpdate] local=${JSON.stringify(local)}`)
-    debugLog(`[checkForUpdate] remote=${JSON.stringify(remote)}`)
-
-    const remoteNum = remote.buildNumber ?? 0
-    const localNum  = local.buildNumber  ?? 0
-
-    if (remoteNum <= localNum) { console.log(`[update] 最新版です (build ${localNum})`); return }
-    if (updateDialogShown) return  // 既に表示中はスキップ
-    updateDialogShown = true
-
-    console.log(`[update] 新バージョン検知: build ${localNum} → ${remoteNum}`)
-
-    const { response } = await dialog.showMessageBox(mainWin, {
-      type: 'info',
-      title: '学習トラッカー - アップデート',
-      message: '新しいバージョンが利用可能です 🎉',
-      detail: [
-        `現在 : v${local.version  ?? '?'} (build ${localNum})`,
-        `最新 : v${remote.version ?? '?'} (build ${remoteNum})`,
-        '',
-        '今すぐ更新しますか？',
-      ].join('\n'),
-      buttons: ['今すぐ更新', '後で'],
+      title: '学習トラッカー - アップデート準備完了',
+      message: `v${info.version} の準備ができました 🎉`,
+      detail: '今すぐ再起動してインストールしますか？',
+      buttons: ['今すぐ再起動', '後で'],
       defaultId: 0,
       cancelId: 1,
+    }).then(({ response }) => {
+      if (response === 0) autoUpdater.quitAndInstall()
     })
+  })
 
-    if (response === 0) {
-      await applyUpdate(sourcePath, remote.version ?? '?', remoteNum)
-    } else {
-      updateDialogShown = false  // 「後で」→ 次回チェック時にまた出せる
-    }
-  } catch (e) {
-    console.warn('[update] バージョンチェック失敗:', e.message)
-  }
+  autoUpdater.on('error', (err) => {
+    debugLog(`[update] エラー: ${err.message}`)
+  })
 }
 
 // ── 復習通知スケジューラー ────────────────────────────────────────
@@ -788,43 +484,19 @@ ipcMain.handle('get-build-info', async () => {
 
 // 手動アップデートチェック（設定画面から）
 ipcMain.handle('check-for-update', async () => {
+  if (isDev) return { hasUpdate: false, reason: 'dev' }
   try {
-    const sourcePath = await getUpdateSourcePath()
-    if (!sourcePath) return { hasUpdate: false, reason: 'no-source-config' }
-
-    const versionJsonPath = join(sourcePath, 'version.json')
-    if (!existsSync(versionJsonPath)) return { hasUpdate: false, reason: 'no-version-file' }
-
-    const [remote, local] = await Promise.all([
-      readFile(versionJsonPath,                   'utf-8').then(JSON.parse),
-      readFile(join(__dirname, 'build-info.json'), 'utf-8').then(JSON.parse),
-    ])
-
-    const remoteNum = remote.buildNumber ?? 0
-    const localNum  = local.buildNumber  ?? 0
-
-    if (remoteNum <= localNum) {
-      return { hasUpdate: false, current: { version: local.version, buildNumber: localNum } }
-    }
-    return {
-      hasUpdate: true,
-      current:   { version: local.version,  buildNumber: localNum  },
-      latest:    { version: remote.version, buildNumber: remoteNum },
-      sourcePath,
-    }
+    const result = await autoUpdater.checkForUpdates()
+    const remoteVersion = result?.updateInfo?.version ?? null
+    return { checking: true, version: remoteVersion }
   } catch (e) {
-    return { hasUpdate: false, reason: String(e.message) }
+    return { hasUpdate: false, reason: e.message }
   }
 })
 
-ipcMain.on('apply-update', async (_, arg) => {
-  debugLog(`[apply-update] IPC received arg=${JSON.stringify(arg)}`)
-  // arg には { sourcePath, version, buildNumber } が渡される
-  const sourcePath  = arg?.sourcePath  ?? await getUpdateSourcePath()
-  const newVersion  = arg?.version     ?? '?'
-  const newBuildNum = arg?.buildNumber ?? 0
-  if (!sourcePath) { console.warn('[apply-update] sourcePath なし'); return }
-  await applyUpdate(sourcePath, newVersion, newBuildNum)
+// アップデート適用（設定画面の「再起動してインストール」ボタンから）
+ipcMain.on('apply-update', () => {
+  autoUpdater.quitAndInstall()
 })
 
 // Google Drive バックアップパス取得
@@ -865,20 +537,14 @@ if (!gotLock) {
     Menu.setApplicationMenu(null)
     await loadDriveConfig()
 
-    // Drive から起動された場合は AppData に自動インストールして終了
-    const installed = await autoInstallIfNeeded()
-    if (installed) return
-
     createWindow()
     createTray()
     mainWin.once('ready-to-show', () => {
-      // 起動時に即時チェック（builtAt で比較）
-      setTimeout(() => checkForUpdateOnStartup(), 1500)
-      // 以降は定期チェック（起動30秒後から3分ごと）
-      setTimeout(() => {
-        checkForUpdate()
-        setInterval(() => checkForUpdate(), 3 * 60 * 1000)
-      }, 30_000)
+      // 起動3秒後に確認 → バックグラウンド自動DL → DL完了でダイアログ
+      if (!isDev) {
+        setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 3000)
+        setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 3 * 60 * 1000)
+      }
     })
     // 復習通知スケジュール（毎朝08:00）
     scheduleReviewNotification()
