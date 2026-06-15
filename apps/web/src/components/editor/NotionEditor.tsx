@@ -1789,20 +1789,22 @@ export function NotionEditor({
             className="mb-6 w-full border-none text-3xl font-bold text-gray-900 outline-none placeholder:text-gray-200"
           />
         )}
-        {/* ブック: チャプター名をページ先頭に大きく表示（固定書式バーの上・スクロールで流れる） */}
-        {chapterHeading && (
-          <h1 className="mb-3 text-3xl font-bold text-gray-900">{chapterHeading}</h1>
-        )}
         {!hideToolbar && editor && (
           stickyToolbar ? (
             // ブック: スクロールしても書式バーを上部に固定（下に流れる本文を bg で隠す）
-            // チャプター名がある時は -mt-8/pt-8 のはみ出し補正を外す（先頭がチャプター名になるため）
-            <div className={`sticky top-0 z-20 mb-1 border-b border-gray-100 bg-white pb-1 ${chapterHeading ? 'pt-2' : '-mt-8 pt-8'}`}>
+            <div className="sticky top-0 z-20 -mt-8 mb-1 border-b border-gray-100 bg-white pt-8 pb-1">
               <Toolbar editor={editor} className="mb-0" />
             </div>
           ) : (
             <Toolbar editor={editor} />
           )
+        )}
+        {/* ブック: チャプター名を書式バーの下にタイトル（セクション見出し）として表示 */}
+        {chapterHeading && (
+          <div className="mb-5 mt-3 flex items-center gap-3 border-b-2 border-gray-100 pb-2">
+            <span className="h-7 w-1.5 shrink-0 rounded-full bg-brand-400" />
+            <h1 className="text-2xl font-bold text-gray-900">{chapterHeading}</h1>
+          </div>
         )}
         <EditorContent editor={editor} />
       </div>

@@ -286,7 +286,7 @@ Firebase Firestore（users/{uid}/コレクション）
   - 箇条書き / 番号付きリスト / チェックリスト / H1-H4 / 段落 / 引用（0.1px単位）
   - ドラッグハンドル縦位置（0.5px単位、0=中央基準）
 - 章番号の書式（**ブックのときだけ表示**）：第一章 / 第1章 / Chapter 1 / なし（`bookChapterFormat`）
-- チャプター名を先頭に表示（**ブックのときだけ表示**）：ON/OFF トグル（`bookShowChapterHeading`）。ON でチャプター本文の先頭に章ラベルを大きく表示（固定書式バーの上・スクロールで流れる）
+- チャプター名を先頭に表示（**ブックのときだけ表示**）：ON/OFF トグル（`bookShowChapterHeading`）。ON で固定書式バーの**下**に章ラベルをセクション見出し（左アクセントバー＋下区切り線）として表示
 - 本文に見出し番号（**ブックのときだけ表示**）：ON/OFF トグル（`bookNumberHeadings`）
   - 番号の色：プリセット7色＋カラーピッカー（`bookHeadingNumberColor`、番号ONのときだけ表示）
 
@@ -889,6 +889,7 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-06-15 | （次回配信） | ブック：チャプター名タイトルの位置を固定書式バーの「下」へ変更し、左アクセントバー＋下区切り線のセクション見出しに整形（タイトルだと一目で分かるように）。固定バーは常に -mt-8/pt-8 へ戻す。NotionEditor.tsx |
 | 2026-06-15 | （次回配信） | ブック：チャプター名をページ先頭に大きく表示する/しないを⚙で切替（`bookShowChapterHeading`・既定ON）。NotionEditor の `chapterHeading` プロパティで先頭に章ラベルを表示（固定書式バーの上、スクロールで流れる）。チャプター名がある時は固定バーのはみ出し補正(-mt-8/pt-8)を外す。settingsStore / NotionEditor.tsx / notion-plus/[id]/page.tsx |
 | 2026-06-15 | （次回配信） | ブック見出し番号の微調整：番号の文字色を⚙から変更可能に（プリセット7色＋カラーピッカー、CSS変数 `--booknum-color`、設定 `bookHeadingNumberColor`）。固定書式バーと本文先頭見出しの間の余白を縮小（sticky の pb-1 化＋`.notion-editor > :first-child` の上余白0）。settingsStore / NotionEditor.tsx / editor.css / notion-plus/[id]/page.tsx |
 | 2026-06-15 | （次回配信） | ブック見出し番号 Phase 2：本文の見出しにも番号(1/1.1/1.1.1)を自動表示（CSSカウンタ・本文非破壊）。章番号の書式を変更可能に（第一章/第1章/Chapter 1/なし）。⚙メニューにブック専用設定（章番号書式＋本文番号ON/OFF）を追加。bookNumbering.ts / editor.css / NotionEditor.tsx(numberHeadings) / settingsStore(bookChapterFormat・bookNumberHeadings) / notion-plus/[id]/page.tsx |
