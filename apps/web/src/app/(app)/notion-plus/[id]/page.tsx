@@ -9,7 +9,7 @@ import { useNotionPageStore, WORKSPACE_ID, addPageLinkToContent, type PageHistor
 import { useSettingsStore, type NotionBlockOffsets, DEFAULT_BLOCK_OFFSETS } from '@/stores/settingsStore';
 
 import { type NotionPage, type BookChapter, parseBookChapters, serializeBookChapters, createBookChapter } from '@study-tracker/core';
-import { chapterLabel, numberHeadings } from '@/lib/bookNumbering';
+import { chapterLabel, numberHeadings, type BookChapterFormat } from '@/lib/bookNumbering';
 import { DatabaseView } from '@/components/database/DatabaseView';
 
 const NotionEditor = dynamic(
@@ -172,6 +172,8 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
     notionPlusSoftLineHeight, setNotionPlusSoftLineHeight,
     notionPlusBlockOffsets, setNotionPlusBlockOffsets, resetNotionPlusBlockOffsets,
     dragHandleOffset, setDragHandleOffset,
+    bookChapterFormat, setBookChapterFormat,
+    bookNumberHeadings, setBookNumberHeadings,
     setLastViewedNotionPageId,
   } = useSettingsStore();
   const [saving, setSaving] = useState(false);
@@ -580,6 +582,37 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
                     ))}
                   </div>
                 </div>
+                {/* ブック: 章番号の書式＆本文見出し番号（book のときだけ表示） */}
+                {page.type === 'book' && (
+                  <div className="mt-3 border-t border-gray-100 pt-3">
+                    <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">章番号の書式</p>
+                    <div className="grid grid-cols-2 gap-1">
+                      {([
+                        { label: '第一章', v: 'kanji' },
+                        { label: '第1章', v: 'arabic' },
+                        { label: 'Chapter 1', v: 'chapter' },
+                        { label: 'なし', v: 'none' },
+                      ] as const).map(({ label, v }) => (
+                        <button
+                          key={v}
+                          onClick={() => setBookChapterFormat(v)}
+                          className={`rounded border py-1 text-[11px] transition ${bookChapterFormat === v ? 'border-brand-400 bg-brand-50 text-brand-600 font-medium' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <label className="mt-2.5 flex items-center justify-between gap-2 text-xs text-gray-600">
+                      <span>本文に見出し番号（1.1）</span>
+                      <input
+                        type="checkbox"
+                        checked={bookNumberHeadings}
+                        onChange={(e) => setBookNumberHeadings(e.target.checked)}
+                        className="h-4 w-4 accent-brand-500"
+                      />
+                    </label>
+                  </div>
+                )}
                 {id !== WORKSPACE_ID && (
                   <div className="mt-2 border-t border-gray-100 pt-2">
                     <button
@@ -707,7 +740,7 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
                         : 'text-gray-500 hover:bg-white hover:text-gray-700'
                     }`}
                   >
-                    {chapterLabel(idx, chapter.title)}
+                    {chapterLabel(idx, chapter.title, bookChapterFormat)}
                     {/* 並び替えボタン（hover時） */}
                     <span className="hidden gap-0.5 group-hover:flex">
                       {idx > 0 && (
@@ -794,7 +827,7 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
 
           {/* 目次ビュー or チャプターエディタ */}
           {activeChapterId === TOC_TAB_ID ? (
-            <BookTocView chapters={bookChapters} onJump={(id) => { setActiveChapterId(id); setEditorKey((k) => k + 1); }} />
+            <BookTocView chapters={bookChapters} chapterFormat={bookChapterFormat} onJump={(id) => { setActiveChapterId(id); setEditorKey((k) => k + 1); }} />
           ) : (
             (() => {
               const activeChapter = bookChapters.find((c) => c.id === activeChapterId);
@@ -812,6 +845,7 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
                   highlightText={highlightText}
                   hideTitle
                   stickyToolbar
+                  numberHeadings={bookNumberHeadings}
                 />
               );
             })()
@@ -1148,7 +1182,7 @@ function extractHeadings(content: string): { level: number; text: string }[] {
   }
 }
 
-function BookTocView({ chapters, onJump }: { chapters: BookChapter[]; onJump: (chapterId: string) => void }) {
+function BookTocView({ chapters, chapterFormat, onJump }: { chapters: BookChapter[]; chapterFormat: BookChapterFormat; onJump: (chapterId: string) => void }) {
   return (
     <div className="flex-1 overflow-y-auto px-8 py-6">
       <h2 className="mb-5 text-base font-bold text-gray-700">📋 目次</h2>
@@ -1166,7 +1200,7 @@ function BookTocView({ chapters, onJump }: { chapters: BookChapter[]; onJump: (c
                   className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-gray-800 hover:text-brand-600"
                 >
                   <span className="text-brand-400">▶</span>
-                  {chapterLabel(ci, chapter.title)}
+                  {chapterLabel(ci, chapter.title, chapterFormat)}
                 </button>
                 {/* 見出し一覧（自動番号 1 / 1.1 / 1.1.1） */}
                 {headings.length > 0 ? (

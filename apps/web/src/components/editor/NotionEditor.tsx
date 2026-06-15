@@ -1195,7 +1195,8 @@ interface NotionEditorProps {
   compact?: boolean;   // 最小高さを抑えて内容に合わせて伸縮
   onEditorFocus?: (editor: NonNullable<ReturnType<typeof useEditor>>) => void;
   hideToolbar?: boolean;
-  stickyToolbar?: boolean; // ブック用: 書式バーをスクロールしても上部に固定表示
+  stickyToolbar?: boolean;   // ブック用: 書式バーをスクロールしても上部に固定表示
+  numberHeadings?: boolean;  // ブック用: 本文の見出しに番号(1/1.1/1.1.1)をCSSカウンタで表示
 }
 
 interface PastePopup {
@@ -1207,7 +1208,7 @@ interface PastePopup {
 export function NotionEditor({
   initialTitle, initialContent, onSave, onCreateSubPage,
   recordTriggerRef, onRecordText, notionPageId, notionPagePath, highlightText, onPageNavigate,
-  hideTitle, compact, onEditorFocus, hideToolbar, stickyToolbar,
+  hideTitle, compact, onEditorFocus, hideToolbar, stickyToolbar, numberHeadings,
 }: NotionEditorProps) {
   const notionPlusLayout = useSettingsStore((s) => s.notionPlusLayout);
   const notionPlusParaLineHeight = useSettingsStore((s) => s.notionPlusParaLineHeight);
@@ -1745,6 +1746,12 @@ export function NotionEditor({
     editor.on('focus', handleFocus);
     return () => { editor.off('focus', handleFocus); };
   }, [editor, onEditorFocus]);
+
+  // ブック: 本文の見出し番号(CSSカウンタ)クラスをトグル。設定変更に即追従させる
+  useEffect(() => {
+    if (!editor) return;
+    (editor.view.dom as HTMLElement).classList.toggle('notion-editor-booknum', !!numberHeadings);
+  }, [editor, numberHeadings]);
 
   const outerClass = `relative flex flex-1 overflow-y-auto py-8 ${notionPlusLayout === 'center' ? 'justify-center px-6' : 'pl-16 pr-8'}`;
 

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { DEFAULT_REVIEW_STAGE_DAYS, REVIEW_STAGE_LABELS } from '@study-tracker/core';
+import type { BookChapterFormat } from '@/lib/bookNumbering';
 
 export interface NotionBlockOffsets {
   bullet: number;      // 箇条書き
@@ -26,6 +27,12 @@ interface SettingsState {
   resetReviewStageDays: () => void;
   notionPlusLayout: 'center' | 'left';
   setNotionPlusLayout: (layout: 'center' | 'left') => void;
+  // ブック: 章番号の書式（漢数字「第一章」/ 算用数字「第1章」/ 英語「Chapter 1」/ なし）
+  bookChapterFormat: BookChapterFormat;
+  setBookChapterFormat: (f: BookChapterFormat) => void;
+  // ブック: 本文の見出しに番号（1 / 1.1 …）を表示するか
+  bookNumberHeadings: boolean;
+  setBookNumberHeadings: (v: boolean) => void;
   // NotionPlus 行間設定
   notionPlusParaLineHeight: number;
   setNotionPlusParaLineHeight: (v: number) => void;
@@ -57,6 +64,10 @@ export const useSettingsStore = create<SettingsState>()(
       resetReviewStageDays: () => set({ reviewStageDays: [...DEFAULT_REVIEW_STAGE_DAYS] }),
       notionPlusLayout: 'center',
       setNotionPlusLayout: (layout) => set({ notionPlusLayout: layout }),
+      bookChapterFormat: 'kanji',
+      setBookChapterFormat: (f) => set({ bookChapterFormat: f }),
+      bookNumberHeadings: true,
+      setBookNumberHeadings: (v) => set({ bookNumberHeadings: v }),
       notionPlusParaLineHeight: 1.7,
       setNotionPlusParaLineHeight: (v) => set({ notionPlusParaLineHeight: v }),
       notionPlusSoftLineHeight: 1.15,

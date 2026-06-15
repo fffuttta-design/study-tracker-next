@@ -41,6 +41,26 @@
 .notion-editor h3 { font-size: 1.25rem; font-weight: 600; margin: calc(0.75rem + var(--offset-h3, 0px)) 0 0.25rem; }
 .notion-editor h4 { font-size: 1.1rem; font-weight: 600; margin: calc(0.5rem + var(--offset-h4, 0px)) 0 0.25rem; }
 
+/* ── ブック本文の自動見出し番号（CSSカウンタ・本文非破壊 / Phase 2）────── */
+/* 表示だけ。contenteditable のテキストは変わらないので保存内容に影響しない。 */
+.notion-editor-booknum { counter-reset: bh1 bh2 bh3 bh4; }
+.notion-editor-booknum h1 { counter-increment: bh1; counter-reset: bh2 bh3 bh4; }
+.notion-editor-booknum h2 { counter-increment: bh2; counter-reset: bh3 bh4; }
+.notion-editor-booknum h3 { counter-increment: bh3; counter-reset: bh4; }
+.notion-editor-booknum h4 { counter-increment: bh4; }
+.notion-editor-booknum h1::before,
+.notion-editor-booknum h2::before,
+.notion-editor-booknum h3::before,
+.notion-editor-booknum h4::before {
+  color: #9ca3af;
+  font-weight: 600;
+  margin-right: 0.5em;
+}
+.notion-editor-booknum h1::before { content: counter(bh1); }
+.notion-editor-booknum h2::before { content: counter(bh1) "." counter(bh2); }
+.notion-editor-booknum h3::before { content: counter(bh1) "." counter(bh2) "." counter(bh3); }
+.notion-editor-booknum h4::before { content: counter(bh1) "." counter(bh2) "." counter(bh3) "." counter(bh4); }
+
 /* 箇条書き インデント別マーカー */
 .notion-editor ul { list-style: none; padding-left: 1.5rem; margin: 0.25rem 0; }
 .notion-editor ul li { position: relative; margin: calc(0.125rem + var(--offset-bullet, 0px)) 0; padding-left: 1.5rem; }
