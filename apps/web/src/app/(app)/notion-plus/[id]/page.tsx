@@ -31,6 +31,56 @@ function isImageSrc(s: string) {
   return s.startsWith('http://') || s.startsWith('https://') || s.startsWith('data:');
 }
 
+// 本文(TipTap JSON)に含まれる全サブページリンクのページIDを抽出
+function extractPageLinkIds(content: string): string[] {
+  if (!content) return [];
+  let doc: unknown;
+  try { doc = JSON.parse(content); } catch { return []; }
+  const ids: string[] = [];
+  const walk = (node: unknown) => {
+    if (!node || typeof node !== 'object') return;
+    const n = node as { type?: string; attrs?: { href?: string }; content?: unknown[] };
+    if (n.type === 'pageLink' && typeof n.attrs?.href === 'string') {
+      const m = n.attrs.href.match(/\/notion-plus\/([^/?#]+)/);
+      if (m) ids.push(m[1]);
+    }
+    if (Array.isArray(n.content)) n.content.forEach(walk);
+  };
+  walk(doc);
+  return ids;
+}
+
+// 本文に貼り付けられたサブページリンクに合わせ、子ページの parentId を本ページへ付け替える。
+// （本文中のリンクを切り貼りして移動したとき、パンくず＝parentId が追従するように。循環は防ぐ）
+async function reconcileChildrenParent(
+  uid: string,
+  parentPage: NotionPage,
+  content: string,
+  pages: NotionPage[],
+  update: (uid: string, id: string, data: Partial<NotionPage>) => Promise<void>,
+): Promise<void> {
+  const linkedIds = extractPageLinkIds(content);
+  if (linkedIds.length === 0) return;
+  const byId = new Map(pages.map((p) => [p.id, p]));
+  // childId が parentPage の祖先なら、付け替えると循環するのでスキップ
+  const isAncestorOfParent = (childId: string): boolean => {
+    let cur: NotionPage | undefined = parentPage;
+    while (cur?.parentId) {
+      if (cur.parentId === childId) return true;
+      cur = byId.get(cur.parentId);
+    }
+    return false;
+  };
+  for (const childId of linkedIds) {
+    if (childId === parentPage.id) continue;
+    const child = byId.get(childId);
+    if (!child) continue;
+    if (child.parentId === parentPage.id) continue; // 既に正しい
+    if (isAncestorOfParent(childId)) continue;       // 循環防止
+    await update(uid, childId, { parentId: parentPage.id });
+  }
+}
+
 const ICON_PRESETS = [
   // 顔・感情
   '😀','😃','😄','😁','😆','😅','🤣','😂','🙂','😉',
@@ -216,6 +266,9 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
       setSaving(true);
       try {
         await update(user.uid, page.id, { title, content });
+        // 本文に貼り付けられたサブページリンクに合わせて子の parentId を付け替える
+        // （リンクを切り貼りして移動したとき、パンくずが追従するように）
+        await reconcileChildrenParent(user.uid, page, content, pages, update).catch(() => {});
         // 5分に1回履歴を保存
         const now = Date.now();
         if (now - lastHistorySavedAtRef.current > 5 * 60 * 1000) {
@@ -226,7 +279,7 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
         setSaving(false);
       }
     },
-    [user, page, update, saveHistory]
+    [user, page, update, saveHistory, pages]
   );
 
   // ── ブック用ハンドラ ──────────────────────────────────────────

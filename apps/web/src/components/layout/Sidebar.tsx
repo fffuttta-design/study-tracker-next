@@ -497,10 +497,10 @@ function NotionPageSidebar({ user }: { user: User }) {
     [pages],
   );
 
-  // お気に入り（BOOKは除外）
-  const roots = pages
-    .filter((p) => !p.parentId && p.id !== WORKSPACE_ID && p.type !== 'book' && p.isFavorite)
-    .sort((a, b) => a.order - b.order);
+  // お気に入り（ルート/子ページ/ブック/DB問わず、★を付けた全ページ）
+  const favorites = pages
+    .filter((p) => p.id !== WORKSPACE_ID && p.isFavorite)
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
   // ページ一覧（全ルートページ）
   const allRootPages = pages
@@ -709,20 +709,38 @@ function NotionPageSidebar({ user }: { user: User }) {
         {/* 通常ページリスト（検索なし時） */}
         {!searchResults && (
           <>
-            {/* ★ お気に入り */}
+            {/* ★ お気に入り（子ページ・ブックも含め、★を付けた全ページをフラット表示） */}
             <p className="mt-1 px-3 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">★ お気に入り</p>
-            {!loading && roots.length === 0 && (
+            {!loading && favorites.length === 0 ? (
               <p className="px-3 py-2 text-center text-[11px] text-gray-400">
                 ★ をつけたノートが<br />ここに表示されます
               </p>
+            ) : (
+              <div className="space-y-0.5">
+                {favorites.map((p) => {
+                  const path = getPagePath(p);
+                  return (
+                    <Link
+                      key={p.id}
+                      href={`/notion-plus/${p.id}`}
+                      onContextMenu={(e) => { e.preventDefault(); handleCtxMenu(e, p); }}
+                      className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors ${
+                        p.id === currentId
+                          ? 'bg-white font-semibold text-gray-900 shadow-sm'
+                          : 'text-gray-600 hover:bg-white hover:text-gray-900'
+                      }`}
+                    >
+                      <PageIcon icon={p.type === 'database' && p.icon === '📄' ? '📊' : p.type === 'book' && p.icon === '📄' ? '📖' : p.icon} />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate">{p.title || 'Untitled'}</div>
+                        {path && <div className="truncate text-[9px] text-gray-400">{path}</div>}
+                      </div>
+                      <span className="shrink-0 text-[10px] text-yellow-400">★</span>
+                    </Link>
+                  );
+                })}
+              </div>
             )}
-            <RootPageList
-              roots={roots}
-              pages={pages}
-              currentId={currentId}
-              onCtxMenu={handleCtxMenu}
-              uid={user.uid}
-            />
 
             {/* ページ一覧（全ルートページ・フラット表示・D&D並び替え可） */}
             {!loading && allRootPages.length > 0 && (
