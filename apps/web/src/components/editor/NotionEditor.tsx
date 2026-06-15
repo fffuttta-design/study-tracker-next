@@ -1195,6 +1195,7 @@ interface NotionEditorProps {
   compact?: boolean;   // 最小高さを抑えて内容に合わせて伸縮
   onEditorFocus?: (editor: NonNullable<ReturnType<typeof useEditor>>) => void;
   hideToolbar?: boolean;
+  stickyToolbar?: boolean; // ブック用: 書式バーをスクロールしても上部に固定表示
 }
 
 interface PastePopup {
@@ -1206,7 +1207,7 @@ interface PastePopup {
 export function NotionEditor({
   initialTitle, initialContent, onSave, onCreateSubPage,
   recordTriggerRef, onRecordText, notionPageId, notionPagePath, highlightText, onPageNavigate,
-  hideTitle, compact, onEditorFocus, hideToolbar,
+  hideTitle, compact, onEditorFocus, hideToolbar, stickyToolbar,
 }: NotionEditorProps) {
   const notionPlusLayout = useSettingsStore((s) => s.notionPlusLayout);
   const notionPlusParaLineHeight = useSettingsStore((s) => s.notionPlusParaLineHeight);
@@ -1778,7 +1779,16 @@ export function NotionEditor({
             className="mb-6 w-full border-none text-3xl font-bold text-gray-900 outline-none placeholder:text-gray-200"
           />
         )}
-        {!hideToolbar && editor && <Toolbar editor={editor} />}
+        {!hideToolbar && editor && (
+          stickyToolbar ? (
+            // ブック: スクロールしても書式バーを上部に固定（下に流れる本文を bg で隠す）
+            <div className="sticky top-0 z-20 -mt-8 border-b border-gray-100 bg-white pt-8 pb-2">
+              <Toolbar editor={editor} className="mb-0" />
+            </div>
+          ) : (
+            <Toolbar editor={editor} />
+          )
+        )}
         <EditorContent editor={editor} />
       </div>
 

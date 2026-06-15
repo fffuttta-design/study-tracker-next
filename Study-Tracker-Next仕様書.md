@@ -880,6 +880,7 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-06-15 | （次回配信） | ブックの書式バーを常に固定表示：チャプター編集時、スクロールしても書式バー（Toolbar）が画面上部に張り付くようにした（NotionEditor に `stickyToolbar` プロパティを追加し、ブックのチャプターエディタからのみ渡す。ノート表示は従来どおり）。NotionEditor.tsx / notion-plus/[id]/page.tsx |
 | 2026-06-15 | （次回配信） | 今日の復習：日付グループ見出し「M/d（曜）に学習」を大きく強調（text-base/bold/gray-700）。今日の復習タブ・ステージ別表示の2箇所（learning/page.tsx） |
 | 2026-06-15 | （次回配信） | ブック自動見出し番号 Phase 1：チャプタータブ・目次に章番号「第一章」（漢数字）を自動表示、目次の見出しに `1 / 1.1 / 1.1.1` を自動採番。表示時計算のみ（本文非破壊）。採番ロジック=apps/web/src/lib/bookNumbering.ts。要件は §4.3/§4.4 に記載 |
 | 2026-06-15 | （次回配信） | 記録モーダルのノート⇄ブック変換バグ修正：変換時に内容が消える/ノート変換が効かない（type:undefinedがmergeで無視）問題を、内容保持＋type:'page'明示で修正（AddItemDialog.tsx） |

@@ -811,6 +811,7 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
                   notionPagePath={`${breadcrumbs.map((p) => p.title || 'Untitled').join(' / ')} / ${activeChapter.title}`}
                   highlightText={highlightText}
                   hideTitle
+                  stickyToolbar
                 />
               );
             })()
