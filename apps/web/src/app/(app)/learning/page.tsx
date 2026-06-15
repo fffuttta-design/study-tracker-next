@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useLearningStore } from '@/stores/learningStore';
 import { useNotionPageStore } from '@/stores/notionPageStore';
 import { AddItemDialog, toDateKey } from '@/components/notion/AddItemDialog';
+import { RegisterCelebration } from '@/components/RegisterCelebration';
 import {
   type LearningItem,
   hasDueReview,
@@ -456,7 +457,7 @@ function DashboardTab({ todayItems, dueItems, inboxItems, uid, onAdd, onQuickAdd
                         <div key={dateKey}>
                           {byDate.length > 1 && (
                             <div className="mb-1.5 flex items-center gap-2 text-xs text-gray-400">
-                              <span className="shrink-0">
+                              <span className="shrink-0 text-base font-bold text-gray-700">
                                 {format(new Date(dateKey), 'M/d（E）', { locale: ja })} に学習
                               </span>
                               <div className="h-px flex-1 bg-gray-200" />
@@ -586,7 +587,7 @@ function ReviewTab({ dueItems, uid }: {
                     <div key={dateKey}>
                       {byDate.length > 1 && (
                         <div className="mb-1.5 flex items-center gap-2 text-xs text-gray-400">
-                          <span className="shrink-0">
+                          <span className="shrink-0 text-base font-bold text-gray-700">
                             {format(new Date(dateKey), 'M/d（E）', { locale: ja })} に学習
                           </span>
                           <div className="h-px flex-1 bg-gray-200" />
@@ -1003,9 +1004,10 @@ function QuickInboxModal({ uid, onClose }: { uid: string; onClose: () => void })
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [saving, setSaving] = useState(false);
+  const [celebrate, setCelebrate] = useState(false);
 
   const handleSave = async () => {
-    if (!title.trim()) return;
+    if (!title.trim() || saving) return;
     setSaving(true);
     try {
       await add(uid, {
@@ -1014,11 +1016,18 @@ function QuickInboxModal({ uid, onClose }: { uid: string; onClose: () => void })
         content: content.trim(),
         sortOrder: Date.now(),
       });
-      onClose();
-    } finally {
+    } catch {
       setSaving(false);
+      return;
     }
+    // 派手にお祝いしてから閉じる（テンションUP）
+    setCelebrate(true);
+    setTimeout(() => { setCelebrate(false); onClose(); }, 1300);
   };
+
+  if (celebrate) {
+    return <RegisterCelebration message="登録しました！" sub="特急メモに追加しました" />;
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>

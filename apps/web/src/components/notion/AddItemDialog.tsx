@@ -5,6 +5,8 @@ import { useAuthStore } from '@/stores/authStore';
 import { useLearningStore } from '@/stores/learningStore';
 import { useNotionPageStore, WORKSPACE_ID } from '@/stores/notionPageStore';
 import { NotionEditor } from '@/components/editor/NotionEditor';
+import { RegisterCelebration } from '@/components/RegisterCelebration';
+import { chapterLabel } from '@/lib/bookNumbering';
 import { type NotionPage, parseBookChapters, serializeBookChapters, createBookChapter, type BookChapter } from '@study-tracker/core';
 
 function isImageSrc(s: string) {
@@ -468,16 +470,35 @@ export function AddItemDialog({ uid, onClose, onAfterRecord }: {
   };
 
   const convertToBook = useCallback(async (pageId: string) => {
-    if (!user) return;
-    await update(user.uid, pageId, { type: 'book' });
+    if (!user) { setContextMenu(null); return; }
+    const p = pages.find((x) => x.id === pageId);
+    if (!p) { setContextMenu(null); return; }
+    // 現在の本文を第1章へ退避してブック化（内容を保持）
+    const firstChapter = { ...createBookChapter(0), content: p.content };
+    await update(user.uid, pageId, {
+      type: 'book',
+      icon: p.icon === '📄' ? '📖' : p.icon,
+      content: serializeBookChapters([firstChapter]),
+    });
     setContextMenu(null);
-  }, [user, update]);
+  }, [user, update, pages]);
 
   const convertToNote = useCallback(async (pageId: string) => {
-    if (!user) return;
-    await update(user.uid, pageId, { type: undefined });
+    if (!user) { setContextMenu(null); return; }
+    const p = pages.find((x) => x.id === pageId);
+    if (!p) { setContextMenu(null); return; }
+    // 全チャプターの本文を1ページへ結合（内容を保持）。type:'page' で確実にノート化
+    const chapters = parseBookChapters(p.content);
+    const merged: { type: 'doc'; content: unknown[] } = { type: 'doc', content: [] };
+    for (const ch of chapters) {
+      try {
+        const doc = JSON.parse(ch.content) as { content?: unknown[] };
+        if (Array.isArray(doc?.content)) merged.content.push(...doc.content);
+      } catch { /* ignore */ }
+    }
+    await update(user.uid, pageId, { type: 'page', content: JSON.stringify(merged) });
     setContextMenu(null);
-  }, [user, update]);
+  }, [user, update, pages]);
 
   const breadcrumbs = selectedPageId ? buildBreadcrumbs(pages, selectedPageId) : [];
 
@@ -756,7 +777,7 @@ export function AddItemDialog({ uid, onClose, onAfterRecord }: {
             {/* ブックのチャプタータブ */}
             {selectedPage?.type === 'book' && bookChapters.length > 0 && (
               <div className="flex items-center gap-1 overflow-x-auto border-b border-gray-100 bg-gray-50 px-3 py-1.5">
-                {bookChapters.map((chapter) => (
+                {bookChapters.map((chapter, ci) => (
                   <button
                     key={chapter.id}
                     onClick={() => { if (activeChapterId !== chapter.id) { setActiveChapterId(chapter.id); setEditorKey((k) => k + 1); } }}
@@ -766,7 +787,7 @@ export function AddItemDialog({ uid, onClose, onAfterRecord }: {
                         : 'text-gray-400 hover:bg-white hover:text-gray-600'
                     }`}
                   >
-                    {chapter.title}
+                    {chapterLabel(ci, chapter.title)}
                   </button>
                 ))}
                 <button
@@ -833,16 +854,8 @@ export function AddItemDialog({ uid, onClose, onAfterRecord }: {
         </div>
       </div>
 
-      {/* 登録完了ビッグトースト */}
-      {bigToast && (
-        <div className="pointer-events-none fixed inset-0 z-[70] flex items-center justify-center">
-          <div className="animate-bounce flex flex-col items-center gap-3 rounded-3xl bg-gradient-to-br from-brand-500 to-purple-500 px-14 py-10 shadow-2xl text-white">
-            <span className="text-6xl">🎉</span>
-            <p className="text-2xl font-bold tracking-tight">登録しました！</p>
-            <p className="text-sm opacity-75">学習リストに追加されました</p>
-          </div>
-        </div>
-      )}
+      {/* 登録完了ビッグ演出（🎉＋紙吹雪） */}
+      {bigToast && <RegisterCelebration />}
 
       {confirming && selectedPageId && (
         <ConfirmDialog

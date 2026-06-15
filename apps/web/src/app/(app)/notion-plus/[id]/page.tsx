@@ -9,6 +9,7 @@ import { useNotionPageStore, WORKSPACE_ID, addPageLinkToContent, type PageHistor
 import { useSettingsStore, type NotionBlockOffsets, DEFAULT_BLOCK_OFFSETS } from '@/stores/settingsStore';
 
 import { type NotionPage, type BookChapter, parseBookChapters, serializeBookChapters, createBookChapter } from '@study-tracker/core';
+import { chapterLabel, numberHeadings } from '@/lib/bookNumbering';
 import { DatabaseView } from '@/components/database/DatabaseView';
 
 const NotionEditor = dynamic(
@@ -706,7 +707,7 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
                         : 'text-gray-500 hover:bg-white hover:text-gray-700'
                     }`}
                   >
-                    {chapter.title}
+                    {chapterLabel(idx, chapter.title)}
                     {/* 並び替えボタン（hover時） */}
                     <span className="hidden gap-0.5 group-hover:flex">
                       {idx > 0 && (
@@ -1154,19 +1155,19 @@ function BookTocView({ chapters, onJump }: { chapters: BookChapter[]; onJump: (c
         <p className="text-sm text-gray-400">チャプターがありません</p>
       ) : (
         <div className="space-y-5">
-          {chapters.map((chapter) => {
-            const headings = extractHeadings(chapter.content);
+          {chapters.map((chapter, ci) => {
+            const headings = numberHeadings(extractHeadings(chapter.content));
             return (
               <div key={chapter.id}>
-                {/* チャプター名 */}
+                {/* チャプター名（自動章番号つき） */}
                 <button
                   onClick={() => onJump(chapter.id)}
                   className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-gray-800 hover:text-brand-600"
                 >
                   <span className="text-brand-400">▶</span>
-                  {chapter.title}
+                  {chapterLabel(ci, chapter.title)}
                 </button>
-                {/* 見出し一覧 */}
+                {/* 見出し一覧（自動番号 1 / 1.1 / 1.1.1） */}
                 {headings.length > 0 ? (
                   <ul className="space-y-0.5 border-l-2 border-gray-100 pl-4">
                     {headings.map((h, i) => (
@@ -1175,8 +1176,8 @@ function BookTocView({ chapters, onJump }: { chapters: BookChapter[]; onJump: (c
                         style={{ paddingLeft: `${(h.level - 1) * 12}px` }}
                         className="text-sm text-gray-500"
                       >
-                        <span className="mr-1.5 text-xs text-gray-300">
-                          {'H' + h.level}
+                        <span className="mr-1.5 text-xs font-medium text-brand-400 tabular-nums">
+                          {h.num}
                         </span>
                         {h.text}
                       </li>

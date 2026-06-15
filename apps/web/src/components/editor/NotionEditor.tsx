@@ -36,7 +36,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useLearningStore } from '@/stores/learningStore';
 import { useNotionPageStore } from '@/stores/notionPageStore';
 import { useDbRowStore } from '@/stores/notionDatabaseRowStore';
-import { parseDbSchema } from '@study-tracker/core';
+import { parseDbSchema, createBookChapter, serializeBookChapters, parseBookChapters } from '@study-tracker/core';
 import './editor.css';
 
 // ── ProseMirror → Markdown 変換 ──────────────────────────────────────
@@ -292,6 +292,41 @@ function PageLinkView({ node, updateAttributes, deleteNode, getPos, editor: tipt
     }
   };
 
+  // リンク先ページの種別と、ノート⇄ブック変換（内容を保持する）
+  const isBook = livePage?.type === 'book';
+  const isDatabase = livePage?.type === 'database';
+
+  const convertLinkedToBook = async () => {
+    setContextMenu(null);
+    if (!pageId || !user || !livePage) return;
+    if (!window.confirm(`「${title}」をブックに変換しますか？\n現在の内容は第1章になります。`)) return;
+    const firstChapter = { ...createBookChapter(0), content: livePage.content };
+    await update(user.uid, pageId, {
+      type: 'book',
+      icon: livePage.icon === '📄' ? '📖' : livePage.icon,
+      content: serializeBookChapters([firstChapter]),
+    });
+  };
+
+  const convertLinkedToNote = async () => {
+    setContextMenu(null);
+    if (!pageId || !user || !livePage) return;
+    if (!window.confirm(`「${title}」をノートに戻しますか？\n全チャプターの内容を1ページに結合します。`)) return;
+    // 全チャプターの本文(doc)を1つの doc に結合して内容を保持
+    const chapters = parseBookChapters(livePage.content);
+    const merged: { type: 'doc'; content: unknown[] } = { type: 'doc', content: [] };
+    for (const ch of chapters) {
+      try {
+        const doc = JSON.parse(ch.content) as { content?: unknown[] };
+        if (Array.isArray(doc?.content)) merged.content.push(...doc.content);
+      } catch { /* ignore */ }
+    }
+    await update(user.uid, pageId, {
+      type: 'page', // 'page' = ノート扱い（undefined は merge で消えず反映されないため明示）
+      content: JSON.stringify(merged),
+    });
+  };
+
   return (
     <NodeViewWrapper data-type="page-link" contentEditable={false}>
       {/* 右クリックコンテキストメニュー */}
@@ -301,6 +336,27 @@ function PageLinkView({ node, updateAttributes, deleteNode, getPos, editor: tipt
           className="fixed z-[200] min-w-[120px] rounded-lg border border-gray-100 bg-white py-1 shadow-xl"
           style={{ top: contextMenu.y, left: contextMenu.x }}
         >
+          {/* リンク先がノート/ブックのときだけ変換を出す（DB・未解決リンクは対象外） */}
+          {livePage && !isDatabase && !isUnresolved && (
+            <>
+              {isBook ? (
+                <button
+                  onMouseDown={(e) => { e.preventDefault(); convertLinkedToNote(); }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  📄 ノートに変換
+                </button>
+              ) : (
+                <button
+                  onMouseDown={(e) => { e.preventDefault(); convertLinkedToBook(); }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  📚 ブックに変換
+                </button>
+              )}
+              <div className="my-1 border-t border-gray-100" />
+            </>
+          )}
           <button
             onMouseDown={(e) => {
               e.preventDefault();
