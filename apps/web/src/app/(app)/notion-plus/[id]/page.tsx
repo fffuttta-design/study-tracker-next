@@ -175,6 +175,7 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
     bookChapterFormat, setBookChapterFormat,
     bookNumberHeadings, setBookNumberHeadings,
     bookHeadingNumberColor, setBookHeadingNumberColor,
+    bookShowChapterHeading, setBookShowChapterHeading,
     setLastViewedNotionPageId,
   } = useSettingsStore();
   const [saving, setSaving] = useState(false);
@@ -604,6 +605,15 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
                       ))}
                     </div>
                     <label className="mt-2.5 flex items-center justify-between gap-2 text-xs text-gray-600">
+                      <span>チャプター名を先頭に表示</span>
+                      <input
+                        type="checkbox"
+                        checked={bookShowChapterHeading}
+                        onChange={(e) => setBookShowChapterHeading(e.target.checked)}
+                        className="h-4 w-4 accent-brand-500"
+                      />
+                    </label>
+                    <label className="mt-2 flex items-center justify-between gap-2 text-xs text-gray-600">
                       <span>本文に見出し番号（1.1）</span>
                       <input
                         type="checkbox"
@@ -865,13 +875,15 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
             <BookTocView chapters={bookChapters} chapterFormat={bookChapterFormat} onJump={(id) => { setActiveChapterId(id); setEditorKey((k) => k + 1); }} />
           ) : (
             (() => {
-              const activeChapter = bookChapters.find((c) => c.id === activeChapterId);
+              const activeIdx = bookChapters.findIndex((c) => c.id === activeChapterId);
+              const activeChapter = bookChapters[activeIdx];
               if (!activeChapter) return null;
               return (
                 <NotionEditor
                   key={`${page.id}-${activeChapterId}-${editorKey}`}
                   initialTitle=""
                   initialContent={activeChapter.content}
+                  chapterHeading={bookShowChapterHeading ? chapterLabel(activeIdx, activeChapter.title, bookChapterFormat) : undefined}
                   onSave={handleBookChapterSave}
                   onCreateSubPage={handleCreateSubPage}
                   recordTriggerRef={recordTriggerRef}

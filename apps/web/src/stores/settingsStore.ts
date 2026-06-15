@@ -36,6 +36,9 @@ interface SettingsState {
   // ブック: 見出し番号の文字色（CSS color 文字列）
   bookHeadingNumberColor: string;
   setBookHeadingNumberColor: (c: string) => void;
+  // ブック: チャプター名をページ先頭に大きく表示するか
+  bookShowChapterHeading: boolean;
+  setBookShowChapterHeading: (v: boolean) => void;
   // NotionPlus 行間設定
   notionPlusParaLineHeight: number;
   setNotionPlusParaLineHeight: (v: number) => void;
@@ -73,6 +76,8 @@ export const useSettingsStore = create<SettingsState>()(
       setBookNumberHeadings: (v) => set({ bookNumberHeadings: v }),
       bookHeadingNumberColor: '#9ca3af',
       setBookHeadingNumberColor: (c) => set({ bookHeadingNumberColor: c }),
+      bookShowChapterHeading: true,
+      setBookShowChapterHeading: (v) => set({ bookShowChapterHeading: v }),
       notionPlusParaLineHeight: 1.7,
       setNotionPlusParaLineHeight: (v) => set({ notionPlusParaLineHeight: v }),
       notionPlusSoftLineHeight: 1.15,

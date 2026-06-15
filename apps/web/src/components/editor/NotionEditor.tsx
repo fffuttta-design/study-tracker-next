@@ -1198,6 +1198,7 @@ interface NotionEditorProps {
   stickyToolbar?: boolean;     // ブック用: 書式バーをスクロールしても上部に固定表示
   numberHeadings?: boolean;    // ブック用: 本文の見出しに番号(1/1.1/1.1.1)をCSSカウンタで表示
   headingNumberColor?: string; // ブック用: 見出し番号の文字色
+  chapterHeading?: string;     // ブック用: ページ先頭に大きく表示するチャプター名（未指定=非表示）
 }
 
 interface PastePopup {
@@ -1209,7 +1210,7 @@ interface PastePopup {
 export function NotionEditor({
   initialTitle, initialContent, onSave, onCreateSubPage,
   recordTriggerRef, onRecordText, notionPageId, notionPagePath, highlightText, onPageNavigate,
-  hideTitle, compact, onEditorFocus, hideToolbar, stickyToolbar, numberHeadings, headingNumberColor,
+  hideTitle, compact, onEditorFocus, hideToolbar, stickyToolbar, numberHeadings, headingNumberColor, chapterHeading,
 }: NotionEditorProps) {
   const notionPlusLayout = useSettingsStore((s) => s.notionPlusLayout);
   const notionPlusParaLineHeight = useSettingsStore((s) => s.notionPlusParaLineHeight);
@@ -1788,10 +1789,15 @@ export function NotionEditor({
             className="mb-6 w-full border-none text-3xl font-bold text-gray-900 outline-none placeholder:text-gray-200"
           />
         )}
+        {/* ブック: チャプター名をページ先頭に大きく表示（固定書式バーの上・スクロールで流れる） */}
+        {chapterHeading && (
+          <h1 className="mb-3 text-3xl font-bold text-gray-900">{chapterHeading}</h1>
+        )}
         {!hideToolbar && editor && (
           stickyToolbar ? (
             // ブック: スクロールしても書式バーを上部に固定（下に流れる本文を bg で隠す）
-            <div className="sticky top-0 z-20 -mt-8 mb-1 border-b border-gray-100 bg-white pt-8 pb-1">
+            // チャプター名がある時は -mt-8/pt-8 のはみ出し補正を外す（先頭がチャプター名になるため）
+            <div className={`sticky top-0 z-20 mb-1 border-b border-gray-100 bg-white pb-1 ${chapterHeading ? 'pt-2' : '-mt-8 pt-8'}`}>
               <Toolbar editor={editor} className="mb-0" />
             </div>
           ) : (
