@@ -1195,8 +1195,9 @@ interface NotionEditorProps {
   compact?: boolean;   // 最小高さを抑えて内容に合わせて伸縮
   onEditorFocus?: (editor: NonNullable<ReturnType<typeof useEditor>>) => void;
   hideToolbar?: boolean;
-  stickyToolbar?: boolean;   // ブック用: 書式バーをスクロールしても上部に固定表示
-  numberHeadings?: boolean;  // ブック用: 本文の見出しに番号(1/1.1/1.1.1)をCSSカウンタで表示
+  stickyToolbar?: boolean;     // ブック用: 書式バーをスクロールしても上部に固定表示
+  numberHeadings?: boolean;    // ブック用: 本文の見出しに番号(1/1.1/1.1.1)をCSSカウンタで表示
+  headingNumberColor?: string; // ブック用: 見出し番号の文字色
 }
 
 interface PastePopup {
@@ -1208,7 +1209,7 @@ interface PastePopup {
 export function NotionEditor({
   initialTitle, initialContent, onSave, onCreateSubPage,
   recordTriggerRef, onRecordText, notionPageId, notionPagePath, highlightText, onPageNavigate,
-  hideTitle, compact, onEditorFocus, hideToolbar, stickyToolbar, numberHeadings,
+  hideTitle, compact, onEditorFocus, hideToolbar, stickyToolbar, numberHeadings, headingNumberColor,
 }: NotionEditorProps) {
   const notionPlusLayout = useSettingsStore((s) => s.notionPlusLayout);
   const notionPlusParaLineHeight = useSettingsStore((s) => s.notionPlusParaLineHeight);
@@ -1772,6 +1773,7 @@ export function NotionEditor({
         '--offset-h4':     `${notionPlusBlockOffsets?.h4 ?? 0}px`,
         '--offset-p':      `${notionPlusBlockOffsets?.p ?? 0}px`,
         '--offset-blockquote': `${notionPlusBlockOffsets?.blockquote ?? 0}px`,
+        '--booknum-color': headingNumberColor ?? '#9ca3af',
       } as React.CSSProperties}
       onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }); }}
       onMouseDown={handleOuterMouseDown}
@@ -1789,7 +1791,7 @@ export function NotionEditor({
         {!hideToolbar && editor && (
           stickyToolbar ? (
             // ブック: スクロールしても書式バーを上部に固定（下に流れる本文を bg で隠す）
-            <div className="sticky top-0 z-20 -mt-8 border-b border-gray-100 bg-white pt-8 pb-2">
+            <div className="sticky top-0 z-20 -mt-8 mb-1 border-b border-gray-100 bg-white pt-8 pb-1">
               <Toolbar editor={editor} className="mb-0" />
             </div>
           ) : (

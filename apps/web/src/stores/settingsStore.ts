@@ -33,6 +33,9 @@ interface SettingsState {
   // ブック: 本文の見出しに番号（1 / 1.1 …）を表示するか
   bookNumberHeadings: boolean;
   setBookNumberHeadings: (v: boolean) => void;
+  // ブック: 見出し番号の文字色（CSS color 文字列）
+  bookHeadingNumberColor: string;
+  setBookHeadingNumberColor: (c: string) => void;
   // NotionPlus 行間設定
   notionPlusParaLineHeight: number;
   setNotionPlusParaLineHeight: (v: number) => void;
@@ -68,6 +71,8 @@ export const useSettingsStore = create<SettingsState>()(
       setBookChapterFormat: (f) => set({ bookChapterFormat: f }),
       bookNumberHeadings: true,
       setBookNumberHeadings: (v) => set({ bookNumberHeadings: v }),
+      bookHeadingNumberColor: '#9ca3af',
+      setBookHeadingNumberColor: (c) => set({ bookHeadingNumberColor: c }),
       notionPlusParaLineHeight: 1.7,
       setNotionPlusParaLineHeight: (v) => set({ notionPlusParaLineHeight: v }),
       notionPlusSoftLineHeight: 1.15,

@@ -52,10 +52,12 @@
 .notion-editor-booknum h2::before,
 .notion-editor-booknum h3::before,
 .notion-editor-booknum h4::before {
-  color: #9ca3af;
+  color: var(--booknum-color, #9ca3af);
   font-weight: 600;
   margin-right: 0.5em;
 }
+/* 固定書式バー直下の見出しが離れて見えないよう、本文先頭ブロックの上余白を詰める */
+.notion-editor > :first-child { margin-top: 0; }
 .notion-editor-booknum h1::before { content: counter(bh1); }
 .notion-editor-booknum h2::before { content: counter(bh1) "." counter(bh2); }
 .notion-editor-booknum h3::before { content: counter(bh1) "." counter(bh2) "." counter(bh3); }

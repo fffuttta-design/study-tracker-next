@@ -174,6 +174,7 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
     dragHandleOffset, setDragHandleOffset,
     bookChapterFormat, setBookChapterFormat,
     bookNumberHeadings, setBookNumberHeadings,
+    bookHeadingNumberColor, setBookHeadingNumberColor,
     setLastViewedNotionPageId,
   } = useSettingsStore();
   const [saving, setSaving] = useState(false);
@@ -611,6 +612,40 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
                         className="h-4 w-4 accent-brand-500"
                       />
                     </label>
+                    {bookNumberHeadings && (
+                      <div className="mt-2">
+                        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">番号の色</p>
+                        <div className="flex flex-wrap items-center gap-1">
+                          {([
+                            { label: 'グレー', v: '#9ca3af' },
+                            { label: '濃灰',   v: '#6b7280' },
+                            { label: '黒',     v: '#111827' },
+                            { label: '紫',     v: '#7c3aed' },
+                            { label: '赤',     v: '#dc2626' },
+                            { label: '青',     v: '#2563eb' },
+                            { label: '緑',     v: '#16a34a' },
+                          ] as const).map(({ label, v }) => (
+                            <button
+                              key={v}
+                              title={label}
+                              onClick={() => setBookHeadingNumberColor(v)}
+                              className={`h-5 w-5 rounded-full border transition hover:ring-2 hover:ring-brand-300 ${bookHeadingNumberColor.toLowerCase() === v ? 'ring-2 ring-brand-400 border-white' : 'border-gray-200'}`}
+                              style={{ background: v }}
+                            />
+                          ))}
+                          {/* 自由な色を選ぶ */}
+                          <label className="relative ml-0.5 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border border-dashed border-gray-300 text-[10px] text-gray-400 hover:border-brand-400" title="自由な色">
+                            ＋
+                            <input
+                              type="color"
+                              value={/^#[0-9a-fA-F]{6}$/.test(bookHeadingNumberColor) ? bookHeadingNumberColor : '#9ca3af'}
+                              onChange={(e) => setBookHeadingNumberColor(e.target.value)}
+                              className="absolute h-0 w-0 opacity-0"
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
                 {id !== WORKSPACE_ID && (
@@ -846,6 +881,7 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
                   hideTitle
                   stickyToolbar
                   numberHeadings={bookNumberHeadings}
+                  headingNumberColor={bookHeadingNumberColor}
                 />
               );
             })()
