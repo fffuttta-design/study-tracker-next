@@ -930,7 +930,7 @@ function ptParseSections(raw: unknown): PtSection[] {
 
 const ptIdFromHref = (href: string) => href?.match(/\/notion-plus\/([^/?#]+)/)?.[1];
 
-function PageTableView({ node, updateAttributes }: NodeViewProps) {
+function PageTableView({ node, updateAttributes, editor: ptEditor }: NodeViewProps) {
   const router = useRouter();
   const onPageNavigate = useContext(PageNavigationContext);
   const currentPageId = useContext(EditorPageIdContext);
@@ -948,10 +948,43 @@ function PageTableView({ node, updateAttributes }: NodeViewProps) {
   const [pickerPos, setPickerPos] = useState<{ top: number; left: number } | null>(null);
   const [query, setQuery] = useState('');
   const [colorOpenCol, setColorOpenCol] = useState<{ s: number; c: number } | null>(null);
+  const [colorPos, setColorPos] = useState<{ top: number; left: number } | null>(null);
   const [sectionMenu, setSectionMenu] = useState<number | null>(null);
+  const [sectionMenuPos, setSectionMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [resizing, setResizing] = useState<{ s: number; c: number; w: number } | null>(null);
   const dragSrc = useRef<{ s: number; c: number; i: number } | null>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
+
+  // ホバー枠の中だと消えるので、色/セクションメニューは最前面ポータルで開く（位置をボタンから算出）
+  const openColorMenu = (e: React.MouseEvent, si: number, ci: number) => {
+    if (colorOpenCol?.s === si && colorOpenCol?.c === ci) { setColorOpenCol(null); return; }
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setColorPos({ top: r.bottom + 6, left: Math.max(8, Math.min(r.left - 70, window.innerWidth - 200)) });
+    setColorOpenCol({ s: si, c: ci });
+  };
+  const openSectionMenu = (e: React.MouseEvent, si: number) => {
+    if (sectionMenu === si) { setSectionMenu(null); return; }
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setSectionMenuPos({ top: r.bottom + 6, left: Math.max(8, Math.min(r.left, window.innerWidth - 200)) });
+    setSectionMenu(si);
+  };
+
+  // ⑤ 重複排除: 看板に入れたページは、同じ本文内の単体ページリンクを削除（看板を正の場所にする）
+  const removeBodyPageLink = (href: string) => {
+    const id = ptIdFromHref(href);
+    if (!id || !ptEditor) return;
+    const dels: { from: number; to: number }[] = [];
+    ptEditor.state.doc.descendants((n, pos) => {
+      if (n.type.name === 'pageLink') {
+        const h = n.attrs.href as string;
+        if (h && ptIdFromHref(h) === id) dels.push({ from: pos, to: pos + n.nodeSize });
+      }
+    });
+    if (!dels.length) return;
+    let tr = ptEditor.state.tr;
+    dels.sort((a, b) => b.from - a.from).forEach((d) => { tr = tr.delete(d.from, d.to); });
+    ptEditor.view.dispatch(tr);
+  };
 
   const openPicker = (e: React.MouseEvent, si: number, ci: number) => {
     const isSame = picker?.s === si && picker?.c === ci;
@@ -1058,9 +1091,11 @@ function PageTableView({ node, updateAttributes }: NodeViewProps) {
     commit(next); setCut(null);
   };
 
-  // 既存ページ追加
+  // 既存ページ追加（看板に入れたら本文の単体リンクは重複排除で消す）
   const pickExisting = (si: number, ci: number, p: NotionPage) => {
-    addLink(si, ci, { href: `/notion-plus/${p.id}`, title: p.title || 'Untitled', icon: p.icon || '📄' });
+    const href = `/notion-plus/${p.id}`;
+    addLink(si, ci, { href, title: p.title || 'Untitled', icon: p.icon || '📄' });
+    removeBodyPageLink(href);
     closePicker();
   };
   // 新規サブページ作成して追加（現在ページの子にする）
@@ -1092,23 +1127,10 @@ function PageTableView({ node, updateAttributes }: NodeViewProps) {
                 placeholder="大見出し"
                 className="min-w-0 max-w-md flex-none bg-transparent text-xl font-bold text-gray-800 outline-none placeholder:font-bold placeholder:text-gray-300"
               />
-              <span className="relative flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover/sec:opacity-100">
-                {si > 0 && <button onClick={() => moveSection(si, -1)} className="rounded px-1 text-gray-400 hover:bg-gray-100" title="上へ">↑</button>}
-                {si < sections.length - 1 && <button onClick={() => moveSection(si, 1)} className="rounded px-1 text-gray-400 hover:bg-gray-100" title="下へ">↓</button>}
-                {/* セクション設定 */}
-                <button onClick={() => setSectionMenu(sectionMenu === si ? null : si)} className="rounded px-1 text-gray-400 hover:bg-gray-100" title="セクション設定">⚙</button>
-                {sectionMenu === si && (
-                  <div className="absolute left-0 top-6 z-20 w-44 rounded-xl border border-gray-200 bg-white p-2 shadow-xl">
-                    <label className="flex items-center justify-between gap-2 rounded px-1.5 py-1 text-xs text-gray-600 hover:bg-gray-50">
-                      <span>枠で囲む</span>
-                      <input type="checkbox" checked={framed} onChange={() => toggleFramed(si)} className="h-4 w-4 accent-brand-500" />
-                    </label>
-                    <button onClick={() => { addColumn(si); setSectionMenu(null); }} className="mt-0.5 w-full rounded px-1.5 py-1 text-left text-xs text-gray-600 hover:bg-gray-50">＋ リストを追加</button>
-                    {sections.length > 1 && (
-                      <button onClick={() => { removeSection(si); setSectionMenu(null); }} className="mt-0.5 w-full rounded px-1.5 py-1 text-left text-xs text-red-500 hover:bg-red-50">🗑️ この大見出しを削除</button>
-                    )}
-                  </div>
-                )}
+              <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover/sec:opacity-100">
+                {si > 0 && <button onClick={() => moveSection(si, -1)} className="flex h-6 w-6 items-center justify-center rounded text-gray-400 hover:bg-gray-100" title="上へ">↑</button>}
+                {si < sections.length - 1 && <button onClick={() => moveSection(si, 1)} className="flex h-6 w-6 items-center justify-center rounded text-gray-400 hover:bg-gray-100" title="下へ">↓</button>}
+                <button onClick={(e) => openSectionMenu(e, si)} className="flex h-6 w-6 items-center justify-center rounded text-gray-400 hover:bg-gray-100" title="セクション設定">⚙</button>
               </span>
             </div>
             {/* カンバン: リスト（コールアウト風カード）を横並び＋折り返し */}
@@ -1125,22 +1147,14 @@ function PageTableView({ node, updateAttributes }: NodeViewProps) {
                       placeholder="リスト名"
                       className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-gray-700 outline-none placeholder:font-normal placeholder:text-gray-400"
                     />
-                    <span className="relative flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover/col:opacity-100">
+                    <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover/col:opacity-100">
                       {/* 色変更 */}
-                      <button onClick={() => setColorOpenCol(colorOpenCol?.s === si && colorOpenCol?.c === ci ? null : { s: si, c: ci })}
-                        className="h-3.5 w-3.5 rounded-full border border-black/15" style={{ background: col.color || PT_DEFAULT_COLOR }} title="色を変更" />
-                      {colorOpenCol?.s === si && colorOpenCol?.c === ci && (
-                        <div className="absolute right-0 top-5 z-10 flex gap-1 rounded-lg border border-gray-200 bg-white p-1.5 shadow-xl">
-                          {CALLOUT_BG_COLORS.map((c) => (
-                            <button key={c.value} title={c.label} onClick={() => { setColumnColor(si, ci, c.value); setColorOpenCol(null); }}
-                              className="h-5 w-5 rounded-full hover:ring-2 hover:ring-brand-300"
-                              style={{ background: c.value, border: (col.color || PT_DEFAULT_COLOR) === c.value ? '2px solid #7c3aed' : '1px solid #e5e7eb' }} />
-                          ))}
-                        </div>
-                      )}
-                      {ci > 0 && <button onClick={() => moveColumn(si, ci, -1)} className="rounded px-0.5 text-gray-400 hover:text-gray-700" title="左へ">‹</button>}
-                      {ci < sec.columns.length - 1 && <button onClick={() => moveColumn(si, ci, 1)} className="rounded px-0.5 text-gray-400 hover:text-gray-700" title="右へ">›</button>}
-                      {sec.columns.length > 1 && <button onClick={() => removeColumn(si, ci)} className="rounded px-0.5 text-gray-400 hover:text-red-400" title="リスト削除">✕</button>}
+                      <button onClick={(e) => openColorMenu(e, si, ci)} className="flex h-5 w-5 items-center justify-center rounded hover:bg-black/5" title="色を変更">
+                        <span className="block h-3.5 w-3.5 rounded-full border border-black/15" style={{ background: col.color || PT_DEFAULT_COLOR }} />
+                      </button>
+                      {ci > 0 && <button onClick={() => moveColumn(si, ci, -1)} className="flex h-5 w-5 items-center justify-center rounded text-gray-400 hover:bg-black/5 hover:text-gray-700" title="左へ">‹</button>}
+                      {ci < sec.columns.length - 1 && <button onClick={() => moveColumn(si, ci, 1)} className="flex h-5 w-5 items-center justify-center rounded text-gray-400 hover:bg-black/5 hover:text-gray-700" title="右へ">›</button>}
+                      {sec.columns.length > 1 && <button onClick={() => removeColumn(si, ci)} className="flex h-5 w-5 items-center justify-center rounded text-gray-400 hover:bg-black/5 hover:text-red-400" title="リスト削除">✕</button>}
                     </span>
                   </div>
                   {/* カード群（空きへドロップで末尾に移動） */}
@@ -1166,9 +1180,9 @@ function PageTableView({ node, updateAttributes }: NodeViewProps) {
                           <button onClick={() => navigate(lk.href)} className="min-w-0 flex-1 break-words text-left text-[13px] leading-snug text-gray-700 hover:text-brand-600" title={title}>
                             {title}
                           </button>
-                          <span className="flex shrink-0 items-center opacity-0 transition group-hover/lk:opacity-100">
-                            <button onClick={() => setCut(isCut ? null : { s: si, c: ci, i: li })} className="rounded px-0.5 text-gray-300 hover:text-brand-500" title={isCut ? '切り取り解除' : '切り取り'}>✂</button>
-                            <button onClick={() => removeLink(si, ci, li)} className="rounded px-0.5 text-gray-300 hover:text-red-400" title="削除">✕</button>
+                          <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover/lk:opacity-100">
+                            <button onClick={() => setCut(isCut ? null : { s: si, c: ci, i: li })} className="flex h-5 w-5 items-center justify-center rounded text-gray-300 hover:bg-gray-100 hover:text-brand-500" title={isCut ? '切り取り解除' : '切り取り'}>✂</button>
+                            <button onClick={() => removeLink(si, ci, li)} className="flex h-5 w-5 items-center justify-center rounded text-gray-300 hover:bg-gray-100 hover:text-red-400" title="削除">✕</button>
                           </span>
                         </div>
                       );
@@ -1210,8 +1224,45 @@ function PageTableView({ node, updateAttributes }: NodeViewProps) {
       </div>
       {/* メニューの外側クリックで閉じる薄い背景 */}
       {(sectionMenu !== null || colorOpenCol) && (
-        <div className="fixed inset-0 z-[5]" onMouseDown={() => { setSectionMenu(null); setColorOpenCol(null); }} />
+        <div className="fixed inset-0 z-[5]" onMouseDown={() => { setSectionMenu(null); setSectionMenuPos(null); setColorOpenCol(null); setColorPos(null); }} />
       )}
+      {/* 色メニュー（最前面ポータル） */}
+      {(() => {
+        if (!colorOpenCol || !colorPos || typeof document === 'undefined') return null;
+        const co = colorOpenCol;
+        const cur = sections[co.s]?.columns[co.c]?.color || PT_DEFAULT_COLOR;
+        return createPortal(
+          <div style={{ position: 'fixed', top: colorPos.top, left: colorPos.left }}
+            className="z-[1000] flex gap-1 rounded-lg border border-gray-200 bg-white p-1.5 shadow-2xl">
+            {CALLOUT_BG_COLORS.map((c) => (
+              <button key={c.value} title={c.label} onClick={() => { setColumnColor(co.s, co.c, c.value); setColorOpenCol(null); setColorPos(null); }}
+                className="h-6 w-6 rounded-full hover:ring-2 hover:ring-brand-300"
+                style={{ background: c.value, border: cur === c.value ? '2px solid #7c3aed' : '1px solid #e5e7eb' }} />
+            ))}
+          </div>,
+          document.body,
+        );
+      })()}
+      {/* セクション設定メニュー（最前面ポータル） */}
+      {(() => {
+        if (sectionMenu === null || !sectionMenuPos || typeof document === 'undefined') return null;
+        const si = sectionMenu;
+        const isFramed = sections[si]?.framed !== false;
+        return createPortal(
+          <div style={{ position: 'fixed', top: sectionMenuPos.top, left: sectionMenuPos.left }}
+            className="z-[1000] w-48 rounded-xl border border-gray-200 bg-white p-2 shadow-2xl">
+            <label className="flex items-center justify-between gap-2 rounded px-1.5 py-1 text-xs text-gray-600 hover:bg-gray-50">
+              <span>枠で囲む</span>
+              <input type="checkbox" checked={isFramed} onChange={() => toggleFramed(si)} className="h-4 w-4 accent-brand-500" />
+            </label>
+            <button onClick={() => { addColumn(si); setSectionMenu(null); setSectionMenuPos(null); }} className="mt-0.5 w-full rounded px-1.5 py-1 text-left text-xs text-gray-600 hover:bg-gray-50">＋ リストを追加</button>
+            {sections.length > 1 && (
+              <button onClick={() => { removeSection(si); setSectionMenu(null); setSectionMenuPos(null); }} className="mt-0.5 w-full rounded px-1.5 py-1 text-left text-xs text-red-500 hover:bg-red-50">🗑️ この大見出しを削除</button>
+            )}
+          </div>,
+          document.body,
+        );
+      })()}
       {/* ＋追加ピッカー: portal＋fixed で最前面（スクロール領域に切られない）*/}
       {(() => {
         if (!picker || !pickerPos || typeof document === 'undefined') return null;
