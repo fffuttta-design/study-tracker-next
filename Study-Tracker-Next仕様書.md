@@ -906,6 +906,7 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-06-16 | （次回配信） | ブック固定書式バーの修正：`-mt-8/pt-8` のはみ出し補正が書式バー上に32pxの白帯（無駄余白）を作り、固定時に分厚くなってチャプタータイトルを覆う問題を解消。コンパクトな `sticky top-0 py-1` に変更。NotionEditor.tsx |
 | 2026-06-16 | （次回配信） | ページテーブル（ページリンク整理ボード）新規実装：`/ページテーブル`で挿入するTipTapノード `pageTable`。大見出し（セクション）＋列（小見出し）＋各列にページリンク縦並びで整理。Phase1＋2＝大小見出し編集/セクション・列の追加削除並べ替え/リンク追加(既存検索＋新規作成)・削除・上下移動・切り取り→貼り付けで列セクション間移動/クリック遷移/子ページ自動親付け替え。NotionEditor.tsx(PageTableNode・EditorPageIdContext) / notion-plus/[id]/page.tsx(extractPageLinkIds拡張)。要件=ページテーブル要件定義.md |
 | 2026-06-15 | （次回配信） | ブック：チャプター名タイトルの位置を固定書式バーの「下」へ変更し、左アクセントバー＋下区切り線のセクション見出しに整形（タイトルだと一目で分かるように）。固定バーは常に -mt-8/pt-8 へ戻す。NotionEditor.tsx |
 | 2026-06-15 | （次回配信） | ブック：チャプター名をページ先頭に大きく表示する/しないを⚙で切替（`bookShowChapterHeading`・既定ON）。NotionEditor の `chapterHeading` プロパティで先頭に章ラベルを表示（固定書式バーの上、スクロールで流れる）。チャプター名がある時は固定バーのはみ出し補正(-mt-8/pt-8)を外す。settingsStore / NotionEditor.tsx / notion-plus/[id]/page.tsx |

@@ -2055,8 +2055,8 @@ export function NotionEditor({
         )}
         {!hideToolbar && editor && (
           stickyToolbar ? (
-            // ブック: スクロールしても書式バーを上部に固定（下に流れる本文を bg で隠す）
-            <div className="sticky top-0 z-20 -mt-8 mb-1 border-b border-gray-100 bg-white pt-8 pb-1">
+            // ブック: スクロールしても書式バーを上部に固定（コンパクト・無駄な余白なし）
+            <div className="sticky top-0 z-20 mb-3 border-b border-gray-100 bg-white py-1">
               <Toolbar editor={editor} className="mb-0" />
             </div>
           ) : (
@@ -2065,7 +2065,7 @@ export function NotionEditor({
         )}
         {/* ブック: チャプター名を書式バーの下にタイトル（セクション見出し）として表示 */}
         {chapterHeading && (
-          <div className="mb-5 mt-3 flex items-center gap-3 border-b-2 border-gray-100 pb-2">
+          <div className="mb-5 mt-1 flex items-center gap-3 border-b-2 border-gray-100 pb-2">
             <span className="h-7 w-1.5 shrink-0 rounded-full bg-brand-400" />
             <h1 className="text-2xl font-bold text-gray-900">{chapterHeading}</h1>
           </div>
