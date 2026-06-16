@@ -900,7 +900,7 @@ const InlineDatabaseNode = TiptapNode.create({
 
 interface PtLink { href: string; title: string; icon: string }
 interface PtColumn { id: string; heading: string; links: PtLink[]; color?: string; width?: number }
-interface PtSection { id: string; title: string; columns: PtColumn[]; framed?: boolean; bg?: string }
+interface PtSection { id: string; title: string; columns: PtColumn[]; framed?: boolean; bg?: string; borderWidth?: number }
 
 const PT_DEFAULT_COLOR = '#F1F1EF'; // リスト（カンバン列）の既定背景＝淡グレー
 const PT_DEFAULT_WIDTH = 240;       // リストの既定幅(px)
@@ -1030,6 +1030,7 @@ function PageTableView({ node, updateAttributes, editor: ptEditor }: NodeViewPro
     setSection(si, (s) => ({ ...s, columns: s.columns.map((c, i) => (i === ci ? { ...c, width } : c)) }));
   const toggleFramed = (si: number) => setSection(si, (s) => ({ ...s, framed: s.framed === false }));
   const setSectionBg = (si: number, bg: string) => setSection(si, (s) => ({ ...s, bg: bg || undefined }));
+  const setSectionBorderWidth = (si: number, w: number) => setSection(si, (s) => ({ ...s, borderWidth: w }));
 
   // リスト幅のドラッグリサイズ（移動中はローカル state、離したら確定）
   const startResize = (e: React.MouseEvent, si: number, ci: number, startW: number) => {
@@ -1120,8 +1121,11 @@ function PageTableView({ node, updateAttributes, editor: ptEditor }: NodeViewPro
           const framed = sec.framed !== false; // 既定で枠あり（明示 false のみ枠なし）
           const panel = framed || !!sec.bg;    // 枠 or 背景があれば角丸＋余白のパネルに
           return (
-          <div key={sec.id} className={`mb-5 ${panel ? 'rounded-2xl p-4' : ''} ${framed ? 'border border-gray-200' : ''}`}
-            style={{ background: sec.bg || undefined }}>
+          <div key={sec.id} className={`mb-5 ${panel ? 'rounded-2xl p-4' : ''}`}
+            style={{
+              background: sec.bg || undefined,
+              ...(framed ? { borderStyle: 'solid', borderColor: '#d1d5db', borderWidth: `${sec.borderWidth ?? 1}px` } : {}),
+            }}>
             {/* 大見出し（大きめ見出し） */}
             <div className="group/sec mb-3 flex items-center gap-1.5">
               <input
@@ -1260,6 +1264,20 @@ function PageTableView({ node, updateAttributes, editor: ptEditor }: NodeViewPro
               <span>枠で囲む</span>
               <input type="checkbox" checked={isFramed} onChange={() => toggleFramed(si)} className="h-4 w-4 accent-brand-500" />
             </label>
+            {/* 枠線の太さ（枠ありのときだけ） */}
+            {isFramed && (
+              <div className="mt-1 px-1.5 py-1">
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">枠線の太さ</p>
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4].map((w) => (
+                    <button key={w} onClick={() => setSectionBorderWidth(si, w)}
+                      className={`flex-1 rounded border py-1 text-[11px] transition ${(sections[si]?.borderWidth ?? 1) === w ? 'border-brand-400 bg-brand-50 font-medium text-brand-600' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                      {w}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {/* セクション背景色（枠の中） */}
             <div className="mt-1 px-1.5 py-1">
               <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">背景色</p>
