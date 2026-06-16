@@ -899,8 +899,10 @@ const InlineDatabaseNode = TiptapNode.create({
 // データはノード attrs.sections に保持（本文JSON内・新規DB不要）。
 
 interface PtLink { href: string; title: string; icon: string }
-interface PtColumn { id: string; heading: string; links: PtLink[] }
+interface PtColumn { id: string; heading: string; links: PtLink[]; color?: string }
 interface PtSection { id: string; title: string; columns: PtColumn[] }
+
+const PT_DEFAULT_COLOR = '#F1F1EF'; // リスト（カンバン列）の既定背景＝淡グレー
 
 const ptNewId = () =>
   (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `pt-${Date.now()}-${performance.now()}`;
@@ -942,6 +944,7 @@ function PageTableView({ node, updateAttributes }: NodeViewProps) {
   const [picker, setPicker] = useState<{ s: number; c: number } | null>(null);
   const [pickerPos, setPickerPos] = useState<{ top: number; left: number } | null>(null);
   const [query, setQuery] = useState('');
+  const [colorOpenCol, setColorOpenCol] = useState<{ s: number; c: number } | null>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
 
   const openPicker = (e: React.MouseEvent, si: number, ci: number) => {
@@ -982,6 +985,8 @@ function PageTableView({ node, updateAttributes }: NodeViewProps) {
     const j = ci + dir; if (j < 0 || j >= s.columns.length) return s;
     const cols = [...s.columns]; [cols[ci], cols[j]] = [cols[j], cols[ci]]; return { ...s, columns: cols };
   });
+  const setColumnColor = (si: number, ci: number, color: string) =>
+    setSection(si, (s) => ({ ...s, columns: s.columns.map((c, i) => (i === ci ? { ...c, color } : c)) }));
 
   // ── リンク操作 ──
   const addLink = (si: number, ci: number, link: PtLink) => setSection(si, (s) => ({
@@ -1038,54 +1043,65 @@ function PageTableView({ node, updateAttributes }: NodeViewProps) {
     <NodeViewWrapper data-type="page-table" contentEditable={false}>
       <div className="page-table my-3" contentEditable={false}>
         {sections.map((sec, si) => (
-          <div key={sec.id} className="mb-3 overflow-hidden rounded-lg border border-gray-200">
-            {/* 大見出し */}
-            <div className="group/sec flex items-center gap-1 border-b border-gray-200 bg-gray-50 px-2 py-1">
+          <div key={sec.id} className="mb-5">
+            {/* 大見出し（小ラベル） */}
+            <div className="group/sec mb-2 flex items-center gap-1">
               <input
                 value={sec.title}
                 onChange={(e) => setSection(si, (s) => ({ ...s, title: e.target.value }))}
                 placeholder="大見出し（任意）"
-                className="min-w-0 flex-1 bg-transparent px-1 text-center text-sm font-bold text-gray-800 outline-none placeholder:font-normal placeholder:text-gray-300"
+                className="min-w-0 max-w-sm flex-none bg-transparent text-sm font-bold text-gray-700 outline-none placeholder:font-normal placeholder:text-gray-300"
               />
               <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover/sec:opacity-100">
-                {si > 0 && <button onClick={() => moveSection(si, -1)} className="rounded px-1 text-gray-400 hover:bg-gray-200" title="上へ">↑</button>}
-                {si < sections.length - 1 && <button onClick={() => moveSection(si, 1)} className="rounded px-1 text-gray-400 hover:bg-gray-200" title="下へ">↓</button>}
-                <button onClick={() => addColumn(si)} className="rounded px-1 text-gray-400 hover:bg-gray-200" title="列を追加">＋列</button>
-                {sections.length > 1 && <button onClick={() => removeSection(si)} className="rounded px-1 text-gray-300 hover:text-red-400" title="セクション削除">✕</button>}
+                {si > 0 && <button onClick={() => moveSection(si, -1)} className="rounded px-1 text-gray-400 hover:bg-gray-100" title="上へ">↑</button>}
+                {si < sections.length - 1 && <button onClick={() => moveSection(si, 1)} className="rounded px-1 text-gray-400 hover:bg-gray-100" title="下へ">↓</button>}
+                {sections.length > 1 && <button onClick={() => removeSection(si)} className="rounded px-1 text-gray-300 hover:text-red-400" title="大見出し削除">✕</button>}
               </span>
             </div>
-            {/* 列 */}
-            <div className="flex divide-x divide-gray-200">
+            {/* カンバン: リスト（コールアウト風カード）を横並び＋折り返し */}
+            <div className="flex flex-wrap items-start gap-3">
               {sec.columns.map((col, ci) => (
-                <div key={col.id} className="group/col min-w-[120px] flex-1 basis-0">
-                  {/* 小見出し */}
-                  <div className="flex items-center gap-0.5 border-b border-gray-200 bg-gray-50/60 px-1.5 py-1">
+                <div key={col.id} className="group/col w-60 shrink-0 rounded-xl p-2" style={{ background: col.color || PT_DEFAULT_COLOR }}>
+                  {/* リスト見出し */}
+                  <div className="mb-1.5 flex items-center gap-0.5 px-1">
                     <input
                       value={col.heading}
                       onChange={(e) => setSection(si, (s) => ({ ...s, columns: s.columns.map((c, k) => (k === ci ? { ...c, heading: e.target.value } : c)) }))}
-                      placeholder="小見出し"
-                      className="min-w-0 flex-1 bg-transparent px-0.5 text-xs font-semibold text-gray-600 outline-none placeholder:font-normal placeholder:text-gray-300"
+                      placeholder="リスト名"
+                      className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-gray-700 outline-none placeholder:font-normal placeholder:text-gray-400"
                     />
-                    <span className="flex shrink-0 items-center opacity-0 transition group-hover/col:opacity-100">
-                      {ci > 0 && <button onClick={() => moveColumn(si, ci, -1)} className="rounded px-0.5 text-gray-300 hover:text-gray-600" title="左へ">‹</button>}
-                      {ci < sec.columns.length - 1 && <button onClick={() => moveColumn(si, ci, 1)} className="rounded px-0.5 text-gray-300 hover:text-gray-600" title="右へ">›</button>}
-                      {sec.columns.length > 1 && <button onClick={() => removeColumn(si, ci)} className="rounded px-0.5 text-gray-300 hover:text-red-400" title="列削除">✕</button>}
+                    <span className="relative flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover/col:opacity-100">
+                      {/* 色変更 */}
+                      <button onClick={() => setColorOpenCol(colorOpenCol?.s === si && colorOpenCol?.c === ci ? null : { s: si, c: ci })}
+                        className="h-3.5 w-3.5 rounded-full border border-black/15" style={{ background: col.color || PT_DEFAULT_COLOR }} title="色を変更" />
+                      {colorOpenCol?.s === si && colorOpenCol?.c === ci && (
+                        <div className="absolute right-0 top-5 z-10 flex gap-1 rounded-lg border border-gray-200 bg-white p-1.5 shadow-xl">
+                          {CALLOUT_BG_COLORS.map((c) => (
+                            <button key={c.value} title={c.label} onClick={() => { setColumnColor(si, ci, c.value); setColorOpenCol(null); }}
+                              className="h-5 w-5 rounded-full hover:ring-2 hover:ring-brand-300"
+                              style={{ background: c.value, border: (col.color || PT_DEFAULT_COLOR) === c.value ? '2px solid #7c3aed' : '1px solid #e5e7eb' }} />
+                          ))}
+                        </div>
+                      )}
+                      {ci > 0 && <button onClick={() => moveColumn(si, ci, -1)} className="rounded px-0.5 text-gray-400 hover:text-gray-700" title="左へ">‹</button>}
+                      {ci < sec.columns.length - 1 && <button onClick={() => moveColumn(si, ci, 1)} className="rounded px-0.5 text-gray-400 hover:text-gray-700" title="右へ">›</button>}
+                      {sec.columns.length > 1 && <button onClick={() => removeColumn(si, ci)} className="rounded px-0.5 text-gray-400 hover:text-red-400" title="リスト削除">✕</button>}
                     </span>
                   </div>
-                  {/* リンク一覧 */}
-                  <div className="space-y-0.5 p-1.5">
+                  {/* カード群 */}
+                  <div className="space-y-1.5">
                     {col.links.map((lk, li) => {
                       const live = pages.find((p) => p.id === ptIdFromHref(lk.href));
                       const title = live?.title || lk.title || 'Untitled';
                       const icon = live?.icon || lk.icon || '📄';
                       const isCut = cut?.s === si && cut?.c === ci && cut?.i === li;
                       return (
-                        <div key={li} className={`group/lk flex items-center gap-1 rounded px-1 py-0.5 hover:bg-gray-50 ${isCut ? 'opacity-40 ring-1 ring-brand-300' : ''}`}>
-                          <span className="shrink-0 text-[13px] leading-none">{isImageSrc(icon)
+                        <div key={li} className={`group/lk flex items-start gap-1.5 rounded-lg bg-white px-2.5 py-1.5 shadow-sm ring-1 ring-black/[0.04] transition hover:ring-brand-200 ${isCut ? 'opacity-40 ring-2 ring-brand-300' : ''}`}>
+                          <span className="mt-px shrink-0 text-[13px] leading-tight">{isImageSrc(icon)
                             // eslint-disable-next-line @next/next/no-img-element
                             ? <img src={icon} alt="" className="h-[15px] w-[15px] rounded object-cover" />
                             : icon}</span>
-                          <button onClick={() => navigate(lk.href)} className="min-w-0 flex-1 truncate text-left text-[13px] text-gray-700 underline-offset-2 hover:underline" title={title}>
+                          <button onClick={() => navigate(lk.href)} className="min-w-0 flex-1 break-words text-left text-[13px] leading-snug text-gray-700 hover:text-brand-600" title={title}>
                             {title}
                           </button>
                           <span className="flex shrink-0 items-center opacity-0 transition group-hover/lk:opacity-100">
@@ -1099,22 +1115,27 @@ function PageTableView({ node, updateAttributes }: NodeViewProps) {
                     })}
                     {/* 貼り付け先（切り取り中のみ） */}
                     {cut && (
-                      <button onClick={() => pasteHere(si, ci)} className="w-full rounded border border-dashed border-brand-300 px-1 py-0.5 text-[11px] text-brand-500 hover:bg-brand-50">
+                      <button onClick={() => pasteHere(si, ci)} className="w-full rounded-lg border border-dashed border-brand-300 bg-white/60 px-2 py-1 text-[11px] text-brand-500 hover:bg-white">
                         ここに貼り付け
                       </button>
                     )}
-                    {/* ＋追加 */}
+                    {/* ＋カードを追加 */}
                     <button onClick={(e) => openPicker(e, si, ci)}
-                      className="w-full rounded px-1 py-0.5 text-left text-[11px] text-gray-300 hover:bg-gray-50 hover:text-gray-500">
-                      ＋ 追加
+                      className="w-full rounded-lg px-2 py-1 text-left text-[12px] text-gray-400 hover:bg-white/70 hover:text-gray-600">
+                      ＋ カードを追加
                     </button>
                   </div>
                 </div>
               ))}
+              {/* リスト追加 */}
+              <button onClick={() => addColumn(si)}
+                className="w-60 shrink-0 rounded-xl border-2 border-dashed border-gray-200 px-2 py-2 text-left text-[12px] text-gray-400 transition hover:border-gray-300 hover:text-gray-600">
+                ＋ リストを追加
+              </button>
             </div>
           </div>
         ))}
-        {/* セクション追加 */}
+        {/* 大見出し追加 */}
         <button onClick={addSection} className="rounded-md px-2 py-1 text-xs text-gray-400 hover:bg-gray-50 hover:text-brand-500">
           ＋ 大見出しを追加
         </button>
