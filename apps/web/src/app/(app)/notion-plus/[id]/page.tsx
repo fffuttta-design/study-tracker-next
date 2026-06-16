@@ -40,10 +40,25 @@ function extractPageLinkIds(content: string): string[] {
   const ids: string[] = [];
   const walk = (node: unknown) => {
     if (!node || typeof node !== 'object') return;
-    const n = node as { type?: string; attrs?: { href?: string }; content?: unknown[] };
+    const n = node as { type?: string; attrs?: { href?: string; sections?: unknown }; content?: unknown[] };
     if (n.type === 'pageLink' && typeof n.attrs?.href === 'string') {
       const m = n.attrs.href.match(/\/notion-plus\/([^/?#]+)/);
       if (m) ids.push(m[1]);
+    }
+    // ページテーブル: attrs.sections[].columns[].links[].href も子リンクとして拾う
+    if (n.type === 'pageTable' && n.attrs?.sections) {
+      let secs: unknown = n.attrs.sections;
+      if (typeof secs === 'string') { try { secs = JSON.parse(secs); } catch { secs = null; } }
+      if (Array.isArray(secs)) {
+        for (const sec of secs as { columns?: { links?: { href?: string }[] }[] }[]) {
+          for (const col of sec.columns ?? []) {
+            for (const lk of col.links ?? []) {
+              const m = typeof lk.href === 'string' ? lk.href.match(/\/notion-plus\/([^/?#]+)/) : null;
+              if (m) ids.push(m[1]);
+            }
+          }
+        }
+      }
     }
     if (Array.isArray(n.content)) n.content.forEach(walk);
   };

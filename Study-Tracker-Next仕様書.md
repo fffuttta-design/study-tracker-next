@@ -270,6 +270,23 @@ Firebase Firestore（users/{uid}/コレクション）
 - **章番号の書式は変更可能（実装済み・2026-06-15）**：設定 `bookChapterFormat` で `kanji`（第一章）/ `arabic`（第1章）/ `chapter`（Chapter 1）/ `none`（番号なし）を選択。`chapterLabel(index, title, format)` が書式に応じてラベル生成。UI はページ右上⚙メニュー（ブックのときだけ「章番号の書式」「本文に見出し番号」を表示）。設定は `settingsStore`（localStorage）に全体既定として保持。
 - **Phase 3（未）**：ブック個別の ON/OFF・書式上書き（`page` 側にフィールドを持たせ、全体既定を上書き）。
 
+##### ページテーブル（ページリンク整理ボード）
+
+> 子ページが増えてフラットになりがちなリンクを、**大見出し（セクション）＋列（小見出し）＋各列にページリンクの縦並び**で手配置して整理する「目次ボード（MOC）」。要件定義の正本は `ページテーブル要件定義.md`。
+
+- **形態**：本文に挿す **TipTap カスタムノード `pageTable`**（`NotionEditor.tsx`）。スラッシュコマンド **`/ページテーブル`** で挿入。1ページに複数可。
+- **データ**：ノード `attrs.sections`（`PtSection[]= {id,title,columns:[{id,heading,links:[{href,title,icon}]}]}`）に保持。**本文JSON内・新規Firestoreコレクション不要・本文非破壊**。リンクのアイコン/ページ名は `notionPageStore` からライブ表示（リネーム追従）。
+- **実装済み機能（Phase 1＋2・2026-06-16）**：
+  - 大見出し・小見出しのインライン編集
+  - セクション：追加 / 削除 / 上下並べ替え
+  - 列：追加 / 削除 / 左右並べ替え
+  - リンク：**既存ページ検索追加** / **新規サブページ作成して追加**（現在ページの子にする）/ 削除 / 列内上下並べ替え / **切り取り→貼り付け（列・セクションをまたいで移動）**
+  - リンククリックで遷移（モーダル内は `PageNavigationContext`）
+- **親子追従**：`extractPageLinkIds`（`notion-plus/[id]/page.tsx`）が `pageTable` 内リンクも拾い、`reconcileChildrenParent` でこのページの子へ `parentId` を付け替え（本文 pageLink と同じ整合）。
+- **新規ページ作成**は `EditorPageIdContext` で現在ページIDを取得し `parentId` を直接設定。
+- **Phase 3（未）**：未配置の子ページ自動収集 / 表示オプション（アイコンON/OFF・列幅・色）/ リンクごとのメモ / 切れリンクのグレーアウト。
+- **モバイル（RN）**：未対応（Web/デスクトップ優先・要追って対応）。
+
 #### ページ操作
 
 - お気に入り登録（★ ボタン）
@@ -889,6 +906,7 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-06-16 | （次回配信） | ページテーブル（ページリンク整理ボード）新規実装：`/ページテーブル`で挿入するTipTapノード `pageTable`。大見出し（セクション）＋列（小見出し）＋各列にページリンク縦並びで整理。Phase1＋2＝大小見出し編集/セクション・列の追加削除並べ替え/リンク追加(既存検索＋新規作成)・削除・上下移動・切り取り→貼り付けで列セクション間移動/クリック遷移/子ページ自動親付け替え。NotionEditor.tsx(PageTableNode・EditorPageIdContext) / notion-plus/[id]/page.tsx(extractPageLinkIds拡張)。要件=ページテーブル要件定義.md |
 | 2026-06-15 | （次回配信） | ブック：チャプター名タイトルの位置を固定書式バーの「下」へ変更し、左アクセントバー＋下区切り線のセクション見出しに整形（タイトルだと一目で分かるように）。固定バーは常に -mt-8/pt-8 へ戻す。NotionEditor.tsx |
 | 2026-06-15 | （次回配信） | ブック：チャプター名をページ先頭に大きく表示する/しないを⚙で切替（`bookShowChapterHeading`・既定ON）。NotionEditor の `chapterHeading` プロパティで先頭に章ラベルを表示（固定書式バーの上、スクロールで流れる）。チャプター名がある時は固定バーのはみ出し補正(-mt-8/pt-8)を外す。settingsStore / NotionEditor.tsx / notion-plus/[id]/page.tsx |
 | 2026-06-15 | （次回配信） | ブック見出し番号の微調整：番号の文字色を⚙から変更可能に（プリセット7色＋カラーピッカー、CSS変数 `--booknum-color`、設定 `bookHeadingNumberColor`）。固定書式バーと本文先頭見出しの間の余白を縮小（sticky の pb-1 化＋`.notion-editor > :first-child` の上余白0）。settingsStore / NotionEditor.tsx / editor.css / notion-plus/[id]/page.tsx |
