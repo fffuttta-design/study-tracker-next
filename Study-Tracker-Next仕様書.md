@@ -282,7 +282,7 @@ Firebase Firestore（users/{uid}/コレクション）
   - 列：追加 / 削除 / 左右並べ替え
   - リンク：**既存ページ検索追加** / **新規サブページ作成して追加**（現在ページの子にする）/ 削除 / 列内上下並べ替え / **切り取り→貼り付け（列・セクションをまたいで移動）**
   - リンククリックで遷移（モーダル内は `PageNavigationContext`）
-- **親子追従**：`extractPageLinkIds`（`notion-plus/[id]/page.tsx`）が `pageTable` 内リンクも拾い、`reconcileChildrenParent` でこのページの子へ `parentId` を付け替え（本文 pageLink と同じ整合）。
+- **親子追従（A案・ノート/ブック統一）**：`extractPageLinkIds`（`notion-plus/[id]/page.tsx`）が `pageTable` 内リンクも拾い、`reconcileChildrenParent` でこのページ（ブックならブック）の子へ `parentId` を付け替え。**ノート保存(handleSave)・ブックチャプター保存(handleBookChapterSave)の両方で実行**＝既存ページを追加すると必ずこのページの子になる（「整理＝束ねる」）。
 - **新規ページ作成**は `EditorPageIdContext` で現在ページIDを取得し `parentId` を直接設定。
 - **Phase 3（未）**：未配置の子ページ自動収集 / 表示オプション（アイコンON/OFF・列幅・色）/ リンクごとのメモ / 切れリンクのグレーアウト。
 - **モバイル（RN）**：未対応（Web/デスクトップ優先・要追って対応）。
@@ -906,6 +906,8 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-06-16 | （次回配信） | ページテーブル/リンクの親付け替えをノート・ブックで統一（A案）：ブックの `handleBookChapterSave` でも `reconcileChildrenParent` を呼び、既存ページを追加すると必ずこのページ（ブック）の子になるように。notion-plus/[id]/page.tsx |
+| 2026-06-16 | （次回配信） | ページテーブル：＋追加ピッカーがエディタのスクロール領域(overflow)に切られて見切れる問題を修正。`createPortal`＋`position:fixed`で `document.body` 直下・最前面(z-[1000])に表示。ボタン位置から座標算出し画面端・下端でクランプ（下にはみ出すなら上開き）。NotionEditor.tsx |
 | 2026-06-16 | （次回配信） | ブック固定書式バーの修正：`-mt-8/pt-8` のはみ出し補正が書式バー上に32pxの白帯（無駄余白）を作り、固定時に分厚くなってチャプタータイトルを覆う問題を解消。コンパクトな `sticky top-0 py-1` に変更。NotionEditor.tsx |
 | 2026-06-16 | （次回配信） | ページテーブル（ページリンク整理ボード）新規実装：`/ページテーブル`で挿入するTipTapノード `pageTable`。大見出し（セクション）＋列（小見出し）＋各列にページリンク縦並びで整理。Phase1＋2＝大小見出し編集/セクション・列の追加削除並べ替え/リンク追加(既存検索＋新規作成)・削除・上下移動・切り取り→貼り付けで列セクション間移動/クリック遷移/子ページ自動親付け替え。NotionEditor.tsx(PageTableNode・EditorPageIdContext) / notion-plus/[id]/page.tsx(extractPageLinkIds拡張)。要件=ページテーブル要件定義.md |
 | 2026-06-15 | （次回配信） | ブック：チャプター名タイトルの位置を固定書式バーの「下」へ変更し、左アクセントバー＋下区切り線のセクション見出しに整形（タイトルだと一目で分かるように）。固定バーは常に -mt-8/pt-8 へ戻す。NotionEditor.tsx |

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback, useState, createContext, useContext, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 
 // ── ページ遷移インターセプトコンテキスト ─────────────────────────────────
@@ -937,14 +938,29 @@ function PageTableView({ node, updateAttributes }: NodeViewProps) {
 
   // 切り取り中のリンク位置（移動用・実データは貼り付け時に移す＝消失しない）
   const [cut, setCut] = useState<{ s: number; c: number; i: number } | null>(null);
-  // ＋追加ピッカー（どの列に追加するか）
+  // ＋追加ピッカー（どの列に追加するか）。位置は fixed＋portal で最前面に出す（スクロール領域に切られない）
   const [picker, setPicker] = useState<{ s: number; c: number } | null>(null);
+  const [pickerPos, setPickerPos] = useState<{ top: number; left: number } | null>(null);
   const [query, setQuery] = useState('');
   const pickerRef = useRef<HTMLDivElement>(null);
 
+  const openPicker = (e: React.MouseEvent, si: number, ci: number) => {
+    const isSame = picker?.s === si && picker?.c === ci;
+    if (isSame) { setPicker(null); setPickerPos(null); return; }
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const W = 240, H = 290;
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - W - 8));
+    let top = r.bottom + 4;
+    if (top + H > window.innerHeight) top = Math.max(8, r.top - H - 4); // 下にはみ出すなら上に開く
+    setPickerPos({ top, left });
+    setPicker({ s: si, c: ci });
+    setQuery('');
+  };
+  const closePicker = () => { setPicker(null); setPickerPos(null); setQuery(''); };
+
   useEffect(() => {
     if (!picker) return;
-    const h = (e: MouseEvent) => { if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPicker(null); };
+    const h = (e: MouseEvent) => { if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) { setPicker(null); setPickerPos(null); } };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
   }, [picker]);
@@ -1002,14 +1018,14 @@ function PageTableView({ node, updateAttributes }: NodeViewProps) {
   // 既存ページ追加
   const pickExisting = (si: number, ci: number, p: NotionPage) => {
     addLink(si, ci, { href: `/notion-plus/${p.id}`, title: p.title || 'Untitled', icon: p.icon || '📄' });
-    setPicker(null); setQuery('');
+    closePicker();
   };
   // 新規サブページ作成して追加（現在ページの子にする）
   const createAndAdd = async (si: number, ci: number) => {
     if (!user) return;
     const np = await addPage(user.uid, currentPageId ? { parentId: currentPageId } : {});
     addLink(si, ci, { href: `/notion-plus/${np.id}`, title: np.title || 'Untitled', icon: np.icon || '📄' });
-    setPicker(null); setQuery('');
+    closePicker();
   };
 
   const navigate = (href: string) => onPageNavigate ? onPageNavigate(href) : router.push(href);
@@ -1088,36 +1104,10 @@ function PageTableView({ node, updateAttributes }: NodeViewProps) {
                       </button>
                     )}
                     {/* ＋追加 */}
-                    <div className="relative">
-                      <button onClick={() => { setPicker(picker?.s === si && picker?.c === ci ? null : { s: si, c: ci }); setQuery(''); }}
-                        className="w-full rounded px-1 py-0.5 text-left text-[11px] text-gray-300 hover:bg-gray-50 hover:text-gray-500">
-                        ＋ 追加
-                      </button>
-                      {picker?.s === si && picker?.c === ci && (
-                        <div ref={pickerRef} className="absolute left-0 top-full z-50 mt-1 w-60 rounded-xl border border-gray-200 bg-white p-2 shadow-xl">
-                          <button onMouseDown={(e) => { e.preventDefault(); createAndAdd(si, ci); }}
-                            className="mb-1 flex w-full items-center gap-1.5 rounded-md bg-brand-50 px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-100">
-                            ＋ 新規ページを作成して追加
-                          </button>
-                          <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="既存ページを検索..."
-                            className="mb-1 w-full rounded border border-gray-200 px-2 py-1 text-xs outline-none focus:border-brand-400" />
-                          <div className="max-h-48 overflow-y-auto">
-                            {filteredPages.length === 0 ? (
-                              <p className="px-2 py-1 text-xs text-gray-400">該当なし</p>
-                            ) : filteredPages.map((p) => (
-                              <button key={p.id} onMouseDown={(e) => { e.preventDefault(); pickExisting(si, ci, p); }}
-                                className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-xs text-gray-700 hover:bg-gray-50">
-                                <span className="shrink-0 text-sm leading-none">{isImageSrc(p.icon)
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  ? <img src={p.icon} alt="" className="h-4 w-4 rounded object-cover" />
-                                  : (p.icon || '📄')}</span>
-                                <span className="truncate">{p.title || 'Untitled'}</span>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                    <button onClick={(e) => openPicker(e, si, ci)}
+                      className="w-full rounded px-1 py-0.5 text-left text-[11px] text-gray-300 hover:bg-gray-50 hover:text-gray-500">
+                      ＋ 追加
+                    </button>
                   </div>
                 </div>
               ))}
@@ -1129,6 +1119,37 @@ function PageTableView({ node, updateAttributes }: NodeViewProps) {
           ＋ 大見出しを追加
         </button>
       </div>
+      {/* ＋追加ピッカー: portal＋fixed で最前面（スクロール領域に切られない）*/}
+      {(() => {
+        if (!picker || !pickerPos || typeof document === 'undefined') return null;
+        const pk = picker;
+        return createPortal(
+          <div ref={pickerRef} style={{ position: 'fixed', top: pickerPos.top, left: pickerPos.left, width: 240 }}
+            className="z-[1000] rounded-xl border border-gray-200 bg-white p-2 shadow-2xl">
+            <button onMouseDown={(e) => { e.preventDefault(); createAndAdd(pk.s, pk.c); }}
+              className="mb-1 flex w-full items-center gap-1.5 rounded-md bg-brand-50 px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-100">
+              ＋ 新規ページを作成して追加
+            </button>
+            <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="既存ページを検索..."
+              className="mb-1 w-full rounded border border-gray-200 px-2 py-1 text-xs outline-none focus:border-brand-400" />
+            <div className="max-h-52 overflow-y-auto">
+              {filteredPages.length === 0 ? (
+                <p className="px-2 py-1 text-xs text-gray-400">該当なし</p>
+              ) : filteredPages.map((p) => (
+                <button key={p.id} onMouseDown={(e) => { e.preventDefault(); pickExisting(pk.s, pk.c, p); }}
+                  className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-xs text-gray-700 hover:bg-gray-50">
+                  <span className="shrink-0 text-sm leading-none">{isImageSrc(p.icon)
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img src={p.icon} alt="" className="h-4 w-4 rounded object-cover" />
+                    : (p.icon || '📄')}</span>
+                  <span className="truncate">{p.title || 'Untitled'}</span>
+                </button>
+              ))}
+            </div>
+          </div>,
+          document.body,
+        );
+      })()}
     </NodeViewWrapper>
   );
 }

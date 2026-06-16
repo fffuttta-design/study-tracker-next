@@ -322,8 +322,12 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
       );
       setBookChapters(updated);
       await saveBookChapters(updated);
+      // ノートと統一（A案）：本文/ページテーブルのリンクをこのブックの子へ付け替える
+      if (user && page) {
+        await reconcileChildrenParent(user.uid, page, content, pages, update).catch(() => {});
+      }
     },
-    [activeChapterId, bookChapters, saveBookChapters]
+    [activeChapterId, bookChapters, saveBookChapters, user, page, pages, update]
   );
 
   const handleAddChapter = useCallback(async () => {
