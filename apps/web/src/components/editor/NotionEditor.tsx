@@ -1133,8 +1133,8 @@ function PageTableView({ node, updateAttributes, editor: ptEditor }: NodeViewPro
                 <button onClick={(e) => openSectionMenu(e, si)} className="flex h-6 w-6 items-center justify-center rounded text-gray-400 hover:bg-gray-100" title="セクション設定">⚙</button>
               </span>
             </div>
-            {/* カンバン: リスト（コールアウト風カード）を横並び＋折り返し */}
-            <div className="flex flex-wrap items-start gap-3">
+            {/* カンバン: リスト（コールアウト風カード）を横並び＋折り返し。items-stretch で同列のリスト高さを揃える */}
+            <div className="flex flex-wrap items-stretch gap-3">
               {sec.columns.map((col, ci) => {
                 const w = (resizing && resizing.s === si && resizing.c === ci) ? resizing.w : (col.width || PT_DEFAULT_WIDTH);
                 return (
@@ -1172,10 +1172,11 @@ function PageTableView({ node, updateAttributes, editor: ptEditor }: NodeViewPro
                           onDragEnd={() => { dragSrc.current = null; }}
                           onDragOver={(e) => { if (dragSrc.current) { e.preventDefault(); e.stopPropagation(); } }}
                           onDrop={(e) => { if (dragSrc.current) { e.preventDefault(); e.stopPropagation(); dropCard(si, ci, li); } }}
-                          className={`group/lk flex cursor-grab items-center gap-1.5 rounded-lg bg-white px-2.5 py-1.5 shadow-sm ring-1 ring-black/[0.04] transition hover:ring-brand-200 active:cursor-grabbing ${isCut ? 'opacity-40 ring-2 ring-brand-300' : ''}`}>
-                          <span className="shrink-0 text-[13px] leading-none">{isImageSrc(icon)
+                          className={`group/lk flex min-h-[34px] cursor-grab items-center gap-1.5 rounded-lg bg-white px-2.5 py-1.5 shadow-sm ring-1 ring-black/[0.04] transition hover:ring-brand-200 active:cursor-grabbing ${isCut ? 'opacity-40 ring-2 ring-brand-300' : ''}`}>
+                          {/* アイコンは絵文字でも画像でも 16px 角の枠に収めて行高を一定にする（カード高さ統一） */}
+                          <span className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden text-[13px] leading-none">{isImageSrc(icon)
                             // eslint-disable-next-line @next/next/no-img-element
-                            ? <img src={icon} alt="" className="block h-[15px] w-[15px] rounded object-cover" />
+                            ? <img src={icon} alt="" className="h-4 w-4 rounded object-cover" />
                             : icon}</span>
                           <button onClick={() => navigate(lk.href)} className="min-w-0 flex-1 break-words text-left text-[13px] leading-snug text-gray-700 hover:text-brand-600" title={title}>
                             {title}
