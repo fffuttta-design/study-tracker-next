@@ -389,7 +389,7 @@ function VersionSection({ isElectron }: { isElectron: boolean }) {
           <div className="flex-1">
             <p className="text-sm text-gray-700">最新バージョンをチェック</p>
             <p className="mt-0.5 text-xs text-gray-400">
-              {isElectron ? 'Google Drive の version.json と比較します' : 'GitHub の最新リリースと比較します'}
+              GitHub の最新リリースと比較します
             </p>
 
             {/* ステータス表示 */}

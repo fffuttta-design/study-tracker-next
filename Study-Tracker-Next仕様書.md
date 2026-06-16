@@ -906,6 +906,7 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-06-16 | （次回配信） | 設定のアップデート確認の説明文が古かった（「Google Drive の version.json と比較します」）。実体は electron-updater(GitHub Release)＝Driveは更新に無関係なため「GitHub の最新リリースと比較します」に統一修正。settings/page.tsx（※Driveは main.js のデータバックアップ先機能としては存続） |
 | 2026-06-16 | （次回配信） | ページテーブル/リンクの親付け替えをノート・ブックで統一（A案）：ブックの `handleBookChapterSave` でも `reconcileChildrenParent` を呼び、既存ページを追加すると必ずこのページ（ブック）の子になるように。notion-plus/[id]/page.tsx |
 | 2026-06-16 | （次回配信） | ページテーブル：＋追加ピッカーがエディタのスクロール領域(overflow)に切られて見切れる問題を修正。`createPortal`＋`position:fixed`で `document.body` 直下・最前面(z-[1000])に表示。ボタン位置から座標算出し画面端・下端でクランプ（下にはみ出すなら上開き）。NotionEditor.tsx |
 | 2026-06-16 | （次回配信） | ブック固定書式バーの修正：`-mt-8/pt-8` のはみ出し補正が書式バー上に32pxの白帯（無駄余白）を作り、固定時に分厚くなってチャプタータイトルを覆う問題を解消。コンパクトな `sticky top-0 py-1` に変更。NotionEditor.tsx |
