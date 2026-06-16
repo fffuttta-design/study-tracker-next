@@ -900,7 +900,7 @@ const InlineDatabaseNode = TiptapNode.create({
 
 interface PtLink { href: string; title: string; icon: string }
 interface PtColumn { id: string; heading: string; links: PtLink[]; color?: string; width?: number }
-interface PtSection { id: string; title: string; columns: PtColumn[]; framed?: boolean }
+interface PtSection { id: string; title: string; columns: PtColumn[]; framed?: boolean; bg?: string }
 
 const PT_DEFAULT_COLOR = '#F1F1EF'; // リスト（カンバン列）の既定背景＝淡グレー
 const PT_DEFAULT_WIDTH = 240;       // リストの既定幅(px)
@@ -1029,6 +1029,7 @@ function PageTableView({ node, updateAttributes, editor: ptEditor }: NodeViewPro
   const setColumnWidth = (si: number, ci: number, width: number) =>
     setSection(si, (s) => ({ ...s, columns: s.columns.map((c, i) => (i === ci ? { ...c, width } : c)) }));
   const toggleFramed = (si: number) => setSection(si, (s) => ({ ...s, framed: s.framed === false }));
+  const setSectionBg = (si: number, bg: string) => setSection(si, (s) => ({ ...s, bg: bg || undefined }));
 
   // リスト幅のドラッグリサイズ（移動中はローカル state、離したら確定）
   const startResize = (e: React.MouseEvent, si: number, ci: number, startW: number) => {
@@ -1117,8 +1118,10 @@ function PageTableView({ node, updateAttributes, editor: ptEditor }: NodeViewPro
       <div className="page-table my-3" contentEditable={false}>
         {sections.map((sec, si) => {
           const framed = sec.framed !== false; // 既定で枠あり（明示 false のみ枠なし）
+          const panel = framed || !!sec.bg;    // 枠 or 背景があれば角丸＋余白のパネルに
           return (
-          <div key={sec.id} className={`mb-5 ${framed ? 'rounded-2xl border border-gray-200 p-4' : ''}`}>
+          <div key={sec.id} className={`mb-5 ${panel ? 'rounded-2xl p-4' : ''} ${framed ? 'border border-gray-200' : ''}`}
+            style={{ background: sec.bg || undefined }}>
             {/* 大見出し（大きめ見出し） */}
             <div className="group/sec mb-3 flex items-center gap-1.5">
               <input
@@ -1249,13 +1252,27 @@ function PageTableView({ node, updateAttributes, editor: ptEditor }: NodeViewPro
         if (sectionMenu === null || !sectionMenuPos || typeof document === 'undefined') return null;
         const si = sectionMenu;
         const isFramed = sections[si]?.framed !== false;
+        const curBg = sections[si]?.bg || '';
         return createPortal(
           <div style={{ position: 'fixed', top: sectionMenuPos.top, left: sectionMenuPos.left }}
-            className="z-[1000] w-48 rounded-xl border border-gray-200 bg-white p-2 shadow-2xl">
+            className="z-[1000] w-52 rounded-xl border border-gray-200 bg-white p-2 shadow-2xl">
             <label className="flex items-center justify-between gap-2 rounded px-1.5 py-1 text-xs text-gray-600 hover:bg-gray-50">
               <span>枠で囲む</span>
               <input type="checkbox" checked={isFramed} onChange={() => toggleFramed(si)} className="h-4 w-4 accent-brand-500" />
             </label>
+            {/* セクション背景色（枠の中） */}
+            <div className="mt-1 px-1.5 py-1">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">背景色</p>
+              <div className="flex flex-wrap gap-1">
+                {[{ label: 'なし', value: '' }, ...CALLOUT_BG_COLORS].map((c) => (
+                  <button key={c.value || 'none'} title={c.label} onClick={() => setSectionBg(si, c.value)}
+                    className="flex h-5 w-5 items-center justify-center rounded-full hover:ring-2 hover:ring-brand-300"
+                    style={{ background: c.value || '#ffffff', border: curBg === c.value ? '2px solid #7c3aed' : '1px solid #e5e7eb' }}>
+                    {c.value === '' && <span className="text-[10px] leading-none text-gray-300">/</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
             <button onClick={() => { addColumn(si); setSectionMenu(null); setSectionMenuPos(null); }} className="mt-0.5 w-full rounded px-1.5 py-1 text-left text-xs text-gray-600 hover:bg-gray-50">＋ リストを追加</button>
             {sections.length > 1 && (
               <button onClick={() => { removeSection(si); setSectionMenu(null); setSectionMenuPos(null); }} className="mt-0.5 w-full rounded px-1.5 py-1 text-left text-xs text-red-500 hover:bg-red-50">🗑️ この大見出しを削除</button>
