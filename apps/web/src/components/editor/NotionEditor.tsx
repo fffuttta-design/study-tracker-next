@@ -899,10 +899,13 @@ const InlineDatabaseNode = TiptapNode.create({
 // データはノード attrs.sections に保持（本文JSON内・新規DB不要）。
 
 interface PtLink { href: string; title: string; icon: string }
-interface PtColumn { id: string; heading: string; links: PtLink[]; color?: string }
-interface PtSection { id: string; title: string; columns: PtColumn[] }
+interface PtColumn { id: string; heading: string; links: PtLink[]; color?: string; width?: number }
+interface PtSection { id: string; title: string; columns: PtColumn[]; framed?: boolean }
 
 const PT_DEFAULT_COLOR = '#F1F1EF'; // リスト（カンバン列）の既定背景＝淡グレー
+const PT_DEFAULT_WIDTH = 240;       // リストの既定幅(px)
+const PT_MIN_WIDTH = 160;
+const PT_MAX_WIDTH = 520;
 
 const ptNewId = () =>
   (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `pt-${Date.now()}-${performance.now()}`;
@@ -945,6 +948,9 @@ function PageTableView({ node, updateAttributes }: NodeViewProps) {
   const [pickerPos, setPickerPos] = useState<{ top: number; left: number } | null>(null);
   const [query, setQuery] = useState('');
   const [colorOpenCol, setColorOpenCol] = useState<{ s: number; c: number } | null>(null);
+  const [sectionMenu, setSectionMenu] = useState<number | null>(null);
+  const [resizing, setResizing] = useState<{ s: number; c: number; w: number } | null>(null);
+  const dragSrc = useRef<{ s: number; c: number; i: number } | null>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
 
   const openPicker = (e: React.MouseEvent, si: number, ci: number) => {
@@ -987,6 +993,46 @@ function PageTableView({ node, updateAttributes }: NodeViewProps) {
   });
   const setColumnColor = (si: number, ci: number, color: string) =>
     setSection(si, (s) => ({ ...s, columns: s.columns.map((c, i) => (i === ci ? { ...c, color } : c)) }));
+  const setColumnWidth = (si: number, ci: number, width: number) =>
+    setSection(si, (s) => ({ ...s, columns: s.columns.map((c, i) => (i === ci ? { ...c, width } : c)) }));
+  const toggleFramed = (si: number) => setSection(si, (s) => ({ ...s, framed: s.framed === false }));
+
+  // リスト幅のドラッグリサイズ（移動中はローカル state、離したら確定）
+  const startResize = (e: React.MouseEvent, si: number, ci: number, startW: number) => {
+    e.preventDefault(); e.stopPropagation();
+    const startX = e.clientX;
+    const clamp = (w: number) => Math.max(PT_MIN_WIDTH, Math.min(PT_MAX_WIDTH, w));
+    setResizing({ s: si, c: ci, w: startW });
+    const onMove = (ev: MouseEvent) => setResizing({ s: si, c: ci, w: clamp(startW + (ev.clientX - startX)) });
+    const onUp = (ev: MouseEvent) => {
+      window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp);
+      setResizing(null); setColumnWidth(si, ci, clamp(startW + (ev.clientX - startX)));
+    };
+    window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
+  };
+
+  // カードのドラッグ移動（リスト間/並べ替え）。tIndex の位置に挿入
+  const dropCard = (ts: number, tc: number, tIndex: number) => {
+    const src = dragSrc.current; dragSrc.current = null;
+    if (!src) return;
+    const moved = sections[src.s]?.columns[src.c]?.links[src.i];
+    if (!moved) return;
+    const removed = sections.map((s, si) => ({
+      ...s,
+      columns: s.columns.map((c, ci) =>
+        (si === src.s && ci === src.c) ? { ...c, links: c.links.filter((_, k) => k !== src.i) } : c),
+    }));
+    let idx = tIndex;
+    if (src.s === ts && src.c === tc && src.i < tIndex) idx = tIndex - 1; // 同リストで前を抜いた分ずらす
+    const next = removed.map((s, si) => ({
+      ...s,
+      columns: s.columns.map((c, ci) => {
+        if (!(si === ts && ci === tc)) return c;
+        const links = [...c.links]; links.splice(idx, 0, moved); return { ...c, links };
+      }),
+    }));
+    commit(next);
+  };
 
   // ── リンク操作 ──
   const addLink = (si: number, ci: number, link: PtLink) => setSection(si, (s) => ({
@@ -995,14 +1041,6 @@ function PageTableView({ node, updateAttributes }: NodeViewProps) {
   const removeLink = (si: number, ci: number, li: number) => setSection(si, (s) => ({
     ...s, columns: s.columns.map((c, i) => (i === ci ? { ...c, links: c.links.filter((_, k) => k !== li) } : c)),
   }));
-  const moveLink = (si: number, ci: number, li: number, dir: -1 | 1) => setSection(si, (s) => ({
-    ...s, columns: s.columns.map((c, i) => {
-      if (i !== ci) return c;
-      const j = li + dir; if (j < 0 || j >= c.links.length) return c;
-      const links = [...c.links]; [links[li], links[j]] = [links[j], links[li]]; return { ...c, links };
-    }),
-  }));
-
   // 切り取り→貼り付け（列・セクションをまたいで移動）
   const pasteHere = (ts: number, tc: number) => {
     if (!cut) return;
@@ -1042,26 +1080,43 @@ function PageTableView({ node, updateAttributes }: NodeViewProps) {
   return (
     <NodeViewWrapper data-type="page-table" contentEditable={false}>
       <div className="page-table my-3" contentEditable={false}>
-        {sections.map((sec, si) => (
-          <div key={sec.id} className="mb-5">
-            {/* 大見出し（小ラベル） */}
-            <div className="group/sec mb-2 flex items-center gap-1">
+        {sections.map((sec, si) => {
+          const framed = sec.framed !== false; // 既定で枠あり（明示 false のみ枠なし）
+          return (
+          <div key={sec.id} className={`mb-5 ${framed ? 'rounded-2xl border border-gray-200 p-4' : ''}`}>
+            {/* 大見出し（大きめ見出し） */}
+            <div className="group/sec mb-3 flex items-center gap-1.5">
               <input
                 value={sec.title}
                 onChange={(e) => setSection(si, (s) => ({ ...s, title: e.target.value }))}
-                placeholder="大見出し（任意）"
-                className="min-w-0 max-w-sm flex-none bg-transparent text-sm font-bold text-gray-700 outline-none placeholder:font-normal placeholder:text-gray-300"
+                placeholder="大見出し"
+                className="min-w-0 max-w-md flex-none bg-transparent text-xl font-bold text-gray-800 outline-none placeholder:font-bold placeholder:text-gray-300"
               />
-              <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover/sec:opacity-100">
+              <span className="relative flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover/sec:opacity-100">
                 {si > 0 && <button onClick={() => moveSection(si, -1)} className="rounded px-1 text-gray-400 hover:bg-gray-100" title="上へ">↑</button>}
                 {si < sections.length - 1 && <button onClick={() => moveSection(si, 1)} className="rounded px-1 text-gray-400 hover:bg-gray-100" title="下へ">↓</button>}
-                {sections.length > 1 && <button onClick={() => removeSection(si)} className="rounded px-1 text-gray-300 hover:text-red-400" title="大見出し削除">✕</button>}
+                {/* セクション設定 */}
+                <button onClick={() => setSectionMenu(sectionMenu === si ? null : si)} className="rounded px-1 text-gray-400 hover:bg-gray-100" title="セクション設定">⚙</button>
+                {sectionMenu === si && (
+                  <div className="absolute left-0 top-6 z-20 w-44 rounded-xl border border-gray-200 bg-white p-2 shadow-xl">
+                    <label className="flex items-center justify-between gap-2 rounded px-1.5 py-1 text-xs text-gray-600 hover:bg-gray-50">
+                      <span>枠で囲む</span>
+                      <input type="checkbox" checked={framed} onChange={() => toggleFramed(si)} className="h-4 w-4 accent-brand-500" />
+                    </label>
+                    <button onClick={() => { addColumn(si); setSectionMenu(null); }} className="mt-0.5 w-full rounded px-1.5 py-1 text-left text-xs text-gray-600 hover:bg-gray-50">＋ リストを追加</button>
+                    {sections.length > 1 && (
+                      <button onClick={() => { removeSection(si); setSectionMenu(null); }} className="mt-0.5 w-full rounded px-1.5 py-1 text-left text-xs text-red-500 hover:bg-red-50">🗑️ この大見出しを削除</button>
+                    )}
+                  </div>
+                )}
               </span>
             </div>
             {/* カンバン: リスト（コールアウト風カード）を横並び＋折り返し */}
             <div className="flex flex-wrap items-start gap-3">
-              {sec.columns.map((col, ci) => (
-                <div key={col.id} className="group/col w-60 shrink-0 rounded-xl p-2" style={{ background: col.color || PT_DEFAULT_COLOR }}>
+              {sec.columns.map((col, ci) => {
+                const w = (resizing && resizing.s === si && resizing.c === ci) ? resizing.w : (col.width || PT_DEFAULT_WIDTH);
+                return (
+                <div key={col.id} className="group/col relative shrink-0 rounded-xl p-2" style={{ width: w, background: col.color || PT_DEFAULT_COLOR }}>
                   {/* リスト見出し */}
                   <div className="mb-1.5 flex items-center gap-0.5 px-1">
                     <input
@@ -1088,25 +1143,30 @@ function PageTableView({ node, updateAttributes }: NodeViewProps) {
                       {sec.columns.length > 1 && <button onClick={() => removeColumn(si, ci)} className="rounded px-0.5 text-gray-400 hover:text-red-400" title="リスト削除">✕</button>}
                     </span>
                   </div>
-                  {/* カード群 */}
-                  <div className="space-y-1.5">
+                  {/* カード群（空きへドロップで末尾に移動） */}
+                  <div className="space-y-1.5"
+                    onDragOver={(e) => { if (dragSrc.current) { e.preventDefault(); e.stopPropagation(); } }}
+                    onDrop={(e) => { if (dragSrc.current) { e.preventDefault(); e.stopPropagation(); dropCard(si, ci, col.links.length); } }}>
                     {col.links.map((lk, li) => {
                       const live = pages.find((p) => p.id === ptIdFromHref(lk.href));
                       const title = live?.title || lk.title || 'Untitled';
                       const icon = live?.icon || lk.icon || '📄';
                       const isCut = cut?.s === si && cut?.c === ci && cut?.i === li;
                       return (
-                        <div key={li} className={`group/lk flex items-start gap-1.5 rounded-lg bg-white px-2.5 py-1.5 shadow-sm ring-1 ring-black/[0.04] transition hover:ring-brand-200 ${isCut ? 'opacity-40 ring-2 ring-brand-300' : ''}`}>
-                          <span className="mt-px shrink-0 text-[13px] leading-tight">{isImageSrc(icon)
+                        <div key={li} draggable
+                          onDragStart={(e) => { dragSrc.current = { s: si, c: ci, i: li }; e.dataTransfer.effectAllowed = 'move'; e.stopPropagation(); }}
+                          onDragEnd={() => { dragSrc.current = null; }}
+                          onDragOver={(e) => { if (dragSrc.current) { e.preventDefault(); e.stopPropagation(); } }}
+                          onDrop={(e) => { if (dragSrc.current) { e.preventDefault(); e.stopPropagation(); dropCard(si, ci, li); } }}
+                          className={`group/lk flex cursor-grab items-center gap-1.5 rounded-lg bg-white px-2.5 py-1.5 shadow-sm ring-1 ring-black/[0.04] transition hover:ring-brand-200 active:cursor-grabbing ${isCut ? 'opacity-40 ring-2 ring-brand-300' : ''}`}>
+                          <span className="shrink-0 text-[13px] leading-none">{isImageSrc(icon)
                             // eslint-disable-next-line @next/next/no-img-element
-                            ? <img src={icon} alt="" className="h-[15px] w-[15px] rounded object-cover" />
+                            ? <img src={icon} alt="" className="block h-[15px] w-[15px] rounded object-cover" />
                             : icon}</span>
                           <button onClick={() => navigate(lk.href)} className="min-w-0 flex-1 break-words text-left text-[13px] leading-snug text-gray-700 hover:text-brand-600" title={title}>
                             {title}
                           </button>
                           <span className="flex shrink-0 items-center opacity-0 transition group-hover/lk:opacity-100">
-                            {li > 0 && <button onClick={() => moveLink(si, ci, li, -1)} className="rounded px-0.5 text-gray-300 hover:text-gray-600" title="上へ">↑</button>}
-                            {li < col.links.length - 1 && <button onClick={() => moveLink(si, ci, li, 1)} className="rounded px-0.5 text-gray-300 hover:text-gray-600" title="下へ">↓</button>}
                             <button onClick={() => setCut(isCut ? null : { s: si, c: ci, i: li })} className="rounded px-0.5 text-gray-300 hover:text-brand-500" title={isCut ? '切り取り解除' : '切り取り'}>✂</button>
                             <button onClick={() => removeLink(si, ci, li)} className="rounded px-0.5 text-gray-300 hover:text-red-400" title="削除">✕</button>
                           </span>
@@ -1125,21 +1185,33 @@ function PageTableView({ node, updateAttributes }: NodeViewProps) {
                       ＋ カードを追加
                     </button>
                   </div>
+                  {/* 幅リサイズハンドル（右端） */}
+                  <div onMouseDown={(e) => startResize(e, si, ci, col.width || PT_DEFAULT_WIDTH)}
+                    className="absolute -right-1 top-0 h-full w-2 cursor-col-resize opacity-0 transition group-hover/col:opacity-100"
+                    title="幅を変更">
+                    <span className="absolute right-1 top-1/2 h-8 w-1 -translate-y-1/2 rounded-full bg-gray-300" />
+                  </div>
                 </div>
-              ))}
+                );
+              })}
               {/* リスト追加 */}
               <button onClick={() => addColumn(si)}
-                className="w-60 shrink-0 rounded-xl border-2 border-dashed border-gray-200 px-2 py-2 text-left text-[12px] text-gray-400 transition hover:border-gray-300 hover:text-gray-600">
+                className="shrink-0 self-start rounded-xl border-2 border-dashed border-gray-200 px-3 py-2 text-left text-[12px] text-gray-400 transition hover:border-gray-300 hover:text-gray-600">
                 ＋ リストを追加
               </button>
             </div>
           </div>
-        ))}
+          );
+        })}
         {/* 大見出し追加 */}
         <button onClick={addSection} className="rounded-md px-2 py-1 text-xs text-gray-400 hover:bg-gray-50 hover:text-brand-500">
           ＋ 大見出しを追加
         </button>
       </div>
+      {/* メニューの外側クリックで閉じる薄い背景 */}
+      {(sectionMenu !== null || colorOpenCol) && (
+        <div className="fixed inset-0 z-[5]" onMouseDown={() => { setSectionMenu(null); setColorOpenCol(null); }} />
+      )}
       {/* ＋追加ピッカー: portal＋fixed で最前面（スクロール領域に切られない）*/}
       {(() => {
         if (!picker || !pickerPos || typeof document === 'undefined') return null;
