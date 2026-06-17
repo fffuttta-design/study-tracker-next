@@ -907,6 +907,8 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-06-17 | （次回配信） | ページテーブル（看板）セクションの背景色の選択肢を6色→16色に拡充（看板専用パレット `PT_SECTION_BG_COLORS`。黄/オレンジ/ベージュ/赤/ローズ/ピンク/紫/ラベンダー/藍/青/水色/ティール/緑/ライム/スレート/グレー）。コールアウト・列色は従来の `CALLOUT_BG_COLORS` のまま。NotionEditor.tsx |
+| 2026-06-17 | （次回配信） | ページテーブル（看板）UI：常時表示の下部「＋ カードを追加」を廃止し、リスト見出し右の小さな「＋」ボタン（常時表示）に集約。見やすさ優先。空リストでもドロップできるようカード群に最小高さを確保。NotionEditor.tsx |
 | 2026-06-17 | （配信基盤） | 配信スクリプト `build-and-sync.mjs` を `GH_TOKEN`(PAT) 依存から **gh CLI 認証ベース**に変更。`--publish never` でビルド後、ログイン済み gh CLI で Release を作成し setup.exe/blockmap/latest.yml/APK を公開＋version.json に downloadUrl 反映。`gh auth login` 済みならトークン設定不要（未認証時は Release だけスキップし Web は配信）。GH_TOKEN 未設定で自動更新が止まる事故の恒久対策 |
 | 2026-06-17 | （次回配信） | バグ修正：看板（ページテーブル）に入れたページが本文に単体リンクとして二重表示される問題を修正。`addPageLinkToContent` が本文トップレベルの単体 `pageLink` しか見ておらず看板内のリンクを「無い」と誤判定→「子ページのリンク自動補完」effect が単体リンクを復活させていた。看板(`pageTable`)の中も再帰的に走査する `contentHasPageLink` を追加し、本文・看板のどこかに既存なら追加しないように。notionPageStore.ts（※既存の重複は手動で1度消せば以後復活しない） |
 | 2026-06-17 | （次回配信） | バグ修正：本文中ページリンクの右クリックメニュー「✂️ 切り取り」が無反応だった問題を修正。`execCommand('cut')` の前にエディタへ `focus()` していなかったため cut イベントが ProseMirror に届かず何も切り取られなかった（正常に動く「貼り付け」と同手順に統一＝`chain().focus().setNodeSelection(pos).run()`）。NotionEditor.tsx |

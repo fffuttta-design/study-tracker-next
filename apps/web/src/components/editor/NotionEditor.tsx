@@ -525,6 +525,26 @@ const CALLOUT_BG_COLORS = [
   { label: 'グレー', value: '#F1F1EF' },
 ];
 
+// ページテーブル（看板）のセクション背景色：見やすい淡色を多めに用意
+const PT_SECTION_BG_COLORS = [
+  { label: '黄', value: '#FEF9CD' },
+  { label: 'オレンジ', value: '#FFEDD5' },
+  { label: 'ベージュ', value: '#F5ECDD' },
+  { label: '赤', value: '#FEE2E2' },
+  { label: 'ローズ', value: '#FFE4E6' },
+  { label: 'ピンク', value: '#FCE7F3' },
+  { label: '紫', value: '#EDE9FE' },
+  { label: 'ラベンダー', value: '#E0E7FF' },
+  { label: '藍', value: '#DBEAFE' },
+  { label: '青', value: '#D8EEF9' },
+  { label: '水色', value: '#CFFAFE' },
+  { label: 'ティール', value: '#CCFBF1' },
+  { label: '緑', value: '#D8F3DC' },
+  { label: 'ライム', value: '#ECFCCB' },
+  { label: 'スレート', value: '#E2E8F0' },
+  { label: 'グレー', value: '#F1F1EF' },
+];
+
 function CalloutView({ node, updateAttributes }: NodeViewProps) {
   const { background } = node.attrs as { background: string };
   const [colorOpen, setColorOpen] = useState(false);
@@ -1155,6 +1175,8 @@ function PageTableView({ node, updateAttributes, editor: ptEditor }: NodeViewPro
                       placeholder="リスト名"
                       className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-gray-700 outline-none placeholder:font-normal placeholder:text-gray-400"
                     />
+                    {/* カード追加（上部・常時表示）。下部の「＋カードを追加」は廃止し見やすさ優先 */}
+                    <button onClick={(e) => openPicker(e, si, ci)} className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-400 hover:bg-black/5 hover:text-brand-500" title="カードを追加">＋</button>
                     <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover/col:opacity-100">
                       {/* 色変更 */}
                       <button onClick={(e) => openColorMenu(e, si, ci)} className="flex h-5 w-5 items-center justify-center rounded hover:bg-black/5" title="色を変更">
@@ -1165,8 +1187,8 @@ function PageTableView({ node, updateAttributes, editor: ptEditor }: NodeViewPro
                       {sec.columns.length > 1 && <button onClick={() => removeColumn(si, ci)} className="flex h-5 w-5 items-center justify-center rounded text-gray-400 hover:bg-black/5 hover:text-red-400" title="リスト削除">✕</button>}
                     </span>
                   </div>
-                  {/* カード群（空きへドロップで末尾に移動） */}
-                  <div className="space-y-1.5"
+                  {/* カード群（空きへドロップで末尾に移動）。空リストでもドロップできるよう最小高さを確保 */}
+                  <div className="min-h-[20px] space-y-1.5"
                     onDragOver={(e) => { if (dragSrc.current) { e.preventDefault(); e.stopPropagation(); } }}
                     onDrop={(e) => { if (dragSrc.current) { e.preventDefault(); e.stopPropagation(); dropCard(si, ci, col.links.length); } }}>
                     {col.links.map((lk, li) => {
@@ -1202,11 +1224,6 @@ function PageTableView({ node, updateAttributes, editor: ptEditor }: NodeViewPro
                         ここに貼り付け
                       </button>
                     )}
-                    {/* ＋カードを追加 */}
-                    <button onClick={(e) => openPicker(e, si, ci)}
-                      className="w-full rounded-lg px-2 py-1 text-left text-[12px] text-gray-400 hover:bg-white/70 hover:text-gray-600">
-                      ＋ カードを追加
-                    </button>
                   </div>
                   {/* 幅リサイズハンドル（右端） */}
                   <div onMouseDown={(e) => startResize(e, si, ci, col.width || PT_DEFAULT_WIDTH)}
@@ -1283,7 +1300,7 @@ function PageTableView({ node, updateAttributes, editor: ptEditor }: NodeViewPro
             <div className="mt-1 px-1.5 py-1">
               <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">背景色</p>
               <div className="flex flex-wrap gap-1">
-                {[{ label: 'なし', value: '' }, ...CALLOUT_BG_COLORS].map((c) => (
+                {[{ label: 'なし', value: '' }, ...PT_SECTION_BG_COLORS].map((c) => (
                   <button key={c.value || 'none'} title={c.label} onClick={() => setSectionBg(si, c.value)}
                     className="flex h-5 w-5 items-center justify-center rounded-full hover:ring-2 hover:ring-brand-300"
                     style={{ background: c.value || '#ffffff', border: curBg === c.value ? '2px solid #7c3aed' : '1px solid #e5e7eb' }}>
