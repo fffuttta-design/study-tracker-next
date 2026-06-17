@@ -2286,11 +2286,11 @@ export function NotionEditor({
             <Toolbar editor={editor} />
           )
         )}
-        {/* ブック: チャプター名を書式バーの下にタイトル（セクション見出し）として表示 */}
+        {/* ブック: チャプター名を書式バーの下にタイトルとして表示。本文H1(1.875rem)より大きく＋背景色で目立たせる */}
         {chapterHeading && (
-          <div className="mb-5 mt-1 flex items-center gap-3 border-b-2 border-gray-100 pb-2">
-            <span className="h-7 w-1.5 shrink-0 rounded-full bg-brand-400" />
-            <h1 className="text-2xl font-bold text-gray-900">{chapterHeading}</h1>
+          <div className="mb-6 mt-1 flex items-center gap-3 rounded-xl bg-brand-50 px-5 py-4">
+            <span className="h-9 w-1.5 shrink-0 rounded-full bg-brand-500" />
+            <h1 className="text-4xl font-bold leading-tight text-brand-700">{chapterHeading}</h1>
           </div>
         )}
         <EditorContent editor={editor} />
