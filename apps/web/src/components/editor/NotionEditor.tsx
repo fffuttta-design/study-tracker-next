@@ -41,6 +41,7 @@ import { useLearningStore } from '@/stores/learningStore';
 import { useNotionPageStore } from '@/stores/notionPageStore';
 import { useDbRowStore } from '@/stores/notionDatabaseRowStore';
 import { parseDbSchema, createBookChapter, serializeBookChapters, parseBookChapters, type NotionPage } from '@study-tracker/core';
+import { IconImagePreview } from '@/components/IconImagePreview';
 import './editor.css';
 
 // ── ProseMirror → Markdown 変換 ──────────────────────────────────────
@@ -404,15 +405,8 @@ function PageLinkView({ node, updateAttributes, deleteNode, getPos, editor: tipt
           </button>
           {pickerOpen && (
             <div className="absolute left-0 top-full z-50 w-72 rounded-xl border border-gray-200 bg-white p-3 shadow-xl">
-              {/* 現在のアイコンが画像（外部URL/貼付）なら、何の画像か分かるよう大きめにプレビュー（表示のみ） */}
-              {isImageSrc(icon) && (
-                <div className="mb-3">
-                  <p className="mb-1 text-xs font-medium text-gray-400">現在の画像</p>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={icon} alt="" className="block max-h-44 w-full rounded-lg border border-gray-100 bg-gray-50 object-contain"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                </div>
-              )}
+              {/* 現在のアイコンが画像（外部URL/貼付）なら、何の画像か分かるよう大きめにプレビュー（クリックで拡大） */}
+              {isImageSrc(icon) && <IconImagePreview src={icon} />}
               <p className="mb-1 text-xs font-medium text-gray-400">画像URL / コピペ</p>
               <div className="flex gap-1">
                 <input type="text" value={iconUrlDraft} onChange={(e) => setIconUrlDraft(e.target.value)}
