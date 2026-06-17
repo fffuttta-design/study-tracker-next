@@ -68,14 +68,15 @@
 .notion-editor ul li { position: relative; margin: calc(0.125rem + var(--offset-bullet, 0px)) 0; padding-left: 1.5rem; }
 .notion-editor ul li::before { position: absolute; left: 0.1rem; top: 0; }
 
+/* マーカーの行高は本文(--para-lh)に揃える＝フォント拡大分を割り戻し、文字と同じ行ボックスにして縦位置を一致させる */
 /* 1階層目: 中黒 */
-.notion-editor ul > li::before { content: '•'; font-size: 1.4em; line-height: 1.3; color: #374151; }
+.notion-editor ul > li::before { content: '•'; font-size: 1.4em; line-height: calc(var(--para-lh, 1.7) / 1.4); color: #374151; }
 /* 2階層目: 白丸 */
-.notion-editor ul ul > li::before { content: '◦'; font-size: 1.4em; line-height: 1.3; color: #374151; }
+.notion-editor ul ul > li::before { content: '◦'; font-size: 1.4em; line-height: calc(var(--para-lh, 1.7) / 1.4); color: #374151; }
 /* 3階層目: 小四角 */
-.notion-editor ul ul ul > li::before { content: '▪'; font-size: 0.95em; line-height: 1.85; color: #374151; }
+.notion-editor ul ul ul > li::before { content: '▪'; font-size: 0.95em; line-height: calc(var(--para-lh, 1.7) / 0.95); color: #374151; }
 /* 4階層目以降: 中黒に戻る */
-.notion-editor ul ul ul ul > li::before { content: '•'; font-size: 1.4em; line-height: 1.3; color: #374151; }
+.notion-editor ul ul ul ul > li::before { content: '•'; font-size: 1.4em; line-height: calc(var(--para-lh, 1.7) / 1.4); color: #374151; }
 
 .notion-editor ol { list-style: decimal; padding-left: 1.5rem; margin: 0.25rem 0; }
 .notion-editor ol li { margin: calc(0.125rem + var(--offset-ol, 0px)) 0; }
