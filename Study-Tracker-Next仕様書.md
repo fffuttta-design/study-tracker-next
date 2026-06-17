@@ -907,6 +907,7 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-06-17 | （次回配信） | ページリンクのアイコンが画像（外部URL/貼付）のとき、アイコンピッカー先頭に「現在の画像」の大きめプレビュー（max-h-44・object-contain）を表示。アイコンサイズだと何の画像か見えない問題への対応（表示のみ・新規state/モーダルなしで低リスク）。NotionEditor.tsx |
 | 2026-06-17 | （次回配信） | ページテーブル（看板）セクションの背景色の選択肢を6色→16色に拡充（看板専用パレット `PT_SECTION_BG_COLORS`。黄/オレンジ/ベージュ/赤/ローズ/ピンク/紫/ラベンダー/藍/青/水色/ティール/緑/ライム/スレート/グレー）。コールアウト・列色は従来の `CALLOUT_BG_COLORS` のまま。NotionEditor.tsx |
 | 2026-06-17 | （次回配信） | ページテーブル（看板）UI：常時表示の下部「＋ カードを追加」を廃止し、リスト見出し右の小さな「＋」ボタン（常時表示）に集約。見やすさ優先。空リストでもドロップできるようカード群に最小高さを確保。NotionEditor.tsx |
 | 2026-06-17 | （配信基盤） | 配信スクリプト `build-and-sync.mjs` を `GH_TOKEN`(PAT) 依存から **gh CLI 認証ベース**に変更。`--publish never` でビルド後、ログイン済み gh CLI で Release を作成し setup.exe/blockmap/latest.yml/APK を公開＋version.json に downloadUrl 反映。`gh auth login` 済みならトークン設定不要（未認証時は Release だけスキップし Web は配信）。GH_TOKEN 未設定で自動更新が止まる事故の恒久対策 |
