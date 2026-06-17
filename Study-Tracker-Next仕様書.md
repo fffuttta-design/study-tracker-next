@@ -907,6 +907,8 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-06-17 | （次回配信） | バグ修正：看板（ページテーブル）に入れたページが本文に単体リンクとして二重表示される問題を修正。`addPageLinkToContent` が本文トップレベルの単体 `pageLink` しか見ておらず看板内のリンクを「無い」と誤判定→「子ページのリンク自動補完」effect が単体リンクを復活させていた。看板(`pageTable`)の中も再帰的に走査する `contentHasPageLink` を追加し、本文・看板のどこかに既存なら追加しないように。notionPageStore.ts（※既存の重複は手動で1度消せば以後復活しない） |
+| 2026-06-17 | （次回配信） | バグ修正：本文中ページリンクの右クリックメニュー「✂️ 切り取り」が無反応だった問題を修正。`execCommand('cut')` の前にエディタへ `focus()` していなかったため cut イベントが ProseMirror に届かず何も切り取られなかった（正常に動く「貼り付け」と同手順に統一＝`chain().focus().setNodeSelection(pos).run()`）。NotionEditor.tsx |
 | 2026-06-16 | （次回配信） | ページテーブル：セクション設定(⚙)に「枠線の太さ」(1〜4px)を追加（`PtSection.borderWidth?`・枠ありのとき表示・inline styleで適用）。NotionEditor.tsx |
 | 2026-06-16 | （次回配信） | ページテーブル：セクション設定(⚙)に「背景色」を追加（枠の中＝セクション全体の背景。なし＋6色、`PtSection.bg?`）。背景色 or 枠があれば角丸＋余白のパネル表示。NotionEditor.tsx |
 | 2026-06-16 | （次回配信） | ページテーブル カンバン高さ統一：①同列のリスト高さを揃える(`items-stretch`)。カード高さを `min-h-[34px]`＋アイコンを16px角の枠に収めて行高一定にし、絵文字/画像アイコンによる微妙な高さ差を解消（Youtube/LINE等のカードが同じ高さに）。NotionEditor.tsx |

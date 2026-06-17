@@ -367,7 +367,8 @@ function PageLinkView({ node, updateAttributes, deleteNode, getPos, editor: tipt
               setContextMenu(null);
               const pos = typeof getPos === 'function' ? getPos() : undefined;
               if (typeof pos === 'number' && tiptapEditor) {
-                tiptapEditor.commands.setNodeSelection(pos);
+                // focus() を先に当てないと execCommand('cut') が ProseMirror に届かず無反応になる（貼り付けと同じ手順）
+                tiptapEditor.chain().focus().setNodeSelection(pos).run();
                 setTimeout(() => document.execCommand('cut'), 10);
               }
             }}

@@ -17,13 +17,37 @@ function parseTipTapDoc(content: string): TipTapDoc {
   return { type: 'doc', content: [] };
 }
 
-/** 親ページの content に PageLinkNode を追加（既存なら何もしない） */
+// content 内に該当ページへのリンクが既に存在するか（本文の単体リンク + 看板=pageTable の中も再帰的に走査）
+// これを見ないと、看板にしか無いページを「本文にリンクが無い」と誤判定して単体リンクを二重追加してしまう
+function contentHasPageLink(nodes: TipTapNode[], href: string): boolean {
+  for (const n of nodes) {
+    if (n.type === 'pageLink' && n.attrs?.href === href) return true;
+    // ページテーブル（看板）: attrs.sections[].columns[].links[].href を確認
+    if (n.type === 'pageTable' && n.attrs?.sections) {
+      let secs: unknown = n.attrs.sections;
+      if (typeof secs === 'string') { try { secs = JSON.parse(secs); } catch { secs = null; } }
+      if (Array.isArray(secs)) {
+        for (const sec of secs as { columns?: { links?: { href?: string }[] }[] }[]) {
+          for (const col of sec.columns ?? []) {
+            for (const lk of col.links ?? []) {
+              if (lk.href === href) return true;
+            }
+          }
+        }
+      }
+    }
+    if (Array.isArray(n.content) && contentHasPageLink(n.content, href)) return true;
+  }
+  return false;
+}
+
+/** 親ページの content に PageLinkNode を追加（本文・看板のどこかに既存なら何もしない） */
 export function addPageLinkToContent(
   content: string, pageId: string, title: string, icon: string,
 ): string {
   const href = `/notion-plus/${pageId}`;
   const doc  = parseTipTapDoc(content);
-  if (doc.content.some((n) => n.type === 'pageLink' && n.attrs?.href === href)) return content;
+  if (contentHasPageLink(doc.content, href)) return content;
   const newDoc: TipTapDoc = {
     ...doc,
     content: [...doc.content, { type: 'pageLink', attrs: { href, title: title || 'Untitled', icon: icon || '📄' } }],
