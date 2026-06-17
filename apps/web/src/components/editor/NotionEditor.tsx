@@ -2240,7 +2240,8 @@ export function NotionEditor({
     (editor.view.dom as HTMLElement).classList.toggle('notion-editor-booknum', !!numberHeadings);
   }, [editor, numberHeadings]);
 
-  const outerClass = `relative flex flex-1 overflow-y-auto py-8 ${notionPlusLayout === 'center' ? 'justify-center px-6' : 'pl-16 pr-8'}`;
+  // ブック（固定書式バー）は上の余白を詰める＝タブ直下の無駄な空白帯を作らない。通常ページは従来どおり py-8
+  const outerClass = `relative flex flex-1 overflow-y-auto ${stickyToolbar ? 'pb-8 pt-2' : 'py-8'} ${notionPlusLayout === 'center' ? 'justify-center px-6' : 'pl-16 pr-8'}`;
 
   return (
     <EditorUidContext.Provider value={user?.uid ?? ''}>
