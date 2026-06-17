@@ -5,15 +5,16 @@
  * やること:
  *   0. build-info.json の buildNumber / version をインクリメント
  *   1. version.ts / version.json / updateService.ts / package.json を自動更新
- *   2. electron-builder NSIS でインストーラーをビルド
- *      → GH_TOKEN があれば GitHub Release v${version} を自動作成・アップロード
+ *   2. electron-builder NSIS でインストーラーをビルド（--publish never）
+ *      → gh CLI で GitHub Release v${version} を作成し setup.exe / blockmap / latest.yml を公開
  *         （electron-updater が latest.yml を参照して自動アップデート）
  *   3. Android APK をビルド（assembleDebug のみ）
- *      → 同じ Release に study-tracker.apk を追加アップロード
+ *      → 同じ Release に study-tracker.apk を追加アップロード＋version.json に downloadUrl 反映
  *   4. git push → Vercel 自動デプロイ（Web 配信完了）
  *
  * 前提:
- *   $env:GH_TOKEN = "ghp_xxx"  ← ビルド前に設定（PAT: contents:write 権限）
+ *   gh CLI がインストール済み＆ `gh auth login` 済みであること（GH_TOKEN/PAT は不要）。
+ *   未認証の場合は GitHub Release だけスキップし、Web（git push）は配信される。
  *
  * 使い方:
  *   npm run dist:win:sync
@@ -84,19 +85,50 @@ pkg.version = newVersion
 writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf-8')
 console.log(`[build-and-sync] package.json version 更新: ${newVersion}`)
 
-// ── Step 4: electron-builder NSIS ビルド & GitHub Release 作成 ───
-const ghToken = process.env.GH_TOKEN
-if (!ghToken) {
-  console.warn('[build-and-sync] ⚠  GH_TOKEN 未設定 → GitHub Release を作成しません')
-  console.warn('              → ビルド前に $env:GH_TOKEN = "ghp_xxx" を設定してください')
+// ── GitHub 配信は gh CLI の認証を使う（GH_TOKEN 不要）─────────────
+// 以前は GH_TOKEN(PAT) を要求していたが、未設定だと Release が作られず自動更新が止まる事故が
+// あったため、ログイン済みの gh CLI を使う方式へ変更（`gh auth login` 済みなら何もいらない）。
+const REPO = 'fffuttta-design/study-tracker-next'
+const releaseTag = `v${newVersion}`
+// gh が使えるか（インストール済み＆認証済み）を確認
+let ghReady = false
+try {
+  execSync('gh auth status', { cwd: ROOT, stdio: 'pipe' })
+  ghReady = true
+} catch {
+  console.warn('[build-and-sync] ⚠  gh CLI が未インストール or 未認証 → GitHub Release をスキップ')
+  console.warn('              → `gh auth login` を一度実行すれば次回から自動で配信されます（Web は git push で配信済み）')
 }
-const publishFlag = ghToken ? '--publish always' : '--publish never'
-console.log(`\n[build-and-sync] Windows NSIS ビルド中 (${publishFlag})...\n`)
+// 指定アセットを Release へ公開（無ければ作成・あればクロバー上書き）。失敗しても false を返すだけ。
+const publishAssets = (assets, { latest = false } = {}) => {
+  if (!ghReady) return false
+  const files = assets.filter(existsSync)
+  if (files.length === 0) { console.warn('[build-and-sync] 公開アセットが見つかりません'); return false }
+  const quoted = files.map((p) => `"${p}"`).join(' ')
+  try {
+    let exists = false
+    try { execSync(`gh release view "${releaseTag}" --repo ${REPO}`, { cwd: ROOT, stdio: 'pipe' }); exists = true } catch { exists = false }
+    if (exists) {
+      execSync(`gh release upload "${releaseTag}" ${quoted} --repo ${REPO} --clobber`, { cwd: ROOT, stdio: 'inherit' })
+      if (latest) execSync(`gh release edit "${releaseTag}" --repo ${REPO} --draft=false --latest`, { cwd: ROOT, stdio: 'pipe' })
+    } else {
+      const latestFlag = latest ? '--latest' : ''
+      execSync(`gh release create "${releaseTag}" --repo ${REPO} --title "v${newVersion} (build ${newBuildNumber})" --notes "自動配信 build ${newBuildNumber}" ${latestFlag} ${quoted}`, { cwd: ROOT, stdio: 'inherit' })
+    }
+    return true
+  } catch (e) {
+    console.warn('[build-and-sync] GitHub Release 公開失敗:', e.message)
+    return false
+  }
+}
+
+// ── Step 4: electron-builder NSIS ビルド & GitHub Release 作成 ───
+console.log(`\n[build-and-sync] Windows NSIS ビルド中 (--publish never)...\n`)
 const setupPath = path.join(ROOT, 'dist-electron', 'study-tracker-setup.exe')
 try {
-  execSync(`npx electron-builder --win ${publishFlag}`, {
+  execSync(`npx electron-builder --win --publish never`, {
     cwd: ROOT, stdio: 'inherit', shell: true,
-    env: { ...process.env },  // GH_TOKEN を引き継ぐ
+    env: { ...process.env },
   })
 } catch (e) {
   if (!existsSync(setupPath)) {
@@ -105,8 +137,17 @@ try {
   }
   console.log('[build-and-sync] electron-builder がログエラーで終了しましたが Setup.exe は存在します。続行します。')
 }
-console.log('\n[build-and-sync] Windows ビルド & Release 完了 ✓')
+console.log('\n[build-and-sync] Windows ビルド完了 ✓')
 console.log(`[build-and-sync] Setup.exe: ${setupPath}`)
+
+// GitHub Release を gh CLI で公開（latest.yml が無いと自動更新が一切効かないため必ず含める）
+const de = path.join(ROOT, 'dist-electron')
+const winPublished = publishAssets([
+  path.join(de, 'study-tracker-setup.exe'),
+  path.join(de, 'study-tracker-setup.exe.blockmap'),
+  path.join(de, 'latest.yml'),
+], { latest: true })
+if (winPublished) console.log(`[build-and-sync] GitHub Release ${releaseTag} 公開 ✓ (Windows 自動更新)`)
 
 // ── Step 5: Android APK ビルド & 既存 Release に追加 ─────────────
 const androidSrcDir  = path.join(ROOT, 'apps', 'mobile')
@@ -149,30 +190,23 @@ try {
   })
   console.log('[build-and-sync] Android Debug ビルド完了 ✓')
 
-  // electron-builder が作成した Release (v${newVersion}) に APK を追加アップロード
-  const releaseTag  = `v${newVersion}`
+  // Release (v${newVersion}) に APK を追加アップロード（gh CLI 認証を使用）
   // gh release upload はファイル名をそのまま使う。正しい名前でコピーしてからアップロード
   const apkFinalPath = path.join(path.dirname(apkDebugPath), 'study-tracker.apk')
-  if (existsSync(apkDebugPath) && ghToken) {
-    try {
-      const { copyFileSync } = await import('fs')
-      copyFileSync(apkDebugPath, apkFinalPath)
-      execSync(
-        `gh release upload "${releaseTag}" "${apkFinalPath}" --clobber`,
-        { cwd: ROOT, stdio: 'pipe' }
-      )
+  if (existsSync(apkDebugPath) && ghReady) {
+    const { copyFileSync } = await import('fs')
+    copyFileSync(apkDebugPath, apkFinalPath)
+    const apkPublished = publishAssets([apkFinalPath], { latest: true })
+    if (apkPublished) {
+      // Android はこの version.json の downloadUrl を見て更新する（master raw 経由）
       const downloadUrl = `https://github.com/fffuttta-design/study-tracker-next/releases/download/${releaseTag}/study-tracker.apk`
       const versionJsonWithUrl = JSON.stringify({ ...newBuildInfo, downloadUrl }, null, 2) + '\n'
       writeFileSync(path.join(ROOT, 'apps', 'mobile', 'version.json'), versionJsonWithUrl, 'utf-8')
-      // draft を外して公開（electron-updater は draft を無視するため必須）
-      execSync(`gh release edit "${releaseTag}" --draft=false --latest`, { cwd: ROOT, stdio: 'pipe' })
       console.log(`[build-and-sync] APK アップロード & Release 公開完了 ✓ (${releaseTag})`)
       console.log(`[build-and-sync] downloadUrl: ${downloadUrl}`)
-    } catch (e) {
-      console.warn('[build-and-sync] APK アップロード失敗:', e.message)
     }
-  } else if (!ghToken) {
-    console.warn('[build-and-sync] GH_TOKEN 未設定のため APK アップロードをスキップ')
+  } else if (!ghReady) {
+    console.warn('[build-and-sync] gh CLI 未認証のため APK アップロードをスキップ')
   } else {
     console.warn('[build-and-sync] APK ファイルが見つかりません（スキップ）')
   }
