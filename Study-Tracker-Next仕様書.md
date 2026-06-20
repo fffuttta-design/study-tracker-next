@@ -907,6 +907,9 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-06-20 | （次回配信） | 新機能：テーブルの**枠線スタイル切替**。ツールバー（テーブル内）に「枠線:標準/くっきり/枠なし」ボタンを追加し3段階で切替。table 要素に borderStyle 属性（data-border）を持たせ CSS で出し分け（strong=1.5px #6b7280／none=透明／標準=従来の薄グレー）。CustomTable / editor.css / NotionEditor.tsx |
+| 2026-06-20 | （次回配信） | バグ修正：YouTube URL をメンション化するとタイトルが「- YouTube」になり拾えない問題を修正。url-preview API で YouTube は公式 oEmbed（youtube.com/oembed）から動画タイトルを取得するようにした（スクレイピングは同意ページでタイトルを取り逃すため）。api/url-preview/route.ts |
+| 2026-06-20 | （次回配信） | 改善：URL貼り付けの挙動を変更。**まずURLをリンク付きで貼り付け**、その直後にポップアップで「メンション／YouTube埋め込み／URLのまま」を選べるようにした（従来は選択するまで何も挿入されなかった）。「URLのまま」は閉じるだけ。変換選択時は貼ったURL範囲(range)を置換。NotionEditor.tsx |
 | 2026-06-20 | （次回配信） | 新機能：テーブルの**行・列にまとめて背景色**。ツールバー（テーブル内のみ表示）に「行色」「列色」を追加し、カーソルのある行/列の全セルへ一括で色付け。TableMap でセル位置を割り出し setNodeMarkup で backgroundColor を設定（色はTABLE_CELL_COLORS）。NotionEditor.tsx / applyTableLineColor |
 | 2026-06-20 | （次回配信） | バグ修正：新規ノート作成（遷移）直後にクリック・キー入力を受け付けず、アプリを最小化→復帰すると直る問題を修正（Electron）。エディタ生成時(onCreate)に webContents へフォーカスを戻す IPC `focus-window` を呼び、エディタにカーソルを置く。electron/main.js・preload.cjs・layout.tsx(型)・NotionEditor.tsx |
 | 2026-06-20 | （次回配信） | 看板のカード追加（既存ページ検索）の一覧を**更新日時の新しい順**に並べ替え。検索しなくても直近編集したノートが上に出る。NotionEditor.tsx filteredPages（updatedAt降順） |
