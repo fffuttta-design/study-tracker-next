@@ -1590,6 +1590,7 @@ interface SlashCommand {
   icon: string;
   action?: (editor: ReturnType<typeof useEditor>) => void;
   asyncAction?: (editor: ReturnType<typeof useEditor>) => Promise<void>;
+  openPageLinkPicker?: boolean; // 既存ページへのショートカット挿入：検索ピッカーを開く
 }
 
 const SLASH_COMMANDS: SlashCommand[] = [
@@ -1632,6 +1633,7 @@ const SLASH_COMMANDS: SlashCommand[] = [
   { label: 'コード',             description: 'コードブロック',       icon: '</>', action: (e) => e?.chain().focus().toggleCodeBlock().run() },
   { label: '区切り線',           description: '水平線',               icon: '—',  action: (e) => e?.chain().focus().setHorizontalRule().run() },
   { label: 'ページテーブル',     description: 'ページリンクを整理する表', icon: '▦',  action: (e) => e?.chain().focus().insertContent({ type: 'pageTable', attrs: { sections: ptDefaultSections() } }).run() },
+  { label: 'ページリンク',       description: '既存ページへのショートカット（押すと移動）', icon: '🔗', openPageLinkPicker: true },
 ];
 
 // ── カラーパレット ────────────────────────────────────────────────────
@@ -1790,6 +1792,10 @@ export function NotionEditor({
   const [slashIndex, setSlashIndex] = useState(0);
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
   const slashStartPos = useRef<number | null>(null);
+  // 既存ページへのショートカット挿入ピッカー（/ページリンク）
+  const allPages = useNotionPageStore((s) => s.pages);
+  const [pageLinkPicker, setPageLinkPicker] = useState<{ top: number; left: number } | null>(null);
+  const [pageLinkQuery, setPageLinkQuery] = useState('');
   const activeSlashItemRef = useRef<HTMLButtonElement>(null);
   // 矢印キーで選択が移動したら、その項目をメニュー内に必ず見えるようスクロール追従させる
   useEffect(() => {
@@ -1970,13 +1976,29 @@ export function NotionEditor({
     if (!editor || slashStartPos.current === null) return;
     const { from } = editor.state.selection;
     editor.chain().focus().deleteRange({ from: slashStartPos.current, to: from }).run();
+    setSlashOpen(false);
+    slashStartPos.current = null;
+    // 既存ページへのショートカット：検索ピッカーを開く（選択後に pageLink を挿入）
+    if (cmd.openPageLinkPicker) {
+      const coords = editor.view.coordsAtPos(editor.state.selection.from);
+      setPageLinkQuery('');
+      setPageLinkPicker({ top: coords.bottom + 8, left: coords.left });
+      return;
+    }
     if (cmd.asyncAction) {
       await cmd.asyncAction(editor);
     } else if (cmd.action) {
       cmd.action(editor);
     }
-    setSlashOpen(false);
-    slashStartPos.current = null;
+  }, [editor]);
+
+  // 選んだ既存ページへのショートカット（pageLink ブロック）を本文に挿入する
+  const insertPageShortcut = useCallback((p: { id: string; title?: string; icon?: string }) => {
+    setPageLinkPicker(null);
+    editor?.chain().focus().insertContent({
+      type: 'pageLink',
+      attrs: { href: `/notion-plus/${p.id}`, title: p.title || 'Untitled', icon: p.icon || '📄' },
+    }).run();
   }, [editor]);
 
   useEffect(() => {
@@ -2679,6 +2701,42 @@ export function NotionEditor({
             </button>
           </div>
         </>
+      )}
+
+      {/* 既存ページへのショートカット挿入ピッカー（/ページリンク） */}
+      {pageLinkPicker && typeof document !== 'undefined' && createPortal(
+        <>
+          <div className="fixed inset-0 z-[1000]" onMouseDown={() => setPageLinkPicker(null)} />
+          <div style={{ position: 'fixed', top: pageLinkPicker.top, left: pageLinkPicker.left, width: 280 }}
+            className="z-[1001] rounded-xl border border-gray-200 bg-white p-2 shadow-2xl">
+            <p className="px-1 pb-1 text-xs font-medium text-gray-400">ショートカットにするページを選ぶ</p>
+            <input autoFocus value={pageLinkQuery} onChange={(e) => setPageLinkQuery(e.target.value)} placeholder="ページを検索..."
+              className="mb-1 w-full rounded border border-gray-200 px-2 py-1 text-xs outline-none focus:border-brand-400" />
+            <div className="max-h-60 overflow-y-auto">
+              {(() => {
+                const list = allPages
+                  .filter((p) => p.id !== notionPageId && p.type !== 'database')
+                  .filter((p) => (p.title || '').toLowerCase().includes(pageLinkQuery.toLowerCase()))
+                  .slice()
+                  .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
+                  .slice(0, 40);
+                if (list.length === 0) return <p className="px-2 py-1 text-xs text-gray-400">該当なし</p>;
+                return list.map((p) => (
+                  <button key={p.id} onMouseDown={(e) => { e.preventDefault(); insertPageShortcut(p); }}
+                    className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-xs text-gray-700 hover:bg-gray-50">
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden text-sm leading-none">{isImageSrc(p.icon)
+                      // eslint-disable-next-line @next/next/no-img-element
+                      ? <img src={p.icon} alt="" className="h-4 w-4 rounded object-cover" />
+                      : (p.icon || '📄')}</span>
+                    <span className="truncate">{p.title || 'Untitled'}</span>
+                    {p.type === 'book' && <span className="ml-auto shrink-0 text-[10px] text-gray-400">ブック</span>}
+                  </button>
+                ));
+              })()}
+            </div>
+          </div>
+        </>,
+        document.body,
       )}
     </div>
     </PageNavigationContext.Provider>

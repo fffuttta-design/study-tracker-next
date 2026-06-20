@@ -41,6 +41,13 @@
 .notion-editor h3 { font-size: 1.25rem; font-weight: 600; margin: calc(0.75rem + var(--offset-h3, 0px)) 0 0.25rem; }
 .notion-editor h4 { font-size: 1.1rem; font-weight: 600; margin: calc(0.5rem + var(--offset-h4, 0px)) 0 0.25rem; }
 
+/* 見出しごとの「うっすら区切り線」。直前のセクションの終わりが分かるよう、H1/H2 の上に淡い線を引く。
+   見出し自身ではなく上端に出すことで「ここまでが前の見出しの内容」と判別しやすくする。表示のみ。 */
+.notion-editor h1 { border-top: 1px solid #ececec; padding-top: 0.4rem; }
+.notion-editor h2 { border-top: 1px solid #f1f1f1; padding-top: 0.3rem; }
+/* 本文先頭の見出しには線を出さない（一番上に余計な線が出るのを防ぐ） */
+.notion-editor > h1:first-child, .notion-editor > h2:first-child { border-top: none; padding-top: 0; }
+
 /* ── ブック本文の自動見出し番号（CSSカウンタ・本文非破壊 / Phase 2）────── */
 /* 表示だけ。contenteditable のテキストは変わらないので保存内容に影響しない。 */
 .notion-editor-booknum { counter-reset: bh1 bh2 bh3 bh4; }
