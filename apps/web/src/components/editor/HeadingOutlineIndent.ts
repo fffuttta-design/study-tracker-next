@@ -4,33 +4,40 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import type { Node as PmNode } from '@tiptap/pm/model';
 
 // ── 見出しアウトライン・インデント拡張 ──────────────────────────────
-// 見出しの「中」に入る本文を、見出しレベルに応じて段階的に字下げする（表示のみ・データ非破壊）。
-//   H1 自身=0段 / H1 配下の本文=1段
-//   H2 自身=1段 / H2 配下の本文=2段
-//   H3 自身=2段 / H3 配下の本文=3段 … というカスケード。
-// ProseMirror のデコレーション（padding-left のインライン style）で付けるだけなので、
+// 見出しの「直下の段」だけを軽く1段（1.5rem）字下げする（表示のみ・データ非破壊）。
+//   - 見出し自身は下げない。
+//   - 見出しの直後に続く本文ブロックを1段だけ字下げ。
+//   - 「空行」または「次の見出し」で字下げは終了する＝そこから下は左端に戻る。
+//     （＝一度見出しを作ると延々インデントが続いて“抜け出せない”問題への対応）
+// さらに「見出し行の先頭で Backspace」を押すと、その見出しを通常テキストに戻す（見出し解除）。
 // 切り戻しは extensions から HeadingOutlineIndent を外すだけ。content は一切変更しない。
 
 const KEY = new PluginKey('headingOutlineIndent');
-const STEP_REM = 1.5; // 1段あたりの字下げ量
+const STEP_REM = 1.5; // 字下げ量（1段）
+
+function isEmptyParagraph(node: PmNode): boolean {
+  return node.type.name === 'paragraph' && node.content.size === 0;
+}
 
 function buildDecorations(doc: PmNode): DecorationSet {
   const decos: Decoration[] = [];
-  let level = 0; // 直近の見出しレベル（0 = まだ見出しが出ていない）
+  let inSection = false; // 直前に見出しがあり、その直下の連続ブロック中か
   // doc 直下のトップレベルブロックを走査。offset = そのブロック直前の絶対位置。
   doc.forEach((node, offset) => {
-    let indentSteps: number;
     if (node.type.name === 'heading') {
-      const lv = (node.attrs.level as number) || 1;
-      level = lv;
-      indentSteps = lv - 1; // 見出し自身は1段浅く（H1=0, H2=1, ...）
-    } else {
-      indentSteps = level; // 見出し配下の本文は見出しレベルぶん
+      // 見出し自身は下げない。直後から「直下の段」を開始。
+      inSection = true;
+      return;
     }
-    if (indentSteps > 0) {
+    if (isEmptyParagraph(node)) {
+      // 空行が来たらセクション終わり（ここから下は左端に戻る）
+      inSection = false;
+      return;
+    }
+    if (inSection) {
       decos.push(
         Decoration.node(offset, offset + node.nodeSize, {
-          style: `padding-left:${indentSteps * STEP_REM}rem`,
+          style: `padding-left:${STEP_REM}rem`,
         }),
       );
     }
@@ -40,6 +47,20 @@ function buildDecorations(doc: PmNode): DecorationSet {
 
 export const HeadingOutlineIndent = Extension.create({
   name: 'headingOutlineIndent',
+  addKeyboardShortcuts() {
+    return {
+      Backspace: () => {
+        const { selection } = this.editor.state;
+        const { empty, $from } = selection;
+        if (!empty) return false;
+        // 見出し行の先頭で Backspace → 見出し解除（通常段落に戻す）
+        if ($from.parent.type.name === 'heading' && $from.parentOffset === 0) {
+          return this.editor.chain().setNode('paragraph').run();
+        }
+        return false;
+      },
+    };
+  },
   addProseMirrorPlugins() {
     return [
       new Plugin({
