@@ -161,6 +161,16 @@
   font-weight: 600;
 }
 
+/* 枠線スタイル切替（table[data-border]）。標準=薄グレー(上の既定) / strong=くっきり / none=枠なし */
+.notion-editor table[data-border="strong"] td,
+.notion-editor table[data-border="strong"] th {
+  border: 1.5px solid #6b7280;
+}
+.notion-editor table[data-border="none"] td,
+.notion-editor table[data-border="none"] th {
+  border-color: transparent;
+}
+
 /* チェックボックスがONの行をグレーアウト（JS側でクラス付与） */
 .notion-editor table tr.memo-row-checked td,
 .notion-editor table tr.memo-row-checked th {

@@ -8,6 +8,21 @@ export async function GET(req: NextRequest) {
     const domain = new URL(url).hostname;
     const favicon = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
 
+    // YouTube は通常スクレイピングだと同意ページ等でタイトルが取れず「- YouTube」になりがち。
+    // 公式 oEmbed で動画タイトルを確実に取得する。
+    if (/(?:youtube\.com|youtu\.be)/.test(domain)) {
+      try {
+        const oe = await fetch(
+          `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`,
+          { signal: AbortSignal.timeout(5000) },
+        );
+        if (oe.ok) {
+          const data = await oe.json() as { title?: string };
+          if (data.title) return NextResponse.json({ title: data.title, favicon, url });
+        }
+      } catch { /* oEmbed 失敗時は下の通常スクレイピングにフォールバック */ }
+    }
+
     const res = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; StudyTracker/1.0)' },
       signal: AbortSignal.timeout(5000),

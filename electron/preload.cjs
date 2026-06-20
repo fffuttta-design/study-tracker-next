@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
   // アプリ操作
   relaunch: () => ipcRenderer.send('app-relaunch'),
+  // ウィンドウへ確実に入力フォーカスを戻す（新規ノート遷移直後の入力不能対策）
+  focusWindow: () => ipcRenderer.send('focus-window'),
   // 復習通知
   setReviewCount:      (count) => ipcRenderer.send('review-count-update', count),
   setNotificationTime: (time)  => ipcRenderer.send('notification-time-update', time),

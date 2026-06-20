@@ -34,6 +34,7 @@ import { TextStyle, Color } from '@tiptap/extension-text-style';
 import Underline from '@tiptap/extension-underline';
 import Youtube from '@tiptap/extension-youtube';
 import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
+import { TableMap } from '@tiptap/pm/tables';
 import { DragHandleExtension, setDragHandleVertOffset } from './DragHandleExtension';
 import { HeadingOutlineIndent } from './HeadingOutlineIndent';
 import { AnnotationMark } from './AnnotationMark';
@@ -1166,8 +1167,11 @@ function PageTableView({ node, updateAttributes, editor: ptEditor }: NodeViewPro
 
   const navigate = (href: string) => onPageNavigate ? onPageNavigate(href) : router.push(href);
 
+  // 検索なしでも最近更新したノートが上に来るよう updatedAt の新しい順に並べる（検索の手間を減らす）
   const filteredPages = pages
     .filter((p) => (p.title || '').toLowerCase().includes(query.toLowerCase()))
+    .slice()
+    .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
     .slice(0, 30);
 
   return (
@@ -1472,6 +1476,22 @@ const CustomTableHeader = TableHeader.extend({
   },
 });
 
+// テーブルの枠線スタイル（標準=薄グレー / strong=くっきり濃いめ / none=枠なし）を table 要素に持たせる
+const TABLE_BORDER_CYCLE = ['normal', 'strong', 'none'] as const;
+const TABLE_BORDER_LABEL: Record<string, string> = { normal: '標準', strong: 'くっきり', none: '枠なし' };
+const CustomTable = Table.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      borderStyle: {
+        default: 'normal',
+        parseHTML: (el) => el.getAttribute('data-border') || 'normal',
+        renderHTML: (attrs) => (attrs.borderStyle && attrs.borderStyle !== 'normal' ? { 'data-border': attrs.borderStyle } : {}),
+      },
+    };
+  },
+});
+
 // ── マークダウンショートカット（- スペース → 箇条書き）────────────────
 // StarterKit の BulletList にも同等の InputRule が含まれているが、
 // カスタム拡張との競合対策として明示的に追加して確実に動作させる
@@ -1745,6 +1765,7 @@ interface PastePopup {
   url: string;
   pos: { top: number; left: number };
   isYoutube: boolean;
+  range: { from: number; to: number }; // 先に貼ったURLテキストの範囲（変換時はここを置換）
 }
 
 export function NotionEditor({
@@ -1793,9 +1814,9 @@ export function NotionEditor({
   const [tableButtonInfo, setTableButtonInfo] = useState<{ rowY: number; colX: number; centerX: number; centerY: number } | null>(null);
   const tableButtonTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const pasteUrlCallbackRef = useRef<((url: string, coords: { bottom: number; left: number }) => void) | null>(null);
-  pasteUrlCallbackRef.current = (url, coords) => {
-    setPastePopup({ url, pos: { top: coords.bottom + 8, left: coords.left }, isYoutube: isYouTubeUrl(url) });
+  const pasteUrlCallbackRef = useRef<((url: string, coords: { bottom: number; left: number }, range: { from: number; to: number }) => void) | null>(null);
+  pasteUrlCallbackRef.current = (url, coords, range) => {
+    setPastePopup({ url, pos: { top: coords.bottom + 8, left: coords.left }, isYoutube: isYouTubeUrl(url), range });
   };
 
   const { user } = useAuthStore();
@@ -1843,7 +1864,7 @@ export function NotionEditor({
       Color,
       Underline,
       ResizableYoutube.configure({ width: 640, height: 360, nocookie: true }),
-      Table.configure({ resizable: true }),
+      CustomTable.configure({ resizable: true }),
       TableRow,
       CustomTableCell,
       CustomTableHeader,
@@ -1891,12 +1912,32 @@ export function NotionEditor({
         const text = event.clipboardData?.getData('text/plain').trim() ?? '';
         if (/^https?:\/\//.test(text) && !text.includes('\n')) {
           event.preventDefault();
-          const coords = view.coordsAtPos(view.state.selection.from);
-          pasteUrlCallbackRef.current?.(text, coords);
+          // まず URL をリンク付きテキストとして実際に貼り付ける（「URLのまま」が既定状態）。
+          const from = view.state.selection.from;
+          const to = from + text.length;
+          const linkType = view.state.schema.marks.link;
+          let tr = view.state.tr.insertText(text);
+          if (linkType) tr = tr.addMark(from, to, linkType.create({ href: text, target: '_blank', rel: 'noopener noreferrer' }));
+          view.dispatch(tr);
+          // 貼った直後にポップアップを出し、メンション／YouTube等への変換を選べるようにする。
+          const coords = view.coordsAtPos(to);
+          pasteUrlCallbackRef.current?.(text, coords, { from, to });
           return true;
         }
         return false;
       },
+    },
+    onCreate: ({ editor }) => {
+      if (typeof window === 'undefined') return;
+      // Electron: 新規ノートへ遷移した直後にクリックやキー入力を受け付けず、
+      // ウィンドウを最小化→復帰すると直る問題への対策。
+      // マウント直後にウィンドウ/webContentsへフォーカスを戻し、エディタにカーソルを置く。
+      setTimeout(() => {
+        try {
+          window.electronAPI?.focusWindow?.();
+          editor.commands.focus(null, { scrollIntoView: false });
+        } catch { /* noop */ }
+      }, 80);
     },
     onUpdate: ({ editor }) => {
       scheduleSave();
@@ -2266,30 +2307,30 @@ export function NotionEditor({
 
   const handlePasteMention = useCallback(async () => {
     if (!pastePopup || !editor) return;
-    const url = pastePopup.url;
+    const { url, range } = pastePopup;
     setPastePopup(null);
     setPasteLoading(true);
     try {
       const res = await fetch(`/api/url-preview?url=${encodeURIComponent(url)}`);
       const data = await res.json() as { title?: string; favicon?: string };
-      editor.chain().focus().insertContent({ type: 'urlMention', attrs: { href: url, title: data.title ?? url, favicon: data.favicon ?? '' } }).run();
+      // 先に貼ったURLテキストをメンションに置き換える
+      editor.chain().focus().deleteRange(range).insertContentAt(range.from, { type: 'urlMention', attrs: { href: url, title: data.title ?? url, favicon: data.favicon ?? '' } }).run();
     } catch {
-      editor.chain().focus().insertContent({ type: 'text', text: url, marks: [{ type: 'link', attrs: { href: url, target: '_blank' } }] }).run();
+      // 失敗時はURLのまま（既に貼られている）なので何もしない
     } finally { setPasteLoading(false); }
   }, [pastePopup, editor]);
 
+  // 「URLのまま」：既にリンク付きで貼られているのでポップアップを閉じるだけ
   const handlePasteUrl = useCallback(() => {
-    if (!pastePopup || !editor) return;
-    const url = pastePopup.url;
     setPastePopup(null);
-    editor.chain().focus().insertContent({ type: 'text', text: url, marks: [{ type: 'link', attrs: { href: url, target: '_blank', rel: 'noopener noreferrer' } }] }).run();
-  }, [pastePopup, editor]);
+  }, []);
 
   const handlePasteYoutube = useCallback(() => {
     if (!pastePopup || !editor) return;
-    const url = pastePopup.url;
+    const { url, range } = pastePopup;
     setPastePopup(null);
-    editor.chain().focus().setYoutubeVideo({ src: url }).run();
+    // 先に貼ったURLテキストをYouTube埋め込みに置き換える
+    editor.chain().focus().deleteRange(range).setTextSelection(range.from).setYoutubeVideo({ src: url }).run();
   }, [pastePopup, editor]);
 
   useEffect(() => {
@@ -2620,15 +2661,11 @@ export function NotionEditor({
         <>
           <div className="fixed inset-0 z-40" onClick={() => setPastePopup(null)} />
           <div className="fixed z-50 overflow-hidden rounded-xl border border-gray-100 bg-white py-1 shadow-2xl" style={{ top: pastePopup.pos.top, left: pastePopup.pos.left }}>
-            <p className="px-3 py-1.5 text-xs font-medium text-gray-400">貼り付け方法を選択</p>
+            <p className="px-3 py-1.5 text-xs font-medium text-gray-400">変換する？（このままでもOK）</p>
             <button onClick={handlePasteMention} disabled={pasteLoading}
               className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
               <span className="text-base">🔗</span>
               <div><p className="font-medium">メンション</p><p className="text-xs text-gray-400">ページタイトル＋アイコン</p></div>
-            </button>
-            <button onClick={handlePasteUrl} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
-              <span className="text-base">🌐</span>
-              <div><p className="font-medium">URL</p><p className="text-xs text-gray-400">リンク付きテキスト</p></div>
             </button>
             {pastePopup.isYoutube && (
               <button onClick={handlePasteYoutube} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
@@ -2636,6 +2673,10 @@ export function NotionEditor({
                 <div><p className="font-medium">YouTube 埋め込み</p><p className="text-xs text-gray-400">プレイヤーを挿入</p></div>
               </button>
             )}
+            <button onClick={handlePasteUrl} className="flex w-full items-center gap-2.5 border-t border-gray-100 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
+              <span className="text-base">🌐</span>
+              <div><p className="font-medium">URLのまま</p><p className="text-xs text-gray-400">変換しない（リンク付きテキスト）</p></div>
+            </button>
           </div>
         </>
       )}
@@ -2646,12 +2687,52 @@ export function NotionEditor({
   );
 }
 
+// ── テーブルの行／列に一括で背景色を適用 ──────────────────────────────
+// 現在カーソルがあるセルが属する行（または列）の全セルへ backgroundColor を設定する。
+// TableMap でセル位置を割り出し、各セルへ直接 setNodeMarkup で属性を書き込む（色変更はサイズ不変なので位置は安定）。
+function applyTableLineColor(
+  editor: NonNullable<ReturnType<typeof useEditor>>,
+  color: string,
+  mode: 'row' | 'col',
+) {
+  const { state, view } = editor;
+  const $anchor = state.selection.$anchor;
+  // セル（tableCell / tableHeader）の深さを探す
+  let cellDepth = $anchor.depth;
+  while (cellDepth > 0 && !/^(tableCell|tableHeader)$/.test($anchor.node(cellDepth).type.name)) {
+    cellDepth--;
+  }
+  if (cellDepth < 2) return; // table > tableRow > cell の構造が必要
+  const tableDepth = cellDepth - 2;
+  const table = $anchor.node(tableDepth);
+  const tableStart = $anchor.start(tableDepth);
+  const map = TableMap.get(table);
+  const cellRel = $anchor.before(cellDepth) - tableStart; // テーブル先頭からの相対位置
+  const rect = map.findCell(cellRel);
+
+  const cellOffsets =
+    mode === 'row'
+      ? map.cellsInRect({ left: 0, right: map.width, top: rect.top, bottom: rect.bottom })
+      : map.cellsInRect({ left: rect.left, right: rect.right, top: 0, bottom: map.height });
+
+  const tr = state.tr;
+  for (const off of cellOffsets) {
+    const pos = tableStart + off;
+    const node = tr.doc.nodeAt(pos);
+    if (node) tr.setNodeMarkup(pos, undefined, { ...node.attrs, backgroundColor: color || null });
+  }
+  if (tr.docChanged) view.dispatch(tr);
+  editor.commands.focus();
+}
+
 // ── ツールバー ────────────────────────────────────────────────────────
 
 export function Toolbar({ editor, className }: { editor: NonNullable<ReturnType<typeof useEditor>>; className?: string }) {
   const [colorOpen, setColorOpen] = useState(false);
   const [bgColorOpen, setBgColorOpen] = useState(false);
   const [cellColorOpen, setCellColorOpen] = useState(false);
+  const [rowColorOpen, setRowColorOpen] = useState(false);
+  const [colColorOpen, setColColorOpen] = useState(false);
 
   const btn = (active: boolean) =>
     `rounded px-2 py-1 text-xs transition ${active ? 'bg-gray-200 text-gray-900 font-semibold' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'}`;
@@ -2743,9 +2824,21 @@ export function Toolbar({ editor, className }: { editor: NonNullable<ReturnType<
           <button onClick={() => editor.chain().focus().deleteRow().run()} className={btn(false)} title="行を削除">行✕</button>
           <button onClick={() => editor.chain().focus().deleteColumn().run()} className={btn(false)} title="列を削除">列✕</button>
           <button onClick={() => editor.chain().focus().deleteTable().run()} className={btn(false)} title="テーブルを削除">表✕</button>
+          {/* 枠線スタイル切替（標準→くっきり→枠なし） */}
+          <button
+            onClick={() => {
+              const cur = (editor.getAttributes('table').borderStyle as string) || 'normal';
+              const next = TABLE_BORDER_CYCLE[(TABLE_BORDER_CYCLE.indexOf(cur as typeof TABLE_BORDER_CYCLE[number]) + 1) % TABLE_BORDER_CYCLE.length];
+              editor.chain().focus().updateAttributes('table', { borderStyle: next }).run();
+            }}
+            className={btn(false)}
+            title="枠線スタイルを切替（標準／くっきり／枠なし）"
+          >
+            枠線:{TABLE_BORDER_LABEL[(editor.getAttributes('table').borderStyle as string) || 'normal']}
+          </button>
           {/* セル背景色 */}
           <div className="relative">
-            <button onClick={() => { setCellColorOpen((v) => !v); setColorOpen(false); setBgColorOpen(false); }}
+            <button onClick={() => { setCellColorOpen((v) => !v); setColorOpen(false); setBgColorOpen(false); setRowColorOpen(false); setColColorOpen(false); }}
               className={`rounded px-2 py-1 text-xs transition ${cellColorOpen ? 'bg-gray-200' : 'text-gray-500 hover:bg-gray-100'}`} title="セル背景色">
               セル色
             </button>
@@ -2753,6 +2846,38 @@ export function Toolbar({ editor, className }: { editor: NonNullable<ReturnType<
               <div className="absolute left-0 top-full z-50 mt-1 flex flex-wrap gap-1 rounded-lg border border-gray-200 bg-white p-2 shadow-xl" style={{ width: 160 }}>
                 {TABLE_CELL_COLORS.map((c) => (
                   <button key={c.value} title={c.label} onClick={() => setCellBg(c.value)}
+                    className="h-6 w-6 rounded hover:ring-2 hover:ring-brand-400"
+                    style={{ background: c.value || 'white', border: '1px solid #e5e7eb' }} />
+                ))}
+              </div>
+            )}
+          </div>
+          {/* 行の色（現在の行の全セル） */}
+          <div className="relative">
+            <button onClick={() => { setRowColorOpen((v) => !v); setColorOpen(false); setBgColorOpen(false); setCellColorOpen(false); setColColorOpen(false); }}
+              className={`rounded px-2 py-1 text-xs transition ${rowColorOpen ? 'bg-gray-200' : 'text-gray-500 hover:bg-gray-100'}`} title="行の背景色">
+              行色
+            </button>
+            {rowColorOpen && (
+              <div className="absolute left-0 top-full z-50 mt-1 flex flex-wrap gap-1 rounded-lg border border-gray-200 bg-white p-2 shadow-xl" style={{ width: 160 }}>
+                {TABLE_CELL_COLORS.map((c) => (
+                  <button key={c.value} title={c.label} onClick={() => { applyTableLineColor(editor, c.value, 'row'); setRowColorOpen(false); }}
+                    className="h-6 w-6 rounded hover:ring-2 hover:ring-brand-400"
+                    style={{ background: c.value || 'white', border: '1px solid #e5e7eb' }} />
+                ))}
+              </div>
+            )}
+          </div>
+          {/* 列の色（現在の列の全セル） */}
+          <div className="relative">
+            <button onClick={() => { setColColorOpen((v) => !v); setColorOpen(false); setBgColorOpen(false); setCellColorOpen(false); setRowColorOpen(false); }}
+              className={`rounded px-2 py-1 text-xs transition ${colColorOpen ? 'bg-gray-200' : 'text-gray-500 hover:bg-gray-100'}`} title="列の背景色">
+              列色
+            </button>
+            {colColorOpen && (
+              <div className="absolute left-0 top-full z-50 mt-1 flex flex-wrap gap-1 rounded-lg border border-gray-200 bg-white p-2 shadow-xl" style={{ width: 160 }}>
+                {TABLE_CELL_COLORS.map((c) => (
+                  <button key={c.value} title={c.label} onClick={() => { applyTableLineColor(editor, c.value, 'col'); setColColorOpen(false); }}
                     className="h-6 w-6 rounded hover:ring-2 hover:ring-brand-400"
                     style={{ background: c.value || 'white', border: '1px solid #e5e7eb' }} />
                 ))}

@@ -20,6 +20,7 @@ declare global {
     electronAPI?: {
       platform: string;
       relaunch?: () => void;
+      focusWindow?: () => void;
       setReviewCount?: (count: number) => void;
       setNotificationTime?: (time: string) => void;
       // バックアップ

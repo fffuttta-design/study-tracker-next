@@ -430,6 +430,18 @@ ipcMain.on('app-relaunch', () => {
   app.exit(0)
 })
 
+// 新規ノート遷移直後に入力（クリック・キー）を受け付けず、最小化で復帰する問題への対策。
+// 送信元ウィンドウの webContents へ確実にフォーカスを戻す。
+ipcMain.on('focus-window', (e) => {
+  try {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    if (win) win.focus()
+    e.sender.focus()
+  } catch (err) {
+    debugLog('[focus-window] error', err?.message)
+  }
+})
+
 ipcMain.on('review-count-update', (_, count) => {
   latestReviewCount = typeof count === 'number' ? count : 0
 })
