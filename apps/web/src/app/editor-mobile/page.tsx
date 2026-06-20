@@ -95,6 +95,63 @@ const ToggleHeadingStub = TiptapNode.create({
 const TocStub            = makeStubNode('toc');
 const InlineDatabaseStub = makeStubNode('inlineDatabase');
 
+// pageTable（看板）: Web版で作ったボードをモバイルでも消さずに読み取り表示する。
+// これが無いと、看板を含むページの setContent が未知ノードで失敗し本文が空になる（事業ページが見れない原因）。
+type PtLink = { href?: string; title?: string; icon?: string };
+type PtCol = { heading?: string; links?: PtLink[] };
+type PtSec = { title?: string; columns?: PtCol[] };
+const PageTableStub = TiptapNode.create({
+  name: 'pageTable',
+  group: 'block',
+  atom: true,
+  addAttributes() {
+    return {
+      sections: {
+        default: null,
+        parseHTML: (el: HTMLElement) => { try { return JSON.parse(el.getAttribute('data-sections') || 'null'); } catch { return null; } },
+        renderHTML: (attrs: Record<string, unknown>) => ({ 'data-sections': JSON.stringify(attrs.sections ?? []) }),
+      },
+    };
+  },
+  parseHTML() { return [{ tag: 'div[data-type="page-table"]' }]; },
+  renderHTML({ HTMLAttributes }) { return ['div', { ...HTMLAttributes, 'data-type': 'page-table' }]; },
+  addNodeView() {
+    return ({ node }) => {
+      const dom = document.createElement('div');
+      dom.style.cssText = 'margin:8px 0;';
+      const sections: PtSec[] = Array.isArray(node.attrs.sections) ? node.attrs.sections : [];
+      const esc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const pagesMap = (window as any).__pagesMap || {};
+      const linkHtml = (lk: PtLink) => {
+        const pageId = (lk.href || '').match(/\/notion-plus\/([^/?#]+)/)?.[1] ?? '';
+        const live = pageId ? pagesMap[pageId] : null;
+        const t = live?.title || lk.title || 'Untitled';
+        const raw = String(live?.icon || lk.icon || '📄');
+        const isUrl = raw.startsWith('http') || raw.startsWith('data:');
+        const icon = isUrl
+          ? `<img src="${esc(raw)}" style="width:16px;height:16px;border-radius:4px;object-fit:cover;flex-shrink:0;" />`
+          : `<span style="font-size:14px;flex-shrink:0;">${esc(raw)}</span>`;
+        return `<div data-href="${esc(lk.href || '')}" style="display:flex;align-items:center;gap:6px;padding:6px 8px;background:#fff;border:1px solid #eee;border-radius:8px;margin:4px 0;">${icon}<span style="color:#1d4ed8;font-size:14px;">${esc(t)}</span></div>`;
+      };
+      let html = '';
+      for (const sec of sections) {
+        if (sec.title) html += `<div style="font-weight:700;font-size:15px;margin:10px 0 4px;">${esc(sec.title)}</div>`;
+        for (const col of (sec.columns || [])) {
+          if (col.heading) html += `<div style="font-weight:600;font-size:13px;color:#555;margin:6px 0 2px;">${esc(col.heading)}</div>`;
+          for (const lk of (col.links || [])) html += linkHtml(lk);
+        }
+      }
+      dom.innerHTML = html || '<div style="color:#9ca3af;font-size:13px;">（空のボード）</div>';
+      dom.addEventListener('click', (e: Event) => {
+        const el = (e.target as HTMLElement).closest('[data-href]');
+        const href = el?.getAttribute('data-href');
+        if (href) window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'navigate', href }));
+      });
+      return { dom };
+    };
+  },
+});
+
 // ── 型定義 ──────────────────────────────────────────────────
 type RNMessage =
   | { type: 'init'; content: string; title: string; readOnly?: boolean }
@@ -193,6 +250,7 @@ export default function EditorMobilePage() {
       ToggleHeadingStub,
       TocStub,
       InlineDatabaseStub,
+      PageTableStub,
     ],
     editorProps: {
       attributes: { class: 'mobile-editor' },
@@ -220,13 +278,15 @@ export default function EditorMobilePage() {
       titleRef.current = t ?? '';
       readOnlyRef.current = !!ro;
       editor.setEditable(!ro);
+      let parsed: unknown = null;
+      try { parsed = JSON.parse(c); } catch { parsed = null; }
       try {
-        const parsed = JSON.parse(c);
-        editor.commands.setContent(parsed, { emitUpdate: false });
-        setDbg(`④ setContent完了 nodes=${parsed?.content?.length ?? '?'}`);
+        editor.commands.setContent((parsed ?? (c ?? '')) as object, { emitUpdate: false });
+        setDbg(`④ setContent完了 nodes=${(parsed as { content?: unknown[] })?.content?.length ?? '?'}`);
       } catch (e) {
-        setDbg(`⑤ JSON parse失敗: ${String(e).slice(0, 40)}`);
-        editor.commands.setContent(c ?? '', { emitUpdate: false });
+        // 未知ノード等で setContent が失敗しても白画面にしない（空ページにフォールバック）
+        setDbg(`⑤ setContent失敗: ${String(e).slice(0, 40)}`);
+        try { editor.commands.setContent('<p></p>', { emitUpdate: false }); } catch { /* noop */ }
       }
       // コンテンツ準備完了をRNに通知（ホワイトアウト解消用）
       window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'contentReady' }));

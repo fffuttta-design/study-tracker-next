@@ -1204,6 +1204,11 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
 
   const noteLinkHref = (() => {
     if (!item.notionPageId) return null;
+    // ページ全体（ブックは章）の復習はハイライト不要。章指定があれば ?chapter= で該当章を開く。
+    if (item.isPageReview) {
+      const chapterQ = item.chapterId ? `&chapter=${encodeURIComponent(item.chapterId)}` : '';
+      return `/notion-plus/${item.notionPageId}?from=${fromTab ?? 0}${chapterQ}`;
+    }
     const rawLine = (item.content.split('\n').find(l => l.trim().length > 5) ?? item.content).trim();
     // Markdown 記号を除去してからハイライト文字列を作る
     const hlText = rawLine
@@ -1245,6 +1250,11 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
           <p className={`min-w-0 flex-1 truncate font-bold text-gray-900 ${expanded ? 'text-2xl' : 'text-sm'}`}>
             {item.title || item.content.split('\n')[0].slice(0, 60)}
           </p>
+          {item.isPageReview && (
+            <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700" title="ページ（章）まるごとの復習">
+              {item.chapterId ? '📖 章' : '📄 ページ全体'}
+            </span>
+          )}
         </div>
         {/* 行2: ノートを開く + 3アイコン（ボタン個別にstopPropagation） */}
         <div className="flex items-center gap-1 px-3 pb-1">
@@ -1349,9 +1359,16 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
         )}
 
         <div className="min-w-0 flex-1">
-          <p className={`font-bold text-gray-900 leading-snug ${expanded ? 'text-2xl' : 'truncate text-sm'}`}>
-            {item.title || item.content.split('\n')[0].slice(0, 60)}
-          </p>
+          <div className="flex items-center gap-1.5">
+            <p className={`min-w-0 font-bold text-gray-900 leading-snug ${expanded ? 'text-2xl' : 'truncate text-sm'}`}>
+              {item.title || item.content.split('\n')[0].slice(0, 60)}
+            </p>
+            {item.isPageReview && (
+              <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700" title="ページ（章）まるごとの復習">
+                {item.chapterId ? '📖 章' : '📄 ページ全体'}
+              </span>
+            )}
+          </div>
           {!expanded && item.content && (
             <p className="mt-1 line-clamp-1 text-xs text-gray-400">
               {item.content.replace(/[#\*`_~>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 80)}

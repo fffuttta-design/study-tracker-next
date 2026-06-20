@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, use, useEffect, useCallback, useState, useRef } from 'react';
+import { Fragment, use, useEffect, useCallback, useMemo, useState, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -282,6 +282,47 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
     }
   }, [activeChapterId, page?.id, page?.type]);
 
+  // ── ページ（ブックは章）まるごとを復習に登録 ─────────────────────────
+  // ブックで章を開いているときは「その章」を、それ以外はページ全体を対象にする
+  const reviewTarget = useMemo(() => {
+    if (page?.type === 'book' && activeChapterId && activeChapterId !== TOC_TAB_ID) {
+      const ch = bookChapters.find((c) => c.id === activeChapterId);
+      return { chapterId: activeChapterId, chapterTitle: ch?.title || '' };
+    }
+    return { chapterId: undefined as string | undefined, chapterTitle: undefined as string | undefined };
+  }, [page?.type, activeChapterId, bookChapters]);
+
+  // 既にこのページ（同じ章）が「ページ全体」で復習登録済みか
+  const alreadyRegistered = useMemo(() => {
+    if (!page) return false;
+    return learningItems.some((it) => it.isPageReview && it.notionPageId === page.id
+      && (it.chapterId || '') === (reviewTarget.chapterId || ''));
+  }, [learningItems, page, reviewTarget]);
+
+  const registerPageReview = useCallback(async () => {
+    if (!user || !page) return;
+    if (alreadyRegistered) {
+      if (!window.confirm('このページは既に復習登録されています。新しく登録しますか？')) return;
+    }
+    const crumbs = buildBreadcrumbs(pages, page.id);
+    const path = crumbs.map((p) => p.title || 'Untitled').join(' / ');
+    const isBookChapter = !!reviewTarget.chapterId;
+    const title = isBookChapter
+      ? `${page.title || 'Untitled'} / ${reviewTarget.chapterTitle || '章'}`
+      : (page.title || 'Untitled');
+    const data: Parameters<typeof addLearning>[1] = {
+      dateKey: localDateKey(),
+      title,
+      content: '',
+      sortOrder: 0,
+      notionPageId: page.id,
+      notionPagePath: path,
+      isPageReview: true,
+    };
+    if (reviewTarget.chapterId) { data.chapterId = reviewTarget.chapterId; data.chapterTitle = reviewTarget.chapterTitle; }
+    await addLearning(user.uid, data);
+  }, [user, page, pages, alreadyRegistered, reviewTarget, addLearning]);
+
   // アイコンピッカー / 設定パネルの外クリックで閉じる
   useEffect(() => {
     if (!iconPickerOpen && !settingsOpen) return;
@@ -546,6 +587,18 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
           >
             📚 記録
           </button>
+          {/* ページ（ブックは現在の章）まるごとを復習に登録 */}
+          {page.type !== 'database' && (
+            <button
+              onClick={registerPageReview}
+              className={`rounded-lg border px-3 py-1 text-xs font-medium transition ${alreadyRegistered
+                ? 'border-green-300 bg-green-50 text-green-600 hover:bg-green-100'
+                : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+              title={reviewTarget.chapterId ? 'この章まるごとを復習に登録' : 'このページまるごとを復習に登録'}
+            >
+              {alreadyRegistered ? '✓ 復習登録済み' : '🔁 ページを復習'}
+            </button>
+          )}
           <button
             onClick={() => setHistoryOpen(true)}
             className="rounded-lg border border-gray-200 px-3 py-1 text-xs font-medium text-gray-500 hover:bg-gray-50"
