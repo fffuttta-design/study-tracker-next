@@ -907,6 +907,7 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-06-20 | （次回配信） | 新機能：**ページ内 検索＆置換（Ctrl+R）**。Ctrl/Cmd+R でエディタ右上に検索置換バーを表示（Electron/ブラウザのリロードは preventDefault で抑止）。検索（大小無視・件数表示・↑↓/Enter/Shift+Enterで前後移動・該当を選択しスクロール）、置換／すべて置換（末尾→先頭で位置ズレ防止・空欄置換＝削除）。NotionEditor.tsx（getMatches/selectMatch/replaceCurrent/replaceAll） |
 | 2026-06-20 | （次回配信） | 新機能：**既存ページへのショートカット（ページリンク）挿入**。スラッシュ `/ページリンク` で既存ページ検索ピッカー（更新日時順・自分自身/DB除外）を開き、選ぶと本文に pageLink ブロックを挿入。クリックで大元ページへ遷移（本体は別の場所のまま、呼び出し口だけ配置）。NotionEditor.tsx（SlashCommand.openPageLinkPicker / insertPageShortcut / ピッカーポータル） |
 | 2026-06-20 | （次回配信） | 新機能：**見出しごとのうっすら区切り線**。H1/H2 の上端に淡い線（H1=#ececec・H2=#f1f1f1）を引き、直前セクションの終わりを判別しやすくした。本文先頭の見出しは線なし。表示のみ。editor.css |
 | 2026-06-20 | （次回配信） | 新機能：テーブルの**枠線スタイル切替**。ツールバー（テーブル内）に「枠線:標準/くっきり/枠なし」ボタンを追加し3段階で切替。table 要素に borderStyle 属性（data-border）を持たせ CSS で出し分け（strong=1.5px #6b7280／none=透明／標準=従来の薄グレー）。CustomTable / editor.css / NotionEditor.tsx |

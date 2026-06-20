@@ -7,6 +7,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotionPageStore, WORKSPACE_ID, addPageLinkToContent, type PageHistorySnapshot } from '@/stores/notionPageStore';
 import { useSettingsStore, type NotionBlockOffsets, DEFAULT_BLOCK_OFFSETS } from '@/stores/settingsStore';
+import { useLearningStore } from '@/stores/learningStore';
+import { localDateKey } from '@study-tracker/core';
 
 import { type NotionPage, type BookChapter, parseBookChapters, serializeBookChapters, createBookChapter } from '@study-tracker/core';
 import { chapterLabel, numberHeadings, type BookChapterFormat } from '@/lib/bookNumbering';
@@ -182,6 +184,8 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
   const { id } = use(params);
   const { user } = useAuthStore();
   const { pages, loading, update, add, remove, saveHistory, loadPageHistory } = useNotionPageStore();
+  const learningItems = useLearningStore((s) => s.items);
+  const addLearning = useLearningStore((s) => s.add);
   const router = useRouter();
   const searchParams = useSearchParams();
   const highlightText = searchParams.get('hl') ?? undefined;
@@ -258,6 +262,9 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
     const chapters = parseBookChapters(page.content);
     setBookChapters(chapters);
     setActiveChapterId((prev) => {
+      // 0) 復習リンク等で ?chapter= 指定があればそれを優先（その章を開く）
+      const wanted = searchParams.get('chapter');
+      if (wanted && chapters.find((c) => c.id === wanted)) return wanted;
       // 1) 現在の選択が残っていればそのまま 2) このブックで最後に見た章 3) 第1章
       if (chapters.find((c) => c.id === prev)) return prev;
       const remembered = lastChapterByBook.get(page.id);

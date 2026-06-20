@@ -29,6 +29,11 @@ export interface LearningItem {
   createdAt?: string; // ISO 8601
   notionPageId?: string;
   notionPagePath?: string; // ページ階層 (例: "事業 / ビジネス戦闘力")
+  // ページ（またはブックの章）まるごとを復習範囲として登録したアイテムの目印。
+  // テキスト選択の記録と区別し、復習リストで「ページ全体」バッジを出す/開く際にハイライトしないために使う。
+  isPageReview?: boolean;
+  chapterId?: string;    // ブックの章単位で登録したときの章ID（無ければページ全体）
+  chapterTitle?: string; // 章のタイトル（表示用）
 }
 
 export function getNextStageIndex(item: LearningItem): number {

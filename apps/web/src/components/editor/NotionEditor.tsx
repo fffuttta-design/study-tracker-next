@@ -1807,6 +1807,14 @@ export function NotionEditor({
   const [pasteLoading, setPasteLoading] = useState(false);
   const [recordText, setRecordText] = useState<string | null>(null);
 
+  // ページ内 検索＆置換（Ctrl+R）
+  const [replaceOpen, setReplaceOpen] = useState(false);
+  const [findText, setFindText] = useState('');
+  const [replaceWith, setReplaceWith] = useState('');
+  const [matchInfo, setMatchInfo] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
+  const replaceIndexRef = useRef(0);
+  const findInputRef = useRef<HTMLInputElement>(null);
+
   // Annotation (Tip) 関連
   const [annotationDialogPos, setAnnotationDialogPos] = useState<{ x: number; y: number } | null>(null);
   const [annotationDraft, setAnnotationDraft] = useState('');
@@ -2000,6 +2008,81 @@ export function NotionEditor({
       attrs: { href: `/notion-plus/${p.id}`, title: p.title || 'Untitled', icon: p.icon || '📄' },
     }).run();
   }, [editor]);
+
+  // ── ページ内 検索＆置換（Ctrl+R）─────────────────────────────────────
+  // 本文テキストから findText の一致箇所（{from,to}）を全部集める（大文字小文字を無視）
+  const getMatches = useCallback((needle: string) => {
+    const res: { from: number; to: number }[] = [];
+    if (!editor || !needle) return res;
+    const lower = needle.toLowerCase();
+    editor.state.doc.descendants((node, pos) => {
+      if (!node.isText || !node.text) return;
+      const text = node.text.toLowerCase();
+      let idx = text.indexOf(lower);
+      while (idx !== -1) {
+        res.push({ from: pos + idx, to: pos + idx + needle.length });
+        idx = text.indexOf(lower, idx + Math.max(1, needle.length));
+      }
+    });
+    return res;
+  }, [editor]);
+
+  // index 番目の一致を選択してスクロール（負/超過は巡回）
+  const selectMatch = useCallback((index: number) => {
+    if (!editor) return;
+    const matches = getMatches(findText);
+    if (matches.length === 0) { setMatchInfo({ current: 0, total: 0 }); return; }
+    const i = ((index % matches.length) + matches.length) % matches.length;
+    replaceIndexRef.current = i;
+    const m = matches[i];
+    editor.chain().setTextSelection({ from: m.from, to: m.to }).scrollIntoView().run();
+    setMatchInfo({ current: i + 1, total: matches.length });
+  }, [editor, findText, getMatches]);
+
+  const replaceCurrent = useCallback(() => {
+    if (!editor || !findText) return;
+    const matches = getMatches(findText);
+    if (matches.length === 0) return;
+    const i = replaceIndexRef.current % matches.length;
+    const m = matches[i];
+    editor.chain().focus().insertContentAt({ from: m.from, to: m.to }, replaceWith).run();
+    // 置換後に同じ位置（＝次の一致）を選び直す
+    setTimeout(() => selectMatch(replaceIndexRef.current), 0);
+  }, [editor, findText, replaceWith, getMatches, selectMatch]);
+
+  const replaceAll = useCallback(() => {
+    if (!editor || !findText) return;
+    const matches = getMatches(findText);
+    if (matches.length === 0) return;
+    let tr = editor.state.tr;
+    // 末尾→先頭の順に置換すると、前方の位置がズレず安全
+    for (let k = matches.length - 1; k >= 0; k--) {
+      tr = tr.insertText(replaceWith, matches[k].from, matches[k].to);
+    }
+    editor.view.dispatch(tr);
+    setMatchInfo({ current: 0, total: 0 });
+    replaceIndexRef.current = 0;
+  }, [editor, findText, replaceWith, getMatches]);
+
+  // findText が変わるたび先頭の一致へ
+  useEffect(() => {
+    if (!replaceOpen) return;
+    if (findText) selectMatch(0); else setMatchInfo({ current: 0, total: 0 });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [findText, replaceOpen]);
+
+  // Ctrl+R（Cmd+R）で検索置換バーを開く。Electron/ブラウザのリロードは preventDefault で抑止。
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'r' || e.key === 'R')) {
+        e.preventDefault();
+        setReplaceOpen(true);
+        setTimeout(() => findInputRef.current?.focus(), 0);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   useEffect(() => {
     if (!slashOpen) return;
@@ -2676,6 +2759,46 @@ export function NotionEditor({
             >+</button>
           </div>
         </>
+      )}
+
+      {/* ページ内 検索＆置換バー（Ctrl+R） */}
+      {replaceOpen && (
+        <div className="fixed right-6 top-20 z-[1100] w-[320px] rounded-xl border border-gray-200 bg-white p-2.5 shadow-2xl">
+          <div className="mb-1.5 flex items-center justify-between">
+            <p className="text-xs font-semibold text-gray-600">検索＆置換</p>
+            <button onClick={() => setReplaceOpen(false)} className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600" title="閉じる (Esc)">✕</button>
+          </div>
+          <div className="flex items-center gap-1">
+            <input
+              ref={findInputRef}
+              value={findText}
+              onChange={(e) => setFindText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); selectMatch(replaceIndexRef.current + (e.shiftKey ? -1 : 1)); }
+                if (e.key === 'Escape') { e.preventDefault(); setReplaceOpen(false); }
+              }}
+              placeholder="検索する文字"
+              className="min-w-0 flex-1 rounded border border-gray-200 px-2 py-1 text-xs outline-none focus:border-brand-400"
+            />
+            <span className="w-14 shrink-0 text-center text-[11px] text-gray-400">{matchInfo.total > 0 ? `${matchInfo.current}/${matchInfo.total}` : '0件'}</span>
+          </div>
+          <div className="mt-1 flex items-center gap-1">
+            <input
+              value={replaceWith}
+              onChange={(e) => setReplaceWith(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); setReplaceOpen(false); } }}
+              placeholder="置換する文字（空＝削除）"
+              className="min-w-0 flex-1 rounded border border-gray-200 px-2 py-1 text-xs outline-none focus:border-brand-400"
+            />
+          </div>
+          <div className="mt-1.5 flex items-center gap-1">
+            <button onClick={() => selectMatch(replaceIndexRef.current - 1)} className="rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50" title="前へ">↑</button>
+            <button onClick={() => selectMatch(replaceIndexRef.current + 1)} className="rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50" title="次へ">↓</button>
+            <div className="flex-1" />
+            <button onClick={replaceCurrent} disabled={matchInfo.total === 0} className="rounded bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-40">置換</button>
+            <button onClick={replaceAll} disabled={matchInfo.total === 0} className="rounded bg-brand-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-600 disabled:opacity-40">すべて置換</button>
+          </div>
+        </div>
       )}
 
       {/* URL ペーストポップアップ */}
