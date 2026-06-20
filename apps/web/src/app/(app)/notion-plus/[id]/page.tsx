@@ -570,42 +570,31 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
                     左寄せ
                   </button>
                 </div>
-                {/* 行間設定 */}
+                {/* 行間設定（スライダーでドラッグ即反映＝手で触って微調整） */}
                 <div className="mt-3 border-t border-gray-100 pt-3">
-                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">Enter 行間</p>
-                  <div className="flex gap-1">
-                    {([
-                      { label: '狭', v: 1.3 },
-                      { label: '標準', v: 1.55 },
-                      { label: '広', v: 1.7 },
-                      { label: '特広', v: 2.0 },
-                    ] as const).map(({ label, v }) => (
-                      <button
-                        key={v}
-                        onClick={() => setNotionPlusParaLineHeight(v)}
-                        className={`flex-1 rounded border py-1 text-[11px] transition ${notionPlusParaLineHeight === v ? 'border-brand-400 bg-brand-50 text-brand-600 font-medium' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
-                      >
-                        {label}
-                      </button>
-                    ))}
+                  <div className="mb-2">
+                    <div className="mb-1 flex items-center justify-between">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Enter 行間</p>
+                      <span className="text-[11px] tabular-nums text-gray-500">{notionPlusParaLineHeight.toFixed(2)}</span>
+                    </div>
+                    <input
+                      type="range" min={1.0} max={2.2} step={0.05}
+                      value={notionPlusParaLineHeight}
+                      onChange={(e) => setNotionPlusParaLineHeight(parseFloat(e.target.value))}
+                      className="w-full accent-brand-500"
+                    />
                   </div>
-                  <p className="mb-1.5 mt-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Shift+Enter 行間</p>
-                  <div className="flex gap-1">
-                    {([
-                      { label: '詰め', v: 1.0 },
-                      { label: '標準', v: 1.15 },
-                      { label: '普通', v: 1.35 },
-                      { label: '広', v: 1.7 },
-                      { label: '特広', v: 2.0 },
-                    ] as const).map(({ label, v }) => (
-                      <button
-                        key={v}
-                        onClick={() => setNotionPlusSoftLineHeight(v)}
-                        className={`flex-1 rounded border py-1 text-[11px] transition ${notionPlusSoftLineHeight === v ? 'border-brand-400 bg-brand-50 text-brand-600 font-medium' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
-                      >
-                        {label}
-                      </button>
-                    ))}
+                  <div>
+                    <div className="mb-1 flex items-center justify-between">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Shift+Enter 行間</p>
+                      <span className="text-[11px] tabular-nums text-gray-500">{notionPlusSoftLineHeight.toFixed(2)}</span>
+                    </div>
+                    <input
+                      type="range" min={1.0} max={2.2} step={0.05}
+                      value={notionPlusSoftLineHeight}
+                      onChange={(e) => setNotionPlusSoftLineHeight(parseFloat(e.target.value))}
+                      className="w-full accent-brand-500"
+                    />
                   </div>
                 </div>
                 {/* ブック: 章番号の書式＆本文見出し番号（book のときだけ表示） */}

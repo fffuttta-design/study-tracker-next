@@ -1586,6 +1586,16 @@ const BG_COLORS = [
   { label: '赤',         value: '#FEE2E2' },
 ];
 
+// コードブロック内でも太字などのインラインマークを使えるようにする
+// （ProseMirror の codeBlock は既定 marks:'' で不可。'_' で全マーク許可。表示のみ・他ノードには影響しない）
+const CodeBlockAllowMarks = Extension.create({
+  name: 'codeBlockAllowMarks',
+  extendNodeSchema(extension) {
+    if (extension.name === 'codeBlock') return { marks: '_' };
+    return {};
+  },
+});
+
 // ── 学習記録ダイアログ ────────────────────────────────────────────────
 
 function RecordDialog({ initialContent, notionPageId, notionPagePath, onClose }: {
@@ -1793,6 +1803,7 @@ export function NotionEditor({
       PageTableNode,
       DragHandleExtension,
       HeadingOutlineIndent,
+      CodeBlockAllowMarks,
       MarkdownBulletShortcut,
       MarkdownCodeBlockShortcut,
       LineBoldShortcut,

@@ -719,7 +719,7 @@ function NotionPageSidebar({ user }: { user: User }) {
         {!searchResults && (
           <>
             {/* ★ お気に入り（子ページ・ブックも含め、★を付けた全ページをフラット表示） */}
-            <p className="mt-1 px-3 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">★ お気に入り</p>
+            <p className="mx-1 mb-1 mt-1 rounded bg-amber-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-600">★ お気に入り</p>
             {!loading && favorites.length === 0 ? (
               <p className="px-3 py-2 text-center text-[11px] text-gray-400">
                 ★ をつけたノートが<br />ここに表示されます
@@ -754,8 +754,8 @@ function NotionPageSidebar({ user }: { user: User }) {
 
             {/* ページ一覧（全ルートページ・フラット表示・D&D並び替え可） */}
             {!loading && allRootPages.length > 0 && (
-              <div className="mt-3 border-t border-gray-100 pt-2">
-                <p className="px-3 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">ページ一覧</p>
+              <div className="mt-4 border-t border-gray-200 pt-3">
+                <p className="mx-1 mb-1 rounded bg-gray-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-gray-500">📄 ページ一覧</p>
                 <RootPageList
                   roots={allRootPages}
                   pages={pages}

@@ -907,6 +907,9 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-06-20 | （次回配信） | 行間設定をプリセットボタン→**スライダー**化（Enter/Shift+Enter とも 1.00〜2.20・0.05刻み・現在値を数値表示）。ドラッグで本文に即反映＝手で触って微調整→確定できる。場所=NotionPlus ⚙設定。notion-plus/[id]/page.tsx |
+| 2026-06-20 | （次回配信） | サイドバーの「★お気に入り」と「📄ページ一覧」の境目を明確化。各セクション見出しを色付きバー（お気に入り=amber-50/ページ一覧=gray-100）にし、区切り線を border-gray-200・余白拡大で強調。Sidebar.tsx |
+| 2026-06-20 | （次回配信） | コードブロック内でも太字などインラインマークを使えるように（`extendNodeSchema` で codeBlock の marks を '_'＝全許可。既定は marks:'' で不可だった）。新拡張 CodeBlockAllowMarks。NotionEditor.tsx |
 | 2026-06-20 | （次回配信） | 新機能：サイドバーのノートを**ダブルクリックで別ウィンドウ表示**。Web=新規タブ、Electron=`setWindowOpenHandler` に同一オリジン(APP_URL)分岐を追加し新しいアプリ窓として開く（従来は内部URLも openExternal で外部ブラウザ送りだった）。ツリー/検索結果/お気に入りの各ノートリンクに onDoubleClick → openNoteInNewWindow。Sidebar.tsx / electron/main.js |
 | 2026-06-20 | （次回配信） | Shift+Enter 行間の選択肢を拡張（最大1.35→広1.7/特広2.0を追加）。詰まりすぎて使いづらい問題に対応。notion-plus/[id]/page.tsx（設定の「Shift+Enter 行間」） |
 | 2026-06-17 | （次回配信） | バグ修正：ブックの固定書式バーがスクロールで流れて消える問題を修正。エディタ外枠(flex-1 overflow-y-auto)に `min-h-0` が無く、flexの min-height:auto で中身ぶん伸びて外側<main>がスクロール→sticky基準が非スクロール要素になり固定が効かなかった。stickyToolbar時に min-h-0 を付与しエディタ自身をスクロール容器化。NotionEditor.tsx |
