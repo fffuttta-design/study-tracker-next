@@ -907,6 +907,8 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-06-20 | （次回配信） | 新機能：サイドバーのノートを**ダブルクリックで別ウィンドウ表示**。Web=新規タブ、Electron=`setWindowOpenHandler` に同一オリジン(APP_URL)分岐を追加し新しいアプリ窓として開く（従来は内部URLも openExternal で外部ブラウザ送りだった）。ツリー/検索結果/お気に入りの各ノートリンクに onDoubleClick → openNoteInNewWindow。Sidebar.tsx / electron/main.js |
+| 2026-06-20 | （次回配信） | Shift+Enter 行間の選択肢を拡張（最大1.35→広1.7/特広2.0を追加）。詰まりすぎて使いづらい問題に対応。notion-plus/[id]/page.tsx（設定の「Shift+Enter 行間」） |
 | 2026-06-17 | （次回配信） | バグ修正：ブックの固定書式バーがスクロールで流れて消える問題を修正。エディタ外枠(flex-1 overflow-y-auto)に `min-h-0` が無く、flexの min-height:auto で中身ぶん伸びて外側<main>がスクロール→sticky基準が非スクロール要素になり固定が効かなかった。stickyToolbar時に min-h-0 を付与しエディタ自身をスクロール容器化。NotionEditor.tsx |
 | 2026-06-17 | （次回配信） | バグ修正：右クリックメニューの文字色/背景色だけ色をベタ書きしておりツールバー・コールアウト・セクションの正規パレットと食い違っていた（例: 黄の背景が右クリック#FDE68A vs 正規#FEF9CD）。右クリックを `TEXT_COLORS`/`BG_COLORS` に統一し見本も実際の適用色で表示。NotionEditor.tsx |
 | 2026-06-17 | （次回配信） | 新機能「見出しアウトライン・インデント」：見出しの配下の本文を見出しレベルに応じて段階字下げ（H1配下=1段/H2自身=1段・配下=2段/…のカスケード、1段=1.5rem）。ProseMirrイデコレーション（padding-leftインライン）で表示のみ・content非破壊。新拡張 HeadingOutlineIndent.ts を全NotionEditorに追加。切り戻しはextensionsから外すだけ。NotionEditor.tsx |

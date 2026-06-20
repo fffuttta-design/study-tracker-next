@@ -16,6 +16,13 @@ interface SidebarProps {
   user: User;
 }
 
+// ノートを別ウィンドウで開く（ダブルクリック用）。
+// Web=新規タブ／Electron=main.js の setWindowOpenHandler が同一オリジンURLを新しいアプリ窓として開く。
+function openNoteInNewWindow(pageId: string) {
+  if (typeof window === 'undefined') return;
+  window.open(`/notion-plus/${pageId}`, '_blank');
+}
+
 const NAV = [
   { href: '/learning', label: '学習リスト', icon: '📚' },
   { href: '/notion-plus', label: 'NotionPlus', icon: '📝' },
@@ -269,6 +276,7 @@ function PageTreeEntry({
       <Link
         href={`/notion-plus/${page.id}`}
         onContextMenu={(e) => { e.preventDefault(); onCtxMenu(e, page); }}
+        onDoubleClick={(e) => { e.preventDefault(); openNoteInNewWindow(page.id); }}
         className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors ${
           isActive
             ? 'bg-white font-semibold text-gray-900 shadow-sm'
@@ -688,6 +696,7 @@ function NotionPageSidebar({ user }: { user: User }) {
                     href={`/notion-plus/${p.id}`}
                     onClick={() => setSearchQuery('')}
                     onContextMenu={(e) => { e.preventDefault(); handleCtxMenu(e, p); }}
+                    onDoubleClick={(e) => { e.preventDefault(); openNoteInNewWindow(p.id); }}
                     className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors ${
                       p.id === currentId
                         ? 'bg-white font-semibold text-gray-900 shadow-sm'
@@ -724,6 +733,7 @@ function NotionPageSidebar({ user }: { user: User }) {
                       key={p.id}
                       href={`/notion-plus/${p.id}`}
                       onContextMenu={(e) => { e.preventDefault(); handleCtxMenu(e, p); }}
+                      onDoubleClick={(e) => { e.preventDefault(); openNoteInNewWindow(p.id); }}
                       className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors ${
                         p.id === currentId
                           ? 'bg-white font-semibold text-gray-900 shadow-sm'

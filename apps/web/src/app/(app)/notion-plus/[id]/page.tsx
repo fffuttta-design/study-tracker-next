@@ -595,6 +595,8 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
                       { label: '詰め', v: 1.0 },
                       { label: '標準', v: 1.15 },
                       { label: '普通', v: 1.35 },
+                      { label: '広', v: 1.7 },
+                      { label: '特広', v: 2.0 },
                     ] as const).map(({ label, v }) => (
                       <button
                         key={v}

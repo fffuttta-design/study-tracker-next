@@ -279,6 +279,28 @@ function createWindow() {
       return { action: 'allow', overrideBrowserWindowOptions: authWindowOptions }
     }
 
+    // 同一オリジン（アプリ内ルート）は新しいアプリウィンドウで開く（ノートを別窓表示）。
+    // 例: ノートをダブルクリック → window.open('/notion-plus/<id>') → ここで新しい窓として allow。
+    if (popupUrl.startsWith(APP_URL)) {
+      debugLog(`[setWindowOpenHandler] → allow (in-app new window)`)
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          width: 1000,
+          height: 800,
+          minWidth: 700,
+          minHeight: 500,
+          title: '学習トラッカー',
+          icon: getTrayIconPath() ?? undefined,
+          webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            preload: preloadPath,
+          },
+        },
+      }
+    }
+
     // http/https の外部リンクのみブラウザで開く。
     // 空URL・不明プロトコルを openExternal に渡すとコンソールウィンドウが開くため除外。
     if (popupUrl.startsWith('http://') || popupUrl.startsWith('https://')) {
