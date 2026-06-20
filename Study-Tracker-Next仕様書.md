@@ -907,6 +907,8 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-06-17 | （次回配信） | バグ修正：ブックの固定書式バーがスクロールで流れて消える問題を修正。エディタ外枠(flex-1 overflow-y-auto)に `min-h-0` が無く、flexの min-height:auto で中身ぶん伸びて外側<main>がスクロール→sticky基準が非スクロール要素になり固定が効かなかった。stickyToolbar時に min-h-0 を付与しエディタ自身をスクロール容器化。NotionEditor.tsx |
+| 2026-06-17 | （次回配信） | バグ修正：右クリックメニューの文字色/背景色だけ色をベタ書きしておりツールバー・コールアウト・セクションの正規パレットと食い違っていた（例: 黄の背景が右クリック#FDE68A vs 正規#FEF9CD）。右クリックを `TEXT_COLORS`/`BG_COLORS` に統一し見本も実際の適用色で表示。NotionEditor.tsx |
 | 2026-06-17 | （次回配信） | 新機能「見出しアウトライン・インデント」：見出しの配下の本文を見出しレベルに応じて段階字下げ（H1配下=1段/H2自身=1段・配下=2段/…のカスケード、1段=1.5rem）。ProseMirrイデコレーション（padding-leftインライン）で表示のみ・content非破壊。新拡張 HeadingOutlineIndent.ts を全NotionEditorに追加。切り戻しはextensionsから外すだけ。NotionEditor.tsx |
 | 2026-06-17 | （次回配信） | 箇条書きのマーカー(●○▪)と文字の縦位置ズレを修正。マーカー(::before)の行高が固定値(1.3/1.85)で本文の可変行高(--para-lh)と合っていなかったのを、`calc(var(--para-lh)/フォント倍率)` で本文と同じ行ボックスに揃えた。設定の余白調整では直らなかった縦ズレの根治。editor.css |
 | 2026-06-17 | （次回配信） | ブックのチャプタータイトル表示を強化：本文H1(1.875rem)より小さかった(text-2xl)のを text-4xl(2.25rem)へ拡大し、淡い紫の背景パネル(bg-brand-50)＋左アクセントバー＋濃紫文字(text-brand-700)で目立たせた。※既存アクセントバーは未定義色 brand-400 で実質無色だったため brand-500 に修正。NotionEditor.tsx |

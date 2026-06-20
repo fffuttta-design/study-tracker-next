@@ -2243,7 +2243,9 @@ export function NotionEditor({
   }, [editor, numberHeadings]);
 
   // ブック（固定書式バー）は上の余白を詰める＝タブ直下の無駄な空白帯を作らない。通常ページは従来どおり py-8
-  const outerClass = `relative flex flex-1 overflow-y-auto ${stickyToolbar ? 'pb-8 pt-2' : 'py-8'} ${notionPlusLayout === 'center' ? 'justify-center px-6' : 'pl-16 pr-8'}`;
+  // min-h-0: flexアイテムの既定 min-height:auto を無効化し、この枠自身を正しくスクロール容器にする
+  //   （これが無いと中身ぶん伸びて外側<main>がスクロールし、書式バーの sticky 固定が効かない）
+  const outerClass = `relative flex flex-1 overflow-y-auto ${stickyToolbar ? 'min-h-0 pb-8 pt-2' : 'py-8'} ${notionPlusLayout === 'center' ? 'justify-center px-6' : 'pl-16 pr-8'}`;
 
   return (
     <EditorUidContext.Provider value={user?.uid ?? ''}>
@@ -2380,51 +2382,37 @@ export function NotionEditor({
             <div className="border-b border-gray-100 px-2 pt-1.5 pb-1.5">
               <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">文字色</p>
               <div className="flex flex-wrap gap-1">
-                {[
-                  { color: null,      bg: 'bg-gray-800', title: 'デフォルト' },
-                  { color: '#EF4444', bg: 'bg-red-500',    title: '赤' },
-                  { color: '#F97316', bg: 'bg-orange-500', title: 'オレンジ' },
-                  { color: '#EAB308', bg: 'bg-yellow-500', title: '黄' },
-                  { color: '#22C55E', bg: 'bg-green-500',  title: '緑' },
-                  { color: '#3B82F6', bg: 'bg-blue-500',   title: '青' },
-                  { color: '#8B5CF6', bg: 'bg-purple-500', title: '紫' },
-                  { color: '#6B7280', bg: 'bg-gray-500',   title: 'グレー' },
-                ].map(({ color, bg, title }) => (
+                {/* ツールバーと同じ正規パレット(TEXT_COLORS)。見本は実際の適用色で表示し色ズレをなくす */}
+                {TEXT_COLORS.map((c) => (
                   <button
-                    key={title}
-                    title={title}
+                    key={c.label}
+                    title={c.label}
                     onMouseDown={(e) => {
                       e.preventDefault();
-                      if (color) editor?.chain().focus().setColor(color).run();
+                      if (c.value) editor?.chain().focus().setColor(c.value).run();
                       else editor?.chain().focus().unsetColor().run();
                       setCtxMenu(null);
                     }}
-                    className={`h-5 w-5 rounded-full ${bg} ring-offset-1 hover:ring-2 hover:ring-gray-400`}
+                    className="h-5 w-5 rounded-full ring-offset-1 hover:ring-2 hover:ring-gray-400"
+                    style={{ background: c.value || '#1f2937', border: c.value ? undefined : '1px solid #d1d5db' }}
                   />
                 ))}
               </div>
               <p className="mb-1 mt-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">背景色</p>
               <div className="flex flex-wrap gap-1">
-                {[
-                  { color: null,      bg: 'bg-white border border-gray-300', title: 'なし' },
-                  { color: '#FDE68A', bg: 'bg-yellow-200', title: '黄' },
-                  { color: '#BBF7D0', bg: 'bg-green-200',  title: '緑' },
-                  { color: '#BFDBFE', bg: 'bg-blue-200',   title: '青' },
-                  { color: '#FECACA', bg: 'bg-red-200',    title: '赤' },
-                  { color: '#DDD6FE', bg: 'bg-purple-200', title: '紫' },
-                  { color: '#FED7AA', bg: 'bg-orange-200', title: 'オレンジ' },
-                  { color: '#F3F4F6', bg: 'bg-gray-200',   title: 'グレー' },
-                ].map(({ color, bg, title }) => (
+                {/* ツールバー・コールアウト・セクションと同じ正規パレット(BG_COLORS)。黄=#FEF9CD で統一 */}
+                {BG_COLORS.map((c) => (
                   <button
-                    key={title}
-                    title={title}
+                    key={c.label}
+                    title={c.label}
                     onMouseDown={(e) => {
                       e.preventDefault();
-                      if (color) editor?.chain().focus().setHighlight({ color }).run();
+                      if (c.value) editor?.chain().focus().setHighlight({ color: c.value }).run();
                       else editor?.chain().focus().unsetHighlight().run();
                       setCtxMenu(null);
                     }}
-                    className={`h-5 w-5 rounded-full ${bg} ring-offset-1 hover:ring-2 hover:ring-gray-400`}
+                    className="h-5 w-5 rounded-full ring-offset-1 hover:ring-2 hover:ring-gray-400"
+                    style={{ background: c.value || '#ffffff', border: c.value ? '1px solid #e5e7eb' : '1px solid #d1d5db' }}
                   />
                 ))}
               </div>
