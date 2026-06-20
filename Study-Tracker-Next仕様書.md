@@ -907,6 +907,10 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-06-20 | （次回配信） | バグ修正：スラッシュコマンドメニューで矢印キー移動時にスクロールが追従せず選択項目が画面外に出る問題を修正。選択中ボタンに ref を付け slashIndex 変化時に scrollIntoView({block:'nearest'})。NotionEditor.tsx |
+| 2026-06-20 | （次回配信） | コードブロック内で太字などのインラインマークを有効化（正攻法）。StarterKit同梱の codeBlock(marks:'') では `extendNodeSchema` で上書き不可だったため、`@tiptap/extension-code-block@3.23.4` を導入し `StarterKit codeBlock:false`＋`CodeBlock.extend({marks:'_'})` に差し替え。※`#`等のmarkdownショートカットはコード=リテラルのため意図的に無効のまま。NotionEditor.tsx |
+| 2026-06-20 | （次回配信） | ブックが「別ページへ行って戻ると必ず第1章」に戻る問題を改善。ブックIDごとに最後に見た章を記憶（モジュールMap lastChapterByBook）し、再表示時に復元（セッション中）。notion-plus/[id]/page.tsx |
+| 2026-06-20 | （次回配信） | 看板（ページテーブル）カードを右クリック→「📚 ブックに変換／📄 ノートに変換」を追加（本文ページリンクと同等。DBカードは変換不可表示）。NotionEditor.tsx PageTableView |
 | 2026-06-20 | （次回配信） | 行間設定をプリセットボタン→**スライダー**化（Enter/Shift+Enter とも 1.00〜2.20・0.05刻み・現在値を数値表示）。ドラッグで本文に即反映＝手で触って微調整→確定できる。場所=NotionPlus ⚙設定。notion-plus/[id]/page.tsx |
 | 2026-06-20 | （次回配信） | サイドバーの「★お気に入り」と「📄ページ一覧」の境目を明確化。各セクション見出しを色付きバー（お気に入り=amber-50/ページ一覧=gray-100）にし、区切り線を border-gray-200・余白拡大で強調。Sidebar.tsx |
 | 2026-06-20 | （次回配信） | コードブロック内でも太字などインラインマークを使えるように（`extendNodeSchema` で codeBlock の marks を '_'＝全許可。既定は marks:'' で不可だった）。新拡張 CodeBlockAllowMarks。NotionEditor.tsx |

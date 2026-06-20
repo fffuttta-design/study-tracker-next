@@ -98,6 +98,9 @@ async function reconcileChildrenParent(
   }
 }
 
+// ブックごとに「最後に開いていた章」を記憶（セッション中・別ページへ行って戻っても章を保てる）
+const lastChapterByBook = new Map<string, string>();
+
 const ICON_PRESETS = [
   // 顔・感情
   '😀','😃','😄','😁','😆','😅','🤣','😂','🙂','😉',
@@ -255,12 +258,22 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
     const chapters = parseBookChapters(page.content);
     setBookChapters(chapters);
     setActiveChapterId((prev) => {
-      const stillExists = chapters.find((c) => c.id === prev);
-      return stillExists ? prev : (chapters[0]?.id ?? '');
+      // 1) 現在の選択が残っていればそのまま 2) このブックで最後に見た章 3) 第1章
+      if (chapters.find((c) => c.id === prev)) return prev;
+      const remembered = lastChapterByBook.get(page.id);
+      if (remembered && chapters.find((c) => c.id === remembered)) return remembered;
+      return chapters[0]?.id ?? '';
     });
   // page.id が変わったときだけ再初期化（content変化での上書きは不要）
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page?.id, page?.type]);
+
+  // 章を切り替えたら「このブックで最後に見た章」として記憶（目次タブは除く）
+  useEffect(() => {
+    if (page?.type === 'book' && activeChapterId && activeChapterId !== TOC_TAB_ID) {
+      lastChapterByBook.set(page.id, activeChapterId);
+    }
+  }, [activeChapterId, page?.id, page?.type]);
 
   // アイコンピッカー / 設定パネルの外クリックで閉じる
   useEffect(() => {

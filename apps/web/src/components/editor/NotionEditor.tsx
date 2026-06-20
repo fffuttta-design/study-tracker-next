@@ -22,6 +22,7 @@ import {
   ReactNodeViewRenderer, type NodeViewProps,
 } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import CodeBlock from '@tiptap/extension-code-block';
 import Placeholder from '@tiptap/extension-placeholder';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
@@ -962,6 +963,7 @@ function PageTableView({ node, updateAttributes, editor: ptEditor }: NodeViewPro
   const { user } = useAuthStore();
   const pages = useNotionPageStore((s) => s.pages);
   const addPage = useNotionPageStore((s) => s.add);
+  const update = useNotionPageStore((s) => s.update);
 
   const sections = useMemo(() => ptParseSections(node.attrs.sections), [node.attrs.sections]);
   const commit = useCallback((next: PtSection[]) => updateAttributes({ sections: next }), [updateAttributes]);
@@ -979,6 +981,35 @@ function PageTableView({ node, updateAttributes, editor: ptEditor }: NodeViewPro
   const [resizing, setResizing] = useState<{ s: number; c: number; w: number } | null>(null);
   const dragSrc = useRef<{ s: number; c: number; i: number } | null>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
+  // 看板カードの右クリックメニュー（ブック⇄ノート変換）
+  const [cardMenu, setCardMenu] = useState<{ pageId: string; type: string; x: number; y: number } | null>(null);
+
+  // 看板カードのリンク先ページをブックに変換（本文ページリンクの右クリックと同じ挙動）
+  const convertCardToBook = async (pageId: string) => {
+    setCardMenu(null);
+    const lp = pages.find((p) => p.id === pageId);
+    if (!user || !lp || lp.type === 'book' || lp.type === 'database') return;
+    if (!window.confirm(`「${lp.title || 'Untitled'}」をブックに変換しますか？\n現在の内容は第1章になります。`)) return;
+    const firstChapter = { ...createBookChapter(0), content: lp.content };
+    await update(user.uid, pageId, {
+      type: 'book',
+      icon: lp.icon === '📄' ? '📖' : lp.icon,
+      content: serializeBookChapters([firstChapter]),
+    });
+  };
+  // 看板カードのリンク先ブックをノートに戻す（全チャプターを1ページに結合）
+  const convertCardToNote = async (pageId: string) => {
+    setCardMenu(null);
+    const lp = pages.find((p) => p.id === pageId);
+    if (!user || !lp || lp.type !== 'book') return;
+    if (!window.confirm(`「${lp.title || 'Untitled'}」をノートに戻しますか？\n全チャプターの内容を1ページに結合します。`)) return;
+    const chapters = parseBookChapters(lp.content);
+    const merged: { type: 'doc'; content: unknown[] } = { type: 'doc', content: [] };
+    for (const ch of chapters) {
+      try { const doc = JSON.parse(ch.content) as { content?: unknown[] }; if (Array.isArray(doc?.content)) merged.content.push(...doc.content); } catch { /* ignore */ }
+    }
+    await update(user.uid, pageId, { type: 'page', content: JSON.stringify(merged) });
+  };
 
   // ホバー枠の中だと消えるので、色/セクションメニューは最前面ポータルで開く（位置をボタンから算出）
   const openColorMenu = (e: React.MouseEvent, si: number, ci: number) => {
@@ -1206,6 +1237,7 @@ function PageTableView({ node, updateAttributes, editor: ptEditor }: NodeViewPro
                           onDragEnd={() => { dragSrc.current = null; }}
                           onDragOver={(e) => { if (dragSrc.current) { e.preventDefault(); e.stopPropagation(); } }}
                           onDrop={(e) => { if (dragSrc.current) { e.preventDefault(); e.stopPropagation(); dropCard(si, ci, li); } }}
+                          onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); const pid = ptIdFromHref(lk.href); if (pid) setCardMenu({ pageId: pid, type: live?.type || 'page', x: e.clientX, y: e.clientY }); }}
                           className={`group/lk flex min-h-[34px] cursor-grab items-center gap-1.5 rounded-lg bg-white px-2.5 py-1.5 shadow-sm ring-1 ring-black/[0.04] transition hover:ring-brand-200 active:cursor-grabbing ${isCut ? 'opacity-40 ring-2 ring-brand-300' : ''}`}>
                           {/* アイコンは絵文字でも画像でも 16px 角の枠に収めて行高を一定にする（カード高さ統一） */}
                           <span className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden text-[13px] leading-none">{isImageSrc(icon)
@@ -1321,6 +1353,29 @@ function PageTableView({ node, updateAttributes, editor: ptEditor }: NodeViewPro
           document.body,
         );
       })()}
+      {/* 看板カードの右クリックメニュー（ブック⇄ノート変換） */}
+      {cardMenu && typeof document !== 'undefined' && createPortal(
+        <>
+          <div className="fixed inset-0 z-[999]" onMouseDown={() => setCardMenu(null)} />
+          <div style={{ position: 'fixed', top: cardMenu.y, left: cardMenu.x }}
+            className="z-[1000] w-44 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-2xl">
+            {cardMenu.type === 'book' ? (
+              <button onMouseDown={(e) => { e.preventDefault(); convertCardToNote(cardMenu.pageId); }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
+                📄 ノートに変換
+              </button>
+            ) : cardMenu.type === 'database' ? (
+              <div className="px-3 py-2 text-xs text-gray-400">このカードは変換できません</div>
+            ) : (
+              <button onMouseDown={(e) => { e.preventDefault(); convertCardToBook(cardMenu.pageId); }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
+                📚 ブックに変換
+              </button>
+            )}
+          </div>
+        </>,
+        document.body,
+      )}
       {/* ＋追加ピッカー: portal＋fixed で最前面（スクロール領域に切られない）*/}
       {(() => {
         if (!picker || !pickerPos || typeof document === 'undefined') return null;
@@ -1586,16 +1641,6 @@ const BG_COLORS = [
   { label: '赤',         value: '#FEE2E2' },
 ];
 
-// コードブロック内でも太字などのインラインマークを使えるようにする
-// （ProseMirror の codeBlock は既定 marks:'' で不可。'_' で全マーク許可。表示のみ・他ノードには影響しない）
-const CodeBlockAllowMarks = Extension.create({
-  name: 'codeBlockAllowMarks',
-  extendNodeSchema(extension) {
-    if (extension.name === 'codeBlock') return { marks: '_' };
-    return {};
-  },
-});
-
 // ── 学習記録ダイアログ ────────────────────────────────────────────────
 
 function RecordDialog({ initialContent, notionPageId, notionPagePath, onClose }: {
@@ -1724,6 +1769,11 @@ export function NotionEditor({
   const [slashIndex, setSlashIndex] = useState(0);
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
   const slashStartPos = useRef<number | null>(null);
+  const activeSlashItemRef = useRef<HTMLButtonElement>(null);
+  // 矢印キーで選択が移動したら、その項目をメニュー内に必ず見えるようスクロール追従させる
+  useEffect(() => {
+    if (slashOpen) activeSlashItemRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [slashIndex, slashOpen]);
 
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const [pastePopup, setPastePopup] = useState<PastePopup | null>(null);
@@ -1778,7 +1828,10 @@ export function NotionEditor({
         heading: { levels: [1, 2, 3, 4] },
         link: false,      // StarterKit v3 同梱済み。下でカスタム設定を使うため除外
         underline: false, // StarterKit v3 同梱済み。下で個別追加するため除外
+        codeBlock: false, // 同梱版は marks:'' で装飾不可。下で marks 許可版に差し替える
       }),
+      // コードブロック内でも太字などのインラインマークを使えるようにする（marks:'_'＝全マーク許可）
+      CodeBlock.extend({ marks: '_' }),
       Placeholder.configure({ placeholder: '書き始めるか、「/」でコマンドを入力...' }),
       TaskList,
       TaskItem.configure({ nested: true }),
@@ -1803,7 +1856,6 @@ export function NotionEditor({
       PageTableNode,
       DragHandleExtension,
       HeadingOutlineIndent,
-      CodeBlockAllowMarks,
       MarkdownBulletShortcut,
       MarkdownCodeBlockShortcut,
       LineBoldShortcut,
@@ -2316,7 +2368,7 @@ export function NotionEditor({
         <div className="fixed z-50 w-64 overflow-y-auto rounded-xl border border-gray-200 bg-white py-1 shadow-xl" style={{ top: menuPos.top, left: menuPos.left, maxHeight: 'min(400px, 80vh)' }}>
           <p className="px-3 py-1 text-xs font-medium text-gray-400">コマンド</p>
           {filteredCommands.map((cmd, i) => (
-            <button key={cmd.label} onMouseDown={(e) => { e.preventDefault(); applyCommand(cmd); }}
+            <button key={cmd.label} ref={i === slashIndex ? activeSlashItemRef : undefined} onMouseDown={(e) => { e.preventDefault(); applyCommand(cmd); }}
               className={`flex w-full items-center gap-3 px-3 py-2 text-left transition ${i === slashIndex ? 'bg-brand-50' : 'hover:bg-gray-50'}`}>
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-xs font-bold text-gray-500">{cmd.icon}</span>
               <div>
