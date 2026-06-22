@@ -254,6 +254,7 @@ function DashboardTab({ todayItems, dueItems, inboxItems, uid, onAdd, onQuickAdd
 }) {
   const [reviewSortDir, setReviewSortDir] = useState<'asc' | 'desc'>('asc');
   const [expandedInboxIds, setExpandedInboxIds] = useState<Set<string>>(new Set());
+  const [editInboxItem, setEditInboxItem] = useState<LearningItem | null>(null);
   const { remove: removeItem } = useLearningStore();
 
   const toggleInbox = (id: string) =>
@@ -352,6 +353,10 @@ function DashboardTab({ todayItems, dueItems, inboxItems, uid, onAdd, onQuickAdd
                           )}
                           <div className="flex items-center justify-end">
                             <div className="flex gap-2">
+                              <button
+                                onClick={() => setEditInboxItem(item)}
+                                className="rounded-lg border border-gray-200 px-2.5 py-1 text-[11px] font-medium text-gray-500 hover:border-amber-300 hover:text-amber-600"
+                              >✏️ 編集</button>
                               <button
                                 onClick={() => onAiTriage(item)}
                                 className="rounded-lg bg-purple-500 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-purple-600"
@@ -475,6 +480,11 @@ function DashboardTab({ todayItems, dueItems, inboxItems, uid, onAdd, onQuickAdd
           )}
         </div>
       </div>
+
+      {/* 特急メモ編集モーダル */}
+      {editInboxItem && (
+        <InboxEditModal item={editInboxItem} uid={uid} onClose={() => setEditInboxItem(null)} />
+      )}
     </div>
   );
 }
@@ -1069,6 +1079,65 @@ function QuickInboxModal({ uid, onClose }: { uid: string; onClose: () => void })
   );
 }
 
+// ── 特急メモ編集モーダル ───────────────────────────────────────────────
+
+function InboxEditModal({ item, uid, onClose }: { item: LearningItem; uid: string; onClose: () => void }) {
+  const { update } = useLearningStore();
+  const [title, setTitle] = useState(item.title ?? '');
+  const [content, setContent] = useState(item.content ?? '');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!title.trim() || saving) return;
+    setSaving(true);
+    try {
+      await update(uid, item.id, { title: title.trim(), content: content.trim() });
+    } catch {
+      setSaving(false);
+      return;
+    }
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-gray-800">✏️ 特急メモを編集</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
+        </div>
+        <input
+          autoFocus
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) handleSave(); }}
+          placeholder="タイトルを入力..."
+          className="mb-3 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-amber-400"
+        />
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          placeholder="メモ（任意）"
+          rows={6}
+          className="mb-4 w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-amber-400"
+        />
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-gray-500 hover:bg-gray-100">
+            キャンセル
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!title.trim() || saving}
+            className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50"
+          >
+            {saving ? '保存中...' : '保存'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── ⚡ 特急タブ ─────────────────────────────────────────────────────────
 
 function QuickTab({ inboxItems, uid, onDigest, onAiTriage }: {
@@ -1078,6 +1147,7 @@ function QuickTab({ inboxItems, uid, onDigest, onAiTriage }: {
   onAiTriage: (item: LearningItem) => void;
 }) {
   const { remove } = useLearningStore();
+  const [editItem, setEditItem] = useState<LearningItem | null>(null);
 
   if (inboxItems.length === 0) {
     return (
@@ -1107,6 +1177,12 @@ function QuickTab({ inboxItems, uid, onDigest, onAiTriage }: {
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
                 <button
+                  onClick={() => setEditItem(item)}
+                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 hover:border-amber-300 hover:text-amber-600"
+                >
+                  ✏️ 編集
+                </button>
+                <button
                   onClick={() => onAiTriage(item)}
                   className="rounded-lg bg-purple-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-600"
                 >
@@ -1128,6 +1204,11 @@ function QuickTab({ inboxItems, uid, onDigest, onAiTriage }: {
           </div>
         ))}
       </div>
+
+      {/* 特急メモ編集モーダル */}
+      {editItem && (
+        <InboxEditModal item={editItem} uid={uid} onClose={() => setEditItem(null)} />
+      )}
     </div>
   );
 }

@@ -907,6 +907,7 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-06-22 | （次回配信） | 新機能：**特急メモにインライン「✏️ 編集」ボタン**を追加。ダッシュボードの特急メモ（展開部）と「⚡ 特急」タブの両方に編集ボタンを配置。押すとタイトル＋本文を編集できる小さなモーダル（InboxEditModal）が開き、保存で learningStore.update を呼んで上書き。消化前にサッと直したいニーズに対応。learning/page.tsx |
 | 2026-06-20 | （次回配信） | 改善：見出しインデントの「一度見出しを作ると延々インデントが続いて抜け出せない」問題を解消。①見出し行の先頭で **Backspace → 見出し解除（通常テキスト化）** ②カスケードをやめ **見出しの“直下の段”だけ1段(1.5rem)字下げ**し、**空行 or 次の見出しで字下げ終了**（＝そこから左端に戻れる）。見出し自身は下げない。表示のみ・非破壊。HeadingOutlineIndent.ts |
 | 2026-06-20 | （次回配信） | バグ修正：**Android版で看板（ページテーブル）を含むページが真っ白**になる問題を修正。モバイルの /editor-mobile に pageTable のスタブが無く、setContent が未知ノードで失敗→本文消失していた。看板用 PageTableStub（大見出し/列/ページリンクを読取表示・タップでそのページへ遷移）を追加。さらに setContent 失敗時も白画面にせず空ページにフォールバックするよう堅牢化。※/editor-mobile は Vercel 配信なのでAPK再インストール不要・Web反映で既存Android即修正。editor-mobile/page.tsx |
 | 2026-06-20 | （次回配信） | 新機能：**ページ（ブックは章）まるごとを復習に登録**。ページヘッダーに「🔁 ページを復習」ワンクリックボタン（DBは非表示）。learningItem を作成（isPageReview:true / title=ページ名・ブックは「ページ名 / 章名」/ content空 / notionPageId / ブックは chapterId・chapterTitle）し5段階の復習ルーティンへ。二重登録は確認メッセージ「既に復習登録されています。新しく登録しますか？」を出して任意で再登録、登録済みはボタンが「✓ 復習登録済み」表示。復習リストでは「📄 ページ全体／📖 章」バッジを表示。復習で開くときはハイライト無し（章は ?chapter= で該当章を開く＝ブックの章deep-link対応）。LearningItem(core)/notion-plus/[id]/page.tsx/learning/page.tsx |
