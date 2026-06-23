@@ -236,22 +236,38 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
 
   // 子ページのPageLinkが欠けていれば自動補完（過去に移動したページ対応）
   // 保存後にeditorKeyを上げてエディタを再初期化→上書きによる消失を防ぐ
+  //
+  // ⚠️ 看板（pageTable）でカードを新規作成すると、addPage で pages.length が即増える一方、
+  //    看板へのリンク追記は本文の自動保存（約1.2秒デバウンス）後にしかストアへ反映されない。
+  //    その「保存前」の一瞬に古い content を見て補完すると、看板にあるリンクを取りこぼして
+  //    本文末尾に重複リンクを足し、さらに editorKey 再初期化で追加したカードごと消える
+  //    （＝「新規ページが作れない／一瞬でクローズ」の正体）。
+  //    そこで少し待ってから最新の保存済み content を見て判断する（取りこぼしを防ぐ）。
   useEffect(() => {
     if (!page || !user || loading || page.type === 'book' || page.type === 'database') return;
-    const children = pages.filter((p) => p.parentId === page.id);
-    if (children.length === 0) return;
-    let content = page.content;
-    let changed = false;
-    for (const child of children) {
-      const next = addPageLinkToContent(content, child.id, child.title, child.icon);
-      if (next !== content) { content = next; changed = true; }
-    }
-    if (changed) {
-      update(user.uid, page.id, { content }).then(() => {
-        // エディタを強制リセットして補完済みコンテンツで再初期化
-        setEditorKey(k => k + 1);
-      });
-    }
+    if (pages.filter((p) => p.parentId === page.id).length === 0) return;
+    const uid = user.uid;
+    const timer = setTimeout(() => {
+      // クロージャの古い値ではなく、ストアの最新状態を読む（看板の保存反映を待ってから判断）
+      const latest = useNotionPageStore.getState().pages;
+      const cur = latest.find((p) => p.id === id);
+      if (!cur || cur.type === 'book' || cur.type === 'database') return;
+      const children = latest.filter((p) => p.parentId === cur.id);
+      if (children.length === 0) return;
+      let content = cur.content;
+      let changed = false;
+      for (const child of children) {
+        const next = addPageLinkToContent(content, child.id, child.title, child.icon);
+        if (next !== content) { content = next; changed = true; }
+      }
+      if (changed) {
+        update(uid, cur.id, { content }).then(() => {
+          // エディタを強制リセットして補完済みコンテンツで再初期化
+          setEditorKey(k => k + 1);
+        });
+      }
+    }, 1800);
+    return () => clearTimeout(timer);
   // page.idとchildren数が変わったときだけ実行
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page?.id, pages.length]);
