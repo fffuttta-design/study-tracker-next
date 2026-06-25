@@ -43,7 +43,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useLearningStore } from '@/stores/learningStore';
 import { useNotionPageStore } from '@/stores/notionPageStore';
 import { useDbRowStore } from '@/stores/notionDatabaseRowStore';
-import { parseDbSchema, createBookChapter, serializeBookChapters, parseBookChapters, type NotionPage } from '@study-tracker/core';
+import { parseDbSchema, createBookChapter, serializeBookChapters, parseBookChapters, type NotionPage, type DbProperty, type DbRow } from '@study-tracker/core';
 import { IconImagePreview } from '@/components/IconImagePreview';
 import './editor.css';
 
@@ -813,11 +813,78 @@ const TocNode = TiptapNode.create({
 
 // ── インラインデータベース埋め込み ────────────────────────────────────
 
-function InlineDatabaseEmbed({ node }: NodeViewProps) {
+// ── インラインDB プレビュー用：色チップ・型アイコン・既定列幅 ─────────────
+// （フルの DatabaseView.tsx と同じ配色・アイコンに揃えている）
+const DB_SELECT_COLORS: Record<string, string> = {
+  gray: 'bg-gray-100 text-gray-600 border-gray-200',
+  red: 'bg-red-100 text-red-600 border-red-200',
+  yellow: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+  green: 'bg-green-100 text-green-600 border-green-200',
+  blue: 'bg-blue-100 text-blue-600 border-blue-200',
+  purple: 'bg-purple-100 text-purple-600 border-purple-200',
+  pink: 'bg-pink-100 text-pink-600 border-pink-200',
+};
+const DB_TYPE_ICONS: Record<string, string> = {
+  title: '🔤', text: '📝', number: '#', select: '◯',
+  multiselect: '☰', checkbox: '☑', date: '📅', url: '🔗',
+};
+function dbDefaultWidth(type: string): number {
+  if (type === 'checkbox') return 80;
+  if (type === 'number') return 100;
+  if (type === 'date') return 140;
+  if (type === 'url') return 220;
+  if (type === 'multiselect') return 200;
+  return 180;
+}
+
+// セルの中身を型に応じてリッチ表示（テーブル・行ページポップアップで共用）
+function renderDbCell(prop: DbProperty, val: unknown) {
+  if (prop.type === 'checkbox') {
+    const on = val === true || val === 'true';
+    return <span className={`text-sm ${on ? 'text-brand-500' : 'text-gray-300'}`}>{on ? '☑' : '☐'}</span>;
+  }
+  if (prop.type === 'select') {
+    const opt = prop.options?.find((o) => o.id === val);
+    if (!opt) return null;
+    return (
+      <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[11px] font-medium ${DB_SELECT_COLORS[opt.color] ?? DB_SELECT_COLORS.gray}`}>
+        {opt.name}
+      </span>
+    );
+  }
+  if (prop.type === 'multiselect') {
+    let ids: string[] = [];
+    try { ids = JSON.parse(String(val ?? '[]')); } catch { ids = []; }
+    if (!ids.length) return null;
+    return (
+      <span className="flex flex-wrap items-center gap-0.5 overflow-hidden">
+        {ids.map((id) => {
+          const opt = prop.options?.find((o) => o.id === id);
+          if (!opt) return null;
+          return (
+            <span key={id} className={`inline-flex shrink-0 items-center rounded border px-1.5 py-0.5 text-[11px] font-medium ${DB_SELECT_COLORS[opt.color] ?? DB_SELECT_COLORS.gray}`}>
+              {opt.name}
+            </span>
+          );
+        })}
+      </span>
+    );
+  }
+  if (prop.type === 'url' && val) {
+    return <span className="truncate text-blue-500 underline decoration-blue-200">{String(val)}</span>;
+  }
+  if (prop.type === 'number') {
+    return <span className="block truncate text-right tabular-nums text-gray-700">{val === null || val === undefined ? '' : String(val)}</span>;
+  }
+  return <span className="block truncate text-gray-700">{val === null || val === undefined ? '' : String(val)}</span>;
+}
+
+function InlineDatabaseEmbed({ node, updateAttributes }: NodeViewProps) {
   const router = useRouter();
   const onPageNavigate = useContext(PageNavigationContext);
   const uid = useContext(EditorUidContext);
   const { databaseId, title: nodeTitle } = node.attrs as { databaseId: string; title: string };
+  const colWidths = (node.attrs.colWidths ?? {}) as Record<string, number>;
   const pages = useNotionPageStore((s) => s.pages);
   const { rows, subscribeRows } = useDbRowStore();
   const page = pages.find((p) => p.id === databaseId);
@@ -829,36 +896,105 @@ function InlineDatabaseEmbed({ node }: NodeViewProps) {
     return unsub;
   }, [uid, databaseId, subscribeRows]);
 
+  // 各列の有効幅：埋め込みごとの保存値 → DB側の幅 → 型ごとの既定
+  const baseWidths = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const p of schema.properties) {
+      map[p.id] = colWidths[p.id] ?? p.width ?? dbDefaultWidth(p.type);
+    }
+    return map;
+  // colWidths は attrs 由来。schema 変化時に再計算
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schema.properties, JSON.stringify(colWidths)]);
+
+  // ドラッグ中だけローカルで即時反映（確定時に attrs へコミット）
+  const [dragWidths, setDragWidths] = useState<Record<string, number> | null>(null);
+  const effWidths = dragWidths ?? baseWidths;
+  const totalWidth = schema.properties.reduce((s, p) => s + (effWidths[p.id] ?? dbDefaultWidth(p.type)), 0);
+
+  const resizingRef = useRef<{ propId: string; startX: number; startW: number } | null>(null);
+  const startResize = (e: React.MouseEvent, propId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startW = effWidths[propId] ?? 180;
+    resizingRef.current = { propId, startX: e.clientX, startW };
+    let latest = { ...baseWidths };
+    setDragWidths(latest);
+
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;cursor:col-resize;';
+    document.body.appendChild(overlay);
+
+    const onMove = (ev: MouseEvent) => {
+      const r = resizingRef.current;
+      if (!r) return;
+      const w = Math.max(60, r.startW + (ev.clientX - r.startX));
+      latest = { ...latest, [r.propId]: Math.round(w) };
+      setDragWidths({ ...latest });
+    };
+    const onUp = () => {
+      overlay.remove();
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      resizingRef.current = null;
+      // この埋め込み専用の列幅としてノード属性へ保存（DB本体の幅は変更しない）
+      const next = { ...(node.attrs.colWidths ?? {}) } as Record<string, number>;
+      for (const p of schema.properties) next[p.id] = latest[p.id];
+      updateAttributes({ colWidths: next });
+      setDragWidths(null);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
   const displayTitle = page?.title || nodeTitle || 'データベース';
   const href = `/notion-plus/${databaseId}`;
   const PREVIEW_LIMIT = 5;
   const previewRows = rows.slice(0, PREVIEW_LIMIT);
   const extraRows = rows.length - PREVIEW_LIMIT;
 
+  // 行クリックでその行のページをその場でポップアップ表示
+  const [openRowId, setOpenRowId] = useState<string | null>(null);
+  const openRow = openRowId ? rows.find((r) => r.id === openRowId) ?? null : null;
+
   return (
     <NodeViewWrapper contentEditable={false}>
-      <div className="border rounded-lg overflow-hidden my-2 text-xs" contentEditable={false}>
+      <div className="group/db my-2 overflow-hidden rounded-xl border border-gray-200 text-xs shadow-sm" contentEditable={false}>
         {/* ヘッダーバー */}
-        <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-3 py-1.5">
-          <span className="flex items-center gap-1.5 font-medium text-gray-700">
+        <div className="flex items-center justify-between border-b border-gray-100 bg-gradient-to-b from-gray-50 to-white px-3 py-2">
+          <span className="flex items-center gap-1.5 text-[13px] font-semibold text-gray-700">
             <span>📊</span>
             <span>{displayTitle}</span>
+            <span className="ml-1 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-normal text-gray-400">{rows.length}</span>
           </span>
           <button
             onClick={() => href && (onPageNavigate ? onPageNavigate(href) : router.push(href))}
-            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-gray-400 hover:bg-gray-200 hover:text-gray-600"
+            className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-gray-400 opacity-0 transition hover:bg-gray-100 hover:text-gray-600 group-hover/db:opacity-100"
           >
             ↗ 開く
           </button>
         </div>
         {/* テーブル */}
         <div className="overflow-x-auto">
-          <table className="min-w-max border-collapse">
+          <table className="border-collapse" style={{ tableLayout: 'fixed', width: totalWidth }}>
+            <colgroup>
+              {schema.properties.map((prop) => (
+                <col key={prop.id} style={{ width: effWidths[prop.id] }} />
+              ))}
+            </colgroup>
             <thead>
-              <tr className="border-b border-gray-100 bg-gray-50">
+              <tr className="border-b border-gray-100 bg-gray-50/60">
                 {schema.properties.map((prop) => (
-                  <th key={prop.id} className="px-2 py-1 text-left text-[10px] font-semibold text-gray-400 border-r border-gray-100 last:border-r-0 whitespace-nowrap">
-                    {prop.name}
+                  <th key={prop.id} className="group/th relative select-none px-2.5 py-1.5 text-left text-[11px] font-semibold text-gray-400 border-r border-gray-100 last:border-r-0">
+                    <span className="flex items-center gap-1 overflow-hidden">
+                      <span className="shrink-0 text-gray-300">{DB_TYPE_ICONS[prop.type] ?? '·'}</span>
+                      <span className="truncate">{prop.name}</span>
+                    </span>
+                    {/* 列幅リサイズハンドル */}
+                    <span
+                      onMouseDown={(e) => startResize(e, prop.id)}
+                      className="absolute right-0 top-0 z-10 h-full w-1.5 cursor-col-resize bg-brand-400 opacity-0 transition hover:opacity-100 group-hover/th:opacity-30"
+                    />
                   </th>
                 ))}
               </tr>
@@ -866,35 +1002,36 @@ function InlineDatabaseEmbed({ node }: NodeViewProps) {
             <tbody>
               {previewRows.length === 0 ? (
                 <tr>
-                  <td colSpan={schema.properties.length} className="px-2 py-2 text-center text-gray-300">
+                  <td colSpan={schema.properties.length} className="px-2.5 py-3 text-center text-gray-300">
                     データなし
                   </td>
                 </tr>
               ) : (
                 previewRows.map((row) => (
-                  <tr key={row.id} className="border-b border-gray-50 last:border-b-0">
-                    {schema.properties.map((prop) => {
-                      const val = row.cells[prop.id] ?? null;
-                      let display = '';
-                      if (val === null || val === undefined) display = '';
-                      else if (typeof val === 'boolean') display = val ? '✓' : '';
-                      else if (prop.type === 'select') {
-                        const opt = prop.options?.find((o) => o.id === val);
-                        display = opt?.name ?? '';
-                      } else display = String(val);
-                      return (
-                        <td key={prop.id} className="px-2 py-1 border-r border-gray-50 last:border-r-0 min-w-[80px] whitespace-nowrap text-gray-700">
-                          {display}
-                        </td>
-                      );
-                    })}
+                  <tr
+                    key={row.id}
+                    onClick={() => setOpenRowId(row.id)}
+                    className="group/row cursor-pointer border-b border-gray-50 transition-colors last:border-b-0 hover:bg-gray-50/60"
+                  >
+                    {schema.properties.map((prop, i) => (
+                      <td key={prop.id} className="relative overflow-hidden px-2.5 py-1.5 border-r border-gray-50 last:border-r-0 align-middle">
+                        <span className="flex items-center justify-between gap-1 overflow-hidden">
+                          <span className="min-w-0 flex-1 overflow-hidden">{renderDbCell(prop, row.cells[prop.id] ?? null)}</span>
+                          {i === 0 && (
+                            <span className="shrink-0 rounded px-1 text-[10px] text-gray-300 opacity-0 transition group-hover/row:opacity-100">↗ 開く</span>
+                          )}
+                        </span>
+                      </td>
+                    ))}
                   </tr>
                 ))
               )}
               {extraRows > 0 && (
                 <tr>
-                  <td colSpan={schema.properties.length} className="px-2 py-1 text-center text-[10px] text-gray-400">
-                    +{extraRows}行
+                  <td colSpan={schema.properties.length} className="px-2.5 py-1.5 text-center text-[11px] text-gray-400 hover:bg-gray-50/60">
+                    <button onClick={() => href && (onPageNavigate ? onPageNavigate(href) : router.push(href))} className="hover:text-gray-600">
+                      ＋ 他 {extraRows} 行を表示
+                    </button>
                   </td>
                 </tr>
               )}
@@ -902,7 +1039,110 @@ function InlineDatabaseEmbed({ node }: NodeViewProps) {
           </table>
         </div>
       </div>
+      {openRow && uid && (
+        <InlineRowPagePopup
+          row={openRow}
+          schema={schema}
+          uid={uid}
+          databaseTitle={displayTitle}
+          onOpenFull={() => { setOpenRowId(null); if (href) (onPageNavigate ? onPageNavigate(href) : router.push(href)); }}
+          onClose={() => setOpenRowId(null)}
+        />
+      )}
     </NodeViewWrapper>
+  );
+}
+
+// ── インラインDB：行をその場で開くポップアップ（Notionのピーク風）────────────
+function InlineRowPagePopup({
+  row, schema, uid, databaseTitle, onOpenFull, onClose,
+}: {
+  row: DbRow;
+  schema: { properties: DbProperty[] };
+  uid: string;
+  databaseTitle: string;
+  onOpenFull: () => void;
+  onClose: () => void;
+}) {
+  const { updateRow, updateRowContent } = useDbRowStore();
+  const dummyRef = useRef<(() => void) | null>(null);
+  const titleProp = schema.properties.find((p) => p.type === 'title');
+  const titleVal = titleProp && typeof row.cells[titleProp.id] === 'string' ? (row.cells[titleProp.id] as string) : '';
+  const [titleDraft, setTitleDraft] = useState(titleVal);
+  const otherProps = schema.properties.filter((p) => p.type !== 'title');
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const saveTitle = () => {
+    if (!titleProp) return;
+    if (titleDraft === titleVal) return;
+    updateRow(uid, row.id, { ...row.cells, [titleProp.id]: titleDraft }).catch(() => {});
+  };
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[60] flex items-start justify-center bg-black/40 p-4 sm:p-8"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
+        {/* ヘッダー */}
+        <div className="flex items-center justify-between border-b border-gray-100 px-4 py-2">
+          <span className="truncate text-xs text-gray-400">📊 {databaseTitle}</span>
+          <div className="flex items-center gap-1">
+            <button onClick={onOpenFull} className="rounded px-2 py-1 text-xs text-gray-400 hover:bg-gray-100 hover:text-gray-600" title="データベース本体で開く">↗ 本体で開く</button>
+            <button onClick={onClose} className="rounded px-2 py-1 text-lg leading-none text-gray-400 hover:bg-gray-100 hover:text-gray-600" title="閉じる">✕</button>
+          </div>
+        </div>
+
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          {/* タイトル */}
+          <div className="px-6 pt-5">
+            <input
+              value={titleDraft}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onBlur={saveTitle}
+              placeholder="Untitled"
+              className="w-full bg-transparent text-2xl font-bold text-gray-800 outline-none placeholder:text-gray-300"
+            />
+          </div>
+
+          {/* プロパティ一覧（タイトル以外・表示のみ） */}
+          {otherProps.length > 0 && (
+            <div className="flex flex-col gap-2 border-b border-gray-100 px-6 py-4">
+              {otherProps.map((prop) => (
+                <div key={prop.id} className="flex items-start gap-3 text-xs">
+                  <span className="flex w-28 shrink-0 items-center gap-1.5 pt-0.5 text-gray-400">
+                    <span>{DB_TYPE_ICONS[prop.type] ?? '·'}</span>
+                    <span className="truncate">{prop.name}</span>
+                  </span>
+                  <span className="min-w-0 flex-1">{renderDbCell(prop, row.cells[prop.id] ?? null) ?? <span className="text-gray-300">空</span>}</span>
+                </div>
+              ))}
+              <p className="pt-1 text-[10px] text-gray-300">※ プロパティの編集は「↗ 本体で開く」から</p>
+            </div>
+          )}
+
+          {/* ページ本文 */}
+          <div className="flex min-h-[300px] flex-1 flex-col px-2 py-2">
+            <NotionEditor
+              key={row.id}
+              initialTitle=""
+              hideTitle
+              initialContent={row.pageContent ?? ''}
+              onSave={async (_t, content) => { await updateRowContent(uid, row.id, content); }}
+              notionPageId={row.id}
+              recordTriggerRef={dummyRef}
+              onCreateSubPage={async () => ({ id: '', title: '' })}
+            />
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 
@@ -914,6 +1154,7 @@ const InlineDatabaseNode = TiptapNode.create({
     return {
       databaseId: { default: '' },
       title: { default: '' },
+      colWidths: { default: {} },
     };
   },
   parseHTML() { return [{ tag: 'div[data-type="inline-database"]' }]; },
