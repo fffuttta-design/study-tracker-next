@@ -1,0 +1,58 @@
+// StudyTracker クリッパー — バックグラウンド（service worker / MV3）
+//
+// ・ツールバーのアイコンクリック → 現在ページのタイトル・URL＋選択テキストを記録画面へ
+// ・右クリックメニュー「StudyTracker に記録」 → 選択テキスト or ページ or リンクを記録画面へ
+//
+// 記録は StudyTracker Web の /clip ページ（ログイン済みセッションを利用）で行う。
+// 拡張側に認証は持たせない（=Google Cloud 等の設定不要）。
+
+const CLIP_URL = 'https://study-tracker-next-web.vercel.app/clip';
+const MAX_CONTENT = 8000; // URLが長くなりすぎないよう選択テキストを丸める
+
+function openClip({ title, content, url }) {
+  const u = new URL(CLIP_URL);
+  if (title) u.searchParams.set('title', String(title).slice(0, 300));
+  if (content) u.searchParams.set('content', String(content).slice(0, MAX_CONTENT));
+  if (url) u.searchParams.set('url', url);
+  // 小さなポップアップウィンドウで開く（保存すると /clip 側で自動クローズ）
+  chrome.windows.create({ url: u.toString(), type: 'popup', width: 480, height: 600 });
+}
+
+// 右クリックメニューを登録
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.contextMenus.create({
+    id: 'studytracker-clip',
+    title: 'StudyTracker に記録',
+    contexts: ['selection', 'page', 'link'],
+  });
+});
+
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId !== 'studytracker-clip') return;
+  openClip({
+    title: tab && tab.title ? tab.title : '',
+    content: info.selectionText || '',
+    url: info.linkUrl || info.pageUrl || (tab && tab.url) || '',
+  });
+});
+
+// ツールバーアイコンのクリック：アクティブタブの選択テキストを取得して記録画面へ
+chrome.action.onClicked.addListener(async (tab) => {
+  let selection = '';
+  try {
+    if (tab && tab.id != null) {
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => (window.getSelection ? window.getSelection().toString() : ''),
+      });
+      selection = (results && results[0] && results[0].result) || '';
+    }
+  } catch (e) {
+    // chrome:// など実行できないページでは選択は空のまま続行
+  }
+  openClip({
+    title: (tab && tab.title) || '',
+    content: selection,
+    url: (tab && tab.url) || '',
+  });
+});

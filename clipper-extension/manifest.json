@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "StudyTracker クリッパー",
+  "version": "1.0.0",
+  "description": "見ているWebページや選択テキストを StudyTracker の特急メモにサッと記録するクリッパー。",
+  "permissions": ["contextMenus", "scripting", "activeTab"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "StudyTracker に記録（選択テキスト／ページ）"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
