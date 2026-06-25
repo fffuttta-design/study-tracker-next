@@ -36,8 +36,8 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   });
 });
 
-// ツールバーアイコンのクリック：アクティブタブの選択テキストを取得して記録画面へ
-chrome.action.onClicked.addListener(async (tab) => {
+// アクティブタブの選択テキストを取得して記録画面へ（アイコン／ショートカット共通）
+async function clipTab(tab) {
   let selection = '';
   try {
     if (tab && tab.id != null) {
@@ -55,4 +55,15 @@ chrome.action.onClicked.addListener(async (tab) => {
     content: selection,
     url: (tab && tab.url) || '',
   });
+}
+
+// ツールバーアイコンのクリック
+chrome.action.onClicked.addListener((tab) => { clipTab(tab); });
+
+// キーボードショートカット（既定 Alt+Shift+S / Mac: Cmd+Shift+S）
+// 変更は chrome://extensions/shortcuts から可能。
+chrome.commands.onCommand.addListener(async (command) => {
+  if (command !== 'clip-current') return;
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab) clipTab(tab);
 });
