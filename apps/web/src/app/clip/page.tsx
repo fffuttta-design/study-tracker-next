@@ -10,6 +10,7 @@ import { useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { useLearningStore } from '@/stores/learningStore';
 import { localDateKey } from '@study-tracker/core';
+import { RegisterCelebration } from '@/components/RegisterCelebration';
 
 function ClipInner() {
   const params = useSearchParams();
@@ -44,20 +45,18 @@ function ClipInner() {
         sortOrder: Date.now(),
       });
       setSaved(true);
-      // 少し見せてから自動で閉じる（拡張のポップアップウィンドウ）
-      setTimeout(() => { window.close(); }, 1100);
+      // お祝いアニメ（アプリ内と同じ RegisterCelebration）を見せてから自動で閉じる
+      setTimeout(() => { window.close(); }, 1800);
     } catch {
       setSaving(false);
     }
   };
 
-  // 保存完了
+  // 保存完了：アプリ内と同じお祝いアニメ（🎉＋紙吹雪＋ポップ）
   if (saved) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-white p-6 text-center">
-        <div className="text-5xl">✅</div>
-        <p className="text-lg font-bold text-gray-800">特急メモに記録しました</p>
-        <p className="text-xs text-gray-400">この画面は自動で閉じます</p>
+      <div className="min-h-screen bg-white">
+        <RegisterCelebration message="登録しました！" sub="特急メモに追加しました" />
       </div>
     );
   }
