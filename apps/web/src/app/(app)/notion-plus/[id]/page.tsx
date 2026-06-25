@@ -103,6 +103,9 @@ async function reconcileChildrenParent(
 // ブックごとに「最後に開いていた章」を記憶（セッション中・別ページへ行って戻っても章を保てる）
 const lastChapterByBook = new Map<string, string>();
 
+// ページごとに「最後のスクロール位置」を記憶（セッション中・子ページへ入って戻ったとき元の位置に戻す）
+const scrollByPage = new Map<string, number>();
+
 const ICON_PRESETS = [
   // 顔・感情
   '😀','😃','😄','😁','😆','😅','🤣','😂','🙂','😉',
@@ -212,6 +215,7 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
   const settingsRef = useRef<HTMLDivElement>(null);
   const recordTriggerRef = useRef<(() => void) | null>(null);
   const lastHistorySavedAtRef = useRef(0);
+  const restoringScrollRef = useRef(false);
 
   // ── ブック用 state ────────────────────────────────────────────
   const [bookChapters, setBookChapters] = useState<BookChapter[]>([]);
@@ -297,6 +301,48 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
       lastChapterByBook.set(page.id, activeChapterId);
     }
   }, [activeChapterId, page?.id, page?.type]);
+
+  // ── スクロール位置の記憶 ───────────────────────────────────────
+  // スクロール容器は (app)/layout.tsx の <main>。スクロールするたびページIDごとに位置を記録。
+  useEffect(() => {
+    const main = document.querySelector('main');
+    if (!main) return;
+    const onScroll = () => {
+      if (restoringScrollRef.current) return; // 復元中の暫定値で上書きしない
+      scrollByPage.set(id, main.scrollTop);
+    };
+    main.addEventListener('scroll', onScroll, { passive: true });
+    return () => main.removeEventListener('scroll', onScroll);
+  }, [id]);
+
+  // ── スクロール位置の復元 ───────────────────────────────────────
+  // 子ページへ入って戻ったとき、記録しておいた位置へ戻す。
+  // エディタ本文は遅れて高さが決まるため、rAFで一定時間リトライして確実に届かせる。
+  // ※通知ハイライト(?hl=)や章ディープリンク(?chapter=)のときは、そちらのスクロールを優先して復元しない。
+  useEffect(() => {
+    if (loading) return;
+    if (searchParams.get('hl') || searchParams.get('chapter')) return;
+    const target = scrollByPage.get(id);
+    if (!target) return; // 未記録 or 先頭(0)は何もしない
+    const main = document.querySelector('main');
+    if (!main) return;
+    restoringScrollRef.current = true;
+    let raf = 0;
+    const start = performance.now();
+    const tick = () => {
+      main.scrollTop = target;
+      const reached = Math.abs(main.scrollTop - target) <= 2;
+      if (reached || performance.now() - start > 1200) {
+        restoringScrollRef.current = false;
+        return;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => { cancelAnimationFrame(raf); restoringScrollRef.current = false; };
+  // id が変わった時 / データ読込完了時に復元を試みる
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, loading]);
 
   // ── ページ（ブックは章）まるごとを復習に登録 ─────────────────────────
   // ブックで章を開いているときは「その章」を、それ以外はページ全体を対象にする
