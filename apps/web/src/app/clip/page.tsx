@@ -122,7 +122,7 @@ function ClipInner() {
 
         {sourceUrl && (
           <div className="flex flex-col gap-1">
-            <span className="text-[11px] font-semibold text-gray-400">元ページ（クリックで該当箇所へジャンプ）</span>
+            <span className="text-[11px] font-semibold text-gray-400">元ページ</span>
             <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="truncate text-xs text-blue-500 underline">{sourceUrl}</a>
           </div>
         )}
