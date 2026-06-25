@@ -49,8 +49,11 @@
   - `Esc`・背景クリック・✕ で閉じる。`createPortal` で `document.body` 直下に描画（エディタの contentEditable と干渉しない）。
 - ※フル編集（プロパティ含む）はDB本体ページの既存 `RowPageModal` が担当（行タイトルの「↗」から全画面で開く）。
 
-### Phase 2b（提案・未）
-- [ ] **ポップアップ内でもプロパティを編集可能に**（本体の `RowPageModal`/セルエディタを共有モジュール化して再利用。現状は循環import回避のため表示のみ）。
+### Phase 2b（実装済み・2026-06-25）：ポップアップ内でもプロパティ編集
+- [x] セルエディタ群（Text/Number/Select/MultiSelect/Checkbox/Date/Url）と `SELECT_COLORS`/`TYPE_ICONS` を **共有モジュール `apps/web/src/components/database/cells.tsx`** に切り出し（DatabaseView と インラインDBポップアップの両方から使用・NotionEditorを参照しないので循環しない）。
+- [x] 行ページポップアップでタイトル以外のプロパティも **その場で編集**（`saveCell` が直近の行データへマージして `updateRow`・連続編集の取りこぼし防止）。
+
+### Phase 2c（提案・未）
 - [ ] **表示プロパティの選択**（埋め込みごとに「この列だけ出す」、`visibleProps` をノード属性へ）。
 - [ ] **プレビュー行数の変更**（既定5 → 埋め込みごとに3/5/10/全件、`previewLimit`）。
 - [ ] **並び順・フィルタの簡易指定**（本体のソート/フィルタを一部引き継ぐ or 埋め込み側で軽く指定）。

@@ -43,6 +43,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useLearningStore } from '@/stores/learningStore';
 import { useNotionPageStore } from '@/stores/notionPageStore';
 import { useDbRowStore } from '@/stores/notionDatabaseRowStore';
+import { TextCell, NumberCell, SelectCell, MultiSelectCell, CheckboxCell, DateCell, UrlCell } from '@/components/database/cells';
 import { parseDbSchema, createBookChapter, serializeBookChapters, parseBookChapters, type NotionPage, type DbProperty, type DbRow } from '@study-tracker/core';
 import { IconImagePreview } from '@/components/IconImagePreview';
 import './editor.css';
@@ -1077,10 +1078,17 @@ function InlineRowPagePopup({
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  // セル保存：直近の行データへマージして書き込む（連続編集の取りこぼし防止）
+  const saveCell = (propId: string, val: string | number | boolean | null) => {
+    const latest = useDbRowStore.getState().rows.find((r) => r.id === row.id);
+    const cells = { ...(latest?.cells ?? row.cells), [propId]: val };
+    updateRow(uid, row.id, cells).catch(() => {});
+  };
+
   const saveTitle = () => {
     if (!titleProp) return;
     if (titleDraft === titleVal) return;
-    updateRow(uid, row.id, { ...row.cells, [titleProp.id]: titleDraft }).catch(() => {});
+    saveCell(titleProp.id, titleDraft);
   };
 
   return createPortal(
@@ -1110,19 +1118,43 @@ function InlineRowPagePopup({
             />
           </div>
 
-          {/* プロパティ一覧（タイトル以外・表示のみ） */}
+          {/* プロパティ一覧（タイトル以外・編集可） */}
           {otherProps.length > 0 && (
-            <div className="flex flex-col gap-2 border-b border-gray-100 px-6 py-4">
-              {otherProps.map((prop) => (
-                <div key={prop.id} className="flex items-start gap-3 text-xs">
-                  <span className="flex w-28 shrink-0 items-center gap-1.5 pt-0.5 text-gray-400">
-                    <span>{DB_TYPE_ICONS[prop.type] ?? '·'}</span>
-                    <span className="truncate">{prop.name}</span>
-                  </span>
-                  <span className="min-w-0 flex-1">{renderDbCell(prop, row.cells[prop.id] ?? null) ?? <span className="text-gray-300">空</span>}</span>
-                </div>
-              ))}
-              <p className="pt-1 text-[10px] text-gray-300">※ プロパティの編集は「↗ 本体で開く」から</p>
+            <div className="flex flex-col gap-1.5 border-b border-gray-100 px-6 py-4">
+              {otherProps.map((prop) => {
+                const raw = row.cells[prop.id] ?? null;
+                return (
+                  <div key={prop.id} className="flex items-center gap-3 text-xs">
+                    <span className="flex w-28 shrink-0 items-center gap-1.5 text-gray-400">
+                      <span>{DB_TYPE_ICONS[prop.type] ?? '·'}</span>
+                      <span className="truncate">{prop.name}</span>
+                    </span>
+                    <div className="flex min-w-0 flex-1 items-center rounded-md border border-transparent px-1 py-0.5 hover:border-gray-200 hover:bg-gray-50/60">
+                      {prop.type === 'text' && (
+                        <TextCell value={typeof raw === 'string' ? raw : ''} onSave={(v) => saveCell(prop.id, v)} />
+                      )}
+                      {prop.type === 'number' && (
+                        <NumberCell value={typeof raw === 'number' ? raw : null} onSave={(v) => saveCell(prop.id, v)} />
+                      )}
+                      {prop.type === 'select' && (
+                        <SelectCell value={typeof raw === 'string' ? raw : ''} options={prop.options ?? []} onSave={(v) => saveCell(prop.id, v)} />
+                      )}
+                      {prop.type === 'multiselect' && (
+                        <MultiSelectCell value={typeof raw === 'string' ? raw : ''} options={prop.options ?? []} onSave={(v) => saveCell(prop.id, v)} />
+                      )}
+                      {prop.type === 'checkbox' && (
+                        <CheckboxCell value={typeof raw === 'boolean' ? raw : false} onSave={(v) => saveCell(prop.id, v)} />
+                      )}
+                      {prop.type === 'date' && (
+                        <DateCell value={typeof raw === 'string' ? raw : ''} onSave={(v) => saveCell(prop.id, v)} />
+                      )}
+                      {prop.type === 'url' && (
+                        <UrlCell value={typeof raw === 'string' ? raw : ''} onSave={(v) => saveCell(prop.id, v)} />
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
 

@@ -34,8 +34,11 @@
 }
 
 .notion-editor p { margin: calc(0.25rem + var(--offset-p, 0px)) 0; }
-/* Shift+Enter（hardBreak = <br>）を含む段落だけ行間を詰める */
-.notion-editor p:has(br) { line-height: var(--soft-lh, 1.15); }
+/* Shift+Enter（hardBreak = <br>）を含む段落だけ行間を詰める。
+   ただし ProseMirror が空段落へ自動挿入する末尾の <br class="ProseMirror-trailingBreak"> は除外する。
+   これを含めてしまうと「空（カーソルだけ）の箇条書き行」まで soft-lh になり、
+   マーカー（para-lh 基準）とカーソルの高さがズレる（入力すると br が消えて直る現象の原因）。 */
+.notion-editor p:has(br:not(.ProseMirror-trailingBreak)) { line-height: var(--soft-lh, 1.15); }
 .notion-editor h1 { font-size: 1.875rem; font-weight: 700; margin: calc(1.25rem + var(--offset-h1, 0px)) 0 0.5rem; }
 .notion-editor h2 { font-size: 1.5rem; font-weight: 600; margin: calc(1rem + var(--offset-h2, 0px)) 0 0.375rem; }
 .notion-editor h3 { font-size: 1.25rem; font-weight: 600; margin: calc(0.75rem + var(--offset-h3, 0px)) 0 0.25rem; }
