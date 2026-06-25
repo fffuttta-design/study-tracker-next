@@ -24,10 +24,13 @@ function ClipInner() {
   const [saved, setSaved] = useState(false);
 
   // URLパラメータから初期値を流し込む（初回のみ）
+  // 本文には「選択テキスト＋元ページのリンク（該当箇所リンク）」を入れて、保存内容に必ず残す。
   useEffect(() => {
+    const sel = (params.get('content') ?? params.get('text') ?? '').trim();
+    const u = params.get('url') ?? '';
     setTitle(params.get('title')?.slice(0, 300) ?? '');
-    setContent(params.get('content') ?? params.get('text') ?? '');
-    setSourceUrl(params.get('url') ?? '');
+    setContent([sel, u].filter(Boolean).join('\n\n'));
+    setSourceUrl(u);
   // params は初回で確定。以後ユーザー編集を優先するので依存に入れない
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -108,7 +111,7 @@ function ClipInner() {
         </label>
 
         <label className="flex flex-1 flex-col gap-1">
-          <span className="text-[11px] font-semibold text-gray-400">内容（選択テキスト）</span>
+          <span className="text-[11px] font-semibold text-gray-400">内容（選択テキスト＋元ページのリンク）</span>
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
@@ -119,7 +122,7 @@ function ClipInner() {
 
         {sourceUrl && (
           <div className="flex flex-col gap-1">
-            <span className="text-[11px] font-semibold text-gray-400">元ページ</span>
+            <span className="text-[11px] font-semibold text-gray-400">元ページ（クリックで該当箇所へジャンプ）</span>
             <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="truncate text-xs text-blue-500 underline">{sourceUrl}</a>
           </div>
         )}
