@@ -380,13 +380,19 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
     // ユーザーが自分でスクロール/操作したら復元をやめる（勝手に動かさない）
     const cancel = () => finish();
 
-    // 枠が現れるまで探し、見つかったら毎フレーム当て込み。到達して少し安定したら離す。
-    // 本文の高さが遅れて伸びても追従できるよう最長 2.5 秒まで粘る。
+    // 枠が現れるまで探し、見つかったら毎フレーム当て込み。
+    // 「離す基準」は絶対時間ではなく“本文枠が現れてからの経過”にする。
+    //   ＝枠が遅れて描画される重いページでも、マウント直後に走る onCreate のフォーカスや
+    //     レイアウト揺れ（一瞬最上部へ飛ぶ）を必ず当て直してから離す＝間欠で戻らない問題を防ぐ。
+    // 到達しても枠出現から 700ms は粘り、最長 3 秒で打ち切る。
+    let elFirstSeen = 0;
     const tick = () => {
       const el = getEl();
-      if (el) el.scrollTop = target;
+      const now = performance.now();
+      if (el) { if (!elFirstSeen) elFirstSeen = now; el.scrollTop = target; }
       const reached = !!el && Math.abs(el.scrollTop - target) <= 2;
-      if ((reached && performance.now() - start > 600) || performance.now() - start > 2500) {
+      const heldEnough = !!elFirstSeen && now - elFirstSeen > 700;
+      if ((reached && heldEnough) || now - start > 3000) {
         finish();
         return;
       }
