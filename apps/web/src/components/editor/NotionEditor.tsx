@@ -1734,6 +1734,7 @@ function PageDescTableView({ node, updateAttributes, editor: pdEditor }: NodeVie
   const title = (node.attrs.title as string) || '';
   const leftLabel = (node.attrs.leftLabel as string) || '';
   const rightLabel = (node.attrs.rightLabel as string) || '';
+  const headerColor = (node.attrs.headerColor as string) || '';
   const leftWidth = (node.attrs.leftWidth as number) || PD_DEFAULT_LEFT_WIDTH;
 
   const commitRows = useCallback((next: PdRow[]) => updateAttributes({ rows: next }), [updateAttributes]);
@@ -1742,8 +1743,19 @@ function PageDescTableView({ node, updateAttributes, editor: pdEditor }: NodeVie
   const [pickerPos, setPickerPos] = useState<{ top: number; left: number } | null>(null);
   const [query, setQuery] = useState('');
   const [resizing, setResizing] = useState<number | null>(null);
+  const [colorOpen, setColorOpen] = useState(false);
+  const [colorPos, setColorPos] = useState<{ top: number; left: number } | null>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
   const dragSrc = useRef<number | null>(null);
+
+  const openColorMenu = (e: React.MouseEvent) => {
+    if (colorOpen) { setColorOpen(false); setColorPos(null); return; }
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setColorPos({ top: r.bottom + 6, left: Math.max(8, Math.min(r.left - 80, window.innerWidth - 220)) });
+    setColorOpen(true);
+  };
+  // ヘッダー行の既定背景（色未指定のとき）
+  const headerBg = headerColor || '#f9fafb';
 
   // 重複排除: 表に入れたページは、同じ本文内の単体ページリンクを削除（表を正の場所にする＝看板と同じ思想）
   const removeBodyPageLink = (href: string) => {
@@ -1850,20 +1862,24 @@ function PageDescTableView({ node, updateAttributes, editor: pdEditor }: NodeVie
           className="mb-2 w-full max-w-md bg-transparent text-lg font-bold text-gray-800 outline-none placeholder:font-normal placeholder:text-gray-300"
         />
         <div className="overflow-hidden rounded-xl border border-gray-200">
-          {/* ヘッダー行（列名は編集可・既定は「ページ」「説明」） */}
-          <div className="flex border-b border-gray-200 bg-gray-50">
+          {/* ヘッダー行（列名は編集可・既定は「ページ」「説明」・背景色は変更可） */}
+          <div className="group/hd flex border-b border-gray-200" style={{ background: headerBg }}>
             <div className="relative shrink-0 border-r border-gray-200 px-3 py-2" style={{ width: lw }}>
               <input value={leftLabel} onChange={(e) => updateAttributes({ leftLabel: e.target.value })}
-                placeholder="ページ" className="w-full bg-transparent text-xs font-semibold text-gray-500 outline-none placeholder:text-gray-400" />
+                placeholder="ページ" className="w-full bg-transparent text-xs font-semibold text-gray-600 outline-none placeholder:font-normal placeholder:text-gray-400" />
               {/* 左列リサイズハンドル */}
               <div onMouseDown={(e) => startResize(e, leftWidth)}
                 className="absolute -right-1 top-0 z-10 h-full w-2 cursor-col-resize" title="幅を変更">
                 <span className="absolute right-1 top-1/2 h-4 w-1 -translate-y-1/2 rounded-full bg-gray-300 opacity-0 transition hover:opacity-100" />
               </div>
             </div>
-            <div className="flex-1 px-3 py-2">
+            <div className="flex flex-1 items-center px-3 py-2">
               <input value={rightLabel} onChange={(e) => updateAttributes({ rightLabel: e.target.value })}
-                placeholder="説明" className="w-full bg-transparent text-xs font-semibold text-gray-500 outline-none placeholder:text-gray-400" />
+                placeholder="説明" className="min-w-0 flex-1 bg-transparent text-xs font-semibold text-gray-600 outline-none placeholder:font-normal placeholder:text-gray-400" />
+              {/* ヘッダー色を変更 */}
+              <button onClick={openColorMenu} className="ml-1 flex h-5 w-5 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-black/5 group-hover/hd:opacity-100" title="ヘッダーの色を変更">
+                <span className="block h-3.5 w-3.5 rounded-full border border-black/15" style={{ background: headerBg }} />
+              </button>
             </div>
           </div>
           {/* データ行 */}
@@ -1911,6 +1927,23 @@ function PageDescTableView({ node, updateAttributes, editor: pdEditor }: NodeVie
           ＋ 行を追加
         </button>
       </div>
+      {/* ヘッダー色メニューの外側クリックで閉じる薄い背景 */}
+      {colorOpen && <div className="fixed inset-0 z-[5]" onMouseDown={() => { setColorOpen(false); setColorPos(null); }} />}
+      {/* ヘッダー色メニュー（最前面ポータル）*/}
+      {colorOpen && colorPos && typeof document !== 'undefined' && createPortal(
+        <div style={{ position: 'fixed', top: colorPos.top, left: colorPos.left, width: 196 }}
+          className="z-[1000] flex flex-wrap gap-1 rounded-lg border border-gray-200 bg-white p-1.5 shadow-2xl">
+          {CALLOUT_BG_COLORS.map((c) => (
+            <button key={c.value || 'none'} title={c.label}
+              onClick={() => { updateAttributes({ headerColor: c.value }); setColorOpen(false); setColorPos(null); }}
+              className="flex h-6 w-6 items-center justify-center rounded-full hover:ring-2 hover:ring-brand-300"
+              style={{ background: c.value || '#ffffff', border: (headerColor || '') === c.value ? '2px solid #7c3aed' : '1px solid #e5e7eb' }}>
+              {c.value === '' && <span className="text-[10px] leading-none text-gray-300">/</span>}
+            </button>
+          ))}
+        </div>,
+        document.body,
+      )}
       {/* ＋追加ピッカー: portal＋fixed で最前面（スクロール領域に切られない）*/}
       {picker && pickerPos && typeof document !== 'undefined' && createPortal(
         <div ref={pickerRef} style={{ position: 'fixed', top: pickerPos.top, left: pickerPos.left, width: 260 }}
@@ -1951,6 +1984,7 @@ const PageDescTableNode = TiptapNode.create({
       title:      { default: '', parseHTML: (el) => el.getAttribute('data-title') || '', renderHTML: (attrs) => ({ 'data-title': attrs.title || '' }) },
       leftLabel:  { default: '', parseHTML: (el) => el.getAttribute('data-left-label') || '', renderHTML: (attrs) => ({ 'data-left-label': attrs.leftLabel || '' }) },
       rightLabel: { default: '', parseHTML: (el) => el.getAttribute('data-right-label') || '', renderHTML: (attrs) => ({ 'data-right-label': attrs.rightLabel || '' }) },
+      headerColor:{ default: '', parseHTML: (el) => el.getAttribute('data-header-color') || '', renderHTML: (attrs) => ({ 'data-header-color': attrs.headerColor || '' }) },
       leftWidth:  { default: PD_DEFAULT_LEFT_WIDTH, parseHTML: (el) => Number(el.getAttribute('data-left-width')) || PD_DEFAULT_LEFT_WIDTH, renderHTML: (attrs) => ({ 'data-left-width': String(attrs.leftWidth ?? PD_DEFAULT_LEFT_WIDTH) }) },
       rows: {
         default: null,

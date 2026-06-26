@@ -164,6 +164,7 @@ const PageDescTableStub = TiptapNode.create({
       title:      { default: '', parseHTML: (el: HTMLElement) => el.getAttribute('data-title') || '', renderHTML: (attrs: Record<string, unknown>) => ({ 'data-title': String(attrs.title ?? '') }) },
       leftLabel:  { default: '', parseHTML: (el: HTMLElement) => el.getAttribute('data-left-label') || '', renderHTML: (attrs: Record<string, unknown>) => ({ 'data-left-label': String(attrs.leftLabel ?? '') }) },
       rightLabel: { default: '', parseHTML: (el: HTMLElement) => el.getAttribute('data-right-label') || '', renderHTML: (attrs: Record<string, unknown>) => ({ 'data-right-label': String(attrs.rightLabel ?? '') }) },
+      headerColor:{ default: '', parseHTML: (el: HTMLElement) => el.getAttribute('data-header-color') || '', renderHTML: (attrs: Record<string, unknown>) => ({ 'data-header-color': String(attrs.headerColor ?? '') }) },
       leftWidth:  { default: 240, parseHTML: (el: HTMLElement) => Number(el.getAttribute('data-left-width')) || 240, renderHTML: (attrs: Record<string, unknown>) => ({ 'data-left-width': String(attrs.leftWidth ?? 240) }) },
       rows: {
         default: null,

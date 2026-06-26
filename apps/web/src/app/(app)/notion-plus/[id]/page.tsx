@@ -358,20 +358,49 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
     if (!target) return; // 未記録 or 先頭(0)は何もしない
     const main = document.querySelector('main');
     if (!main) return;
+
     restoringScrollRef.current = true;
+    let done = false;
     let raf = 0;
     const start = performance.now();
+    const apply = () => { if (!done) main.scrollTop = target; };
+
+    const finish = () => {
+      if (done) return;
+      done = true;
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+      main.removeEventListener('wheel', cancel);
+      main.removeEventListener('touchstart', cancel);
+      window.removeEventListener('keydown', cancel);
+      restoringScrollRef.current = false;
+    };
+    // ユーザーが自分でスクロール/操作したら復元をやめる（勝手に動かさない）
+    const cancel = () => finish();
+
+    // 本文(エディタ)は遅れて高さが決まるため、毎フレーム当て込みつつ
+    // 到達して少し安定したら離す。最長 2.5 秒まで粘る（重いページ対策）。
     const tick = () => {
-      main.scrollTop = target;
+      apply();
       const reached = Math.abs(main.scrollTop - target) <= 2;
-      if (reached || performance.now() - start > 1200) {
-        restoringScrollRef.current = false;
+      if ((reached && performance.now() - start > 600) || performance.now() - start > 2500) {
+        finish();
         return;
       }
       raf = requestAnimationFrame(tick);
     };
+
+    // 画像やエディタの遅延描画で本文の高さが伸びたら、その都度当て直す
+    const ro = new ResizeObserver(() => apply());
+    ro.observe(main);
+    if (main.firstElementChild) ro.observe(main.firstElementChild);
+
+    main.addEventListener('wheel', cancel, { passive: true });
+    main.addEventListener('touchstart', cancel, { passive: true });
+    window.addEventListener('keydown', cancel);
+
     raf = requestAnimationFrame(tick);
-    return () => { cancelAnimationFrame(raf); restoringScrollRef.current = false; };
+    return () => finish();
   // id が変わった時 / データ読込完了時に復元を試みる
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, loading]);
