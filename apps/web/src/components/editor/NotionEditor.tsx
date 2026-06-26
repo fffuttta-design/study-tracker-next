@@ -2325,6 +2325,7 @@ interface NotionEditorProps {
   onSave: (title: string, content: string) => Promise<void>;
   onCreateSubPage?: () => Promise<{ id: string; title: string }>;
   recordTriggerRef?: React.MutableRefObject<(() => void) | null>;
+  contentGetterRef?: React.MutableRefObject<(() => string) | null>; // 現在の本文(TipTap JSON文字列)を即時取得する（消化モーダル等）
   onRecordText?: (text: string) => void;
   notionPageId?: string;
   notionPagePath?: string;
@@ -2349,7 +2350,7 @@ interface PastePopup {
 
 export function NotionEditor({
   initialTitle, initialContent, onSave, onCreateSubPage,
-  recordTriggerRef, onRecordText, notionPageId, notionPagePath, highlightText, onPageNavigate,
+  recordTriggerRef, contentGetterRef, onRecordText, notionPageId, notionPagePath, highlightText, onPageNavigate,
   hideTitle, compact, onEditorFocus, hideToolbar, stickyToolbar, numberHeadings, headingNumberColor, chapterHeading,
 }: NotionEditorProps) {
   const notionPlusLayout = useSettingsStore((s) => s.notionPlusLayout);
@@ -2953,6 +2954,11 @@ export function NotionEditor({
   useEffect(() => {
     if (recordTriggerRef) { recordTriggerRef.current = handleRecord; }
   }, [recordTriggerRef, handleRecord]);
+
+  // 消化モーダル等から、現在の本文(TipTap JSON)を即時取得できるようにする
+  useEffect(() => {
+    if (contentGetterRef) { contentGetterRef.current = () => (editor ? JSON.stringify(editor.getJSON()) : ''); }
+  }, [contentGetterRef, editor]);
 
   const handleCtxCreatePage = useCallback(async () => {
     setCtxMenu(null);
