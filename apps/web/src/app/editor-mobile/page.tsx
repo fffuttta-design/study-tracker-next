@@ -152,6 +152,70 @@ const PageTableStub = TiptapNode.create({
   },
 });
 
+// テーブルビュー（ページ＋説明の表）: Web版で作った表をモバイルでも消さず読み取り表示する。
+// これが無いと、表を含むページの setContent が未知ノードで失敗し本文が空になる。
+type PdRowM = { href?: string; title?: string; icon?: string; desc?: string };
+const PageDescTableStub = TiptapNode.create({
+  name: 'pageDescTable',
+  group: 'block',
+  atom: true,
+  addAttributes() {
+    return {
+      title:      { default: '', parseHTML: (el: HTMLElement) => el.getAttribute('data-title') || '', renderHTML: (attrs: Record<string, unknown>) => ({ 'data-title': String(attrs.title ?? '') }) },
+      leftLabel:  { default: '', parseHTML: (el: HTMLElement) => el.getAttribute('data-left-label') || '', renderHTML: (attrs: Record<string, unknown>) => ({ 'data-left-label': String(attrs.leftLabel ?? '') }) },
+      rightLabel: { default: '', parseHTML: (el: HTMLElement) => el.getAttribute('data-right-label') || '', renderHTML: (attrs: Record<string, unknown>) => ({ 'data-right-label': String(attrs.rightLabel ?? '') }) },
+      leftWidth:  { default: 240, parseHTML: (el: HTMLElement) => Number(el.getAttribute('data-left-width')) || 240, renderHTML: (attrs: Record<string, unknown>) => ({ 'data-left-width': String(attrs.leftWidth ?? 240) }) },
+      rows: {
+        default: null,
+        parseHTML: (el: HTMLElement) => { try { return JSON.parse(el.getAttribute('data-rows') || 'null'); } catch { return null; } },
+        renderHTML: (attrs: Record<string, unknown>) => ({ 'data-rows': JSON.stringify(attrs.rows ?? []) }),
+      },
+    };
+  },
+  parseHTML() { return [{ tag: 'div[data-type="page-desc-table"]' }]; },
+  renderHTML({ HTMLAttributes }) { return ['div', { ...HTMLAttributes, 'data-type': 'page-desc-table' }]; },
+  addNodeView() {
+    return ({ node }) => {
+      const dom = document.createElement('div');
+      dom.style.cssText = 'margin:8px 0;';
+      const rows: PdRowM[] = Array.isArray(node.attrs.rows) ? node.attrs.rows : [];
+      const title = String(node.attrs.title || '');
+      const esc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const pagesMap = (window as any).__pagesMap || {};
+      let html = '';
+      if (title) html += `<div style="font-weight:700;font-size:15px;margin:0 0 6px;">${esc(title)}</div>`;
+      html += '<div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">';
+      if (rows.length === 0) {
+        html += '<div style="color:#9ca3af;font-size:13px;padding:10px;">（空のテーブル）</div>';
+      } else {
+        for (const r of rows) {
+          const pageId = (r.href || '').match(/\/notion-plus\/([^/?#]+)/)?.[1] ?? '';
+          const live = pageId ? pagesMap[pageId] : null;
+          const t = live?.title || r.title || 'Untitled';
+          const raw = String(live?.icon || r.icon || '📄');
+          const isUrl = raw.startsWith('http') || raw.startsWith('data:');
+          const icon = isUrl
+            ? `<img src="${esc(raw)}" style="width:16px;height:16px;border-radius:4px;object-fit:cover;flex-shrink:0;" />`
+            : `<span style="font-size:14px;flex-shrink:0;">${esc(raw)}</span>`;
+          const desc = r.desc ? `<div style="color:#374151;font-size:13px;margin-top:2px;white-space:pre-wrap;">${esc(r.desc)}</div>` : '';
+          html += `<div style="border-top:1px solid #f1f1f1;padding:8px 10px;">`
+            + `<div data-href="${esc(r.href || '')}" style="display:flex;align-items:center;gap:6px;">${icon}<span style="color:#1d4ed8;font-size:14px;">${esc(t)}</span></div>`
+            + desc
+            + `</div>`;
+        }
+      }
+      html += '</div>';
+      dom.innerHTML = html;
+      dom.addEventListener('click', (e: Event) => {
+        const el = (e.target as HTMLElement).closest('[data-href]');
+        const href = el?.getAttribute('data-href');
+        if (href) window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'navigate', href }));
+      });
+      return { dom };
+    };
+  },
+});
+
 // ── 型定義 ──────────────────────────────────────────────────
 type RNMessage =
   | { type: 'init'; content: string; title: string; readOnly?: boolean }
@@ -251,6 +315,7 @@ export default function EditorMobilePage() {
       TocStub,
       InlineDatabaseStub,
       PageTableStub,
+      PageDescTableStub,
     ],
     editorProps: {
       attributes: { class: 'mobile-editor' },

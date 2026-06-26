@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
-import { useNotionPageStore, WORKSPACE_ID, addPageLinkToContent, type PageHistorySnapshot } from '@/stores/notionPageStore';
+import { useNotionPageStore, WORKSPACE_ID, addPageLinkToContent, stripDeadSingleLinks, type PageHistorySnapshot } from '@/stores/notionPageStore';
 import { useSettingsStore, type NotionBlockOffsets, DEFAULT_BLOCK_OFFSETS } from '@/stores/settingsStore';
 import { useLearningStore } from '@/stores/learningStore';
 import { localDateKey } from '@study-tracker/core';
@@ -60,6 +60,17 @@ function extractPageLinkIds(content: string): string[] {
               if (m) ids.push(m[1]);
             }
           }
+        }
+      }
+    }
+    // テーブルビュー: attrs.rows[].href も子リンクとして拾う
+    if (n.type === 'pageDescTable' && (n.attrs as { rows?: unknown } | undefined)?.rows) {
+      let rws: unknown = (n.attrs as { rows?: unknown }).rows;
+      if (typeof rws === 'string') { try { rws = JSON.parse(rws); } catch { rws = null; } }
+      if (Array.isArray(rws)) {
+        for (const r of rws as { href?: string }[]) {
+          const m = typeof r.href === 'string' ? r.href.match(/\/notion-plus\/([^/?#]+)/) : null;
+          if (m) ids.push(m[1]);
         }
       }
     }
@@ -276,6 +287,27 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page?.id, pages.length]);
 
+  // リンク切れ自動掃除：本文の単体ページリンクのうち「もう存在しないページ」を指すもの（過去に削除されたページの
+  // ゴミ "Untitled" リンク）を取り除く。誤検出を避けるため、読み込み完了後に少し待ってからストアの最新状態で点検する。
+  // ※看板/テーブルビューの中は触らない（説明文を誤って失わないため）。ブックは章ごとの保存系に任せ対象外。
+  useEffect(() => {
+    if (!page || !user || loading || page.type === 'book' || page.type === 'database') return;
+    const uid = user.uid;
+    const timer = setTimeout(() => {
+      const st = useNotionPageStore.getState();
+      if (st.loading) return;
+      const cur = st.pages.find((p) => p.id === id);
+      if (!cur || cur.type === 'book' || cur.type === 'database') return;
+      const existing = new Set(st.pages.map((p) => p.id));
+      const { content, changed } = stripDeadSingleLinks(cur, existing);
+      if (changed) {
+        update(uid, cur.id, { content }).then(() => setEditorKey((k) => k + 1));
+      }
+    }, 2000);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page?.id, pages.length, loading]);
+
   // ブック: page.content から chapters を初期化（pageId が変わった時 or 初回）
   useEffect(() => {
     if (!page || page.type !== 'book') return;
@@ -409,15 +441,21 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
       if (!user || !page) return;
       setSaving(true);
       try {
-        await update(user.uid, page.id, { title, content });
+        // 復活防止：親ページを開いたまま子ページが削除された場合、エディタ内に残った
+        // リンク切れ（存在しないページを指す単体リンク）をそのまま保存し直すと復活してしまう。
+        // 保存前に「今あるページ」を基準にリンク切れを取り除いてから書き込む。
+        const existing = new Set(pages.map((p) => p.id));
+        const stripped = stripDeadSingleLinks({ ...page, content }, existing);
+        const finalContent = stripped.changed ? stripped.content : content;
+        await update(user.uid, page.id, { title, content: finalContent });
         // 本文に貼り付けられたサブページリンクに合わせて子の parentId を付け替える
         // （リンクを切り貼りして移動したとき、パンくずが追従するように）
-        await reconcileChildrenParent(user.uid, page, content, pages, update).catch(() => {});
+        await reconcileChildrenParent(user.uid, page, finalContent, pages, update).catch(() => {});
         // 5分に1回履歴を保存
         const now = Date.now();
         if (now - lastHistorySavedAtRef.current > 5 * 60 * 1000) {
           lastHistorySavedAtRef.current = now;
-          saveHistory(user.uid, page.id, title, content).catch(() => {});
+          saveHistory(user.uid, page.id, title, finalContent).catch(() => {});
         }
       } finally {
         setSaving(false);

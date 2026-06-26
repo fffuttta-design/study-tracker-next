@@ -288,6 +288,16 @@ Firebase Firestore（users/{uid}/コレクション）
 - **Phase 3（未）**：未配置の子ページ自動収集 / 表示オプション（アイコンON/OFF・列幅・色）/ リンクごとのメモ / 切れリンクのグレーアウト。
 - **モバイル（RN）**：未対応（Web/デスクトップ優先・要追って対応）。
 
+##### テーブルビュー（ページ＋説明の表）
+
+> 看板（ページテーブル）と同じ並びの新ビュー。**1行＝「左セル：ページリンク／右セル：そのページの説明文」**の2列テーブル。「どのページが何の用か」を一覧で見せたいときに使う。
+
+- **形態**：本文に挿す **TipTap カスタムノード `pageDescTable`**（`NotionEditor.tsx`）。スラッシュコマンド **`/テーブルビュー`** で挿入（看板の隣）。1ページに複数可。
+- **データ**：ノード `attrs` に保持（本文JSON内・新規Firestoreコレクション不要）。`rows`（`PdRow[]= {id,href,title,icon,desc}`）＋ `title`（表の見出し・任意）＋ `leftLabel`/`rightLabel`（列名・既定「ページ」「説明」）＋ `leftWidth`（左列幅・既定240px）。ページのアイコン/名前は `notionPageStore` からライブ表示（リネーム追従）。
+- **機能**：行追加（**既存ページ検索追加** / **新規サブページ作成して追加**＝現在ページの子にする）／説明文の編集（自動で高さが伸びるテキスト）／行の削除・上下移動・**ドラッグ並べ替え**／左列幅のドラッグリサイズ／列名・表タイトルの編集／ページリンククリックで遷移（モーダル内は `PageNavigationContext`）。
+- **重複排除＆親子追従**：看板と同じ思想。表に入れたページは本文中の単体リンクを自動削除（`removeBodyPageLink`）。`extractPageLinkIds` / `contentHasPageLink` が `pageDescTable` の `rows[].href` も拾うので、子ページリンク自動補完の二重化を防ぎ、`reconcileChildrenParent` でこのページの子へ `parentId` を付け替える。
+- **モバイル（RN）**：`/editor-mobile` に **読み取りスタブ `PageDescTableStub`**（ページリンク＋説明を表示・タップで遷移）。未知ノードによる本文消失を防止。
+
 #### ページ操作
 
 - お気に入り登録（★ ボタン）
@@ -907,6 +917,7 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-06-26 | （次回配信） | 新機能：**テーブルビュー（ページ＋説明の表）**。看板（ページテーブル）と同じ並びの新ビューで、スラッシュ `/テーブルビュー` で挿入する TipTap ノード `pageDescTable`。1行＝「左：ページリンク／右：そのページの説明文」。行追加（既存ページ検索＋新規サブページ作成）・説明の編集（自動高さ）・行の削除/上下移動/ドラッグ並べ替え・左列幅リサイズ・列名/タイトル編集。看板と同じく表に入れたページの本文単体リンクは自動削除し、`extractPageLinkIds`/`contentHasPageLink` に `rows[].href` を拾わせて二重リンク補完を防止＋親子付け替えに追従。モバイル(/editor-mobile)は読み取りスタブ `PageDescTableStub` を追加（未知ノードで本文が空になる事故を防止）。NotionEditor.tsx（PageDescTableView/PageDescTableNode）/ notionPageStore.ts / notion-plus/[id]/page.tsx / editor-mobile/page.tsx |
 | 2026-06-25 | （Web配信） | 新機能：**Chromeクリッパー拡張＋Web記録ページ `/clip`**。見ているWebページや選択テキストをChrome拡張（ツールバー⚡／右クリック「StudyTrackerに記録」）から `/clip` を小ポップアップで開き、**ログイン済みWebセッション**で「特急メモ」(learningItems・title/content/url)へ1件記録。拡張側に認証を持たせない設計（Google Cloud設定不要）。記録画面=apps/web/src/app/clip/page.tsx（Suspense+useSearchParams、未ログイン時はその場でGoogleログイン、保存後window.close）。拡張本体=リポジトリ直下 clipper-extension/（MV3・manifest/background.js/icons、専用CLAUDE.md＋StudyTrackerクリッパー仕様書.md）。 |
 | 2026-06-25 | （次回配信） | バグ修正：**空（カーソルだけ）の箇条書き行でカーソルがマーカーとズレる**問題を修正。`editor.css` の `p:has(br)`（Shift+Enterソフト改行用に行間を詰めるルール）が、ProseMirrorが空段落へ自動挿入する末尾`<br class="ProseMirror-trailingBreak">`にも当たり、空の箇条書きだけ行間がsoft-lh(1.15)になってカーソル高さがマーカー(para-lh基準)とズレていた（入力すると直る現象の正体）。セレクタを `p:has(br:not(.ProseMirror-trailingBreak))` にして末尾自動brを除外。editor.css |
 | 2026-06-25 | （次回配信） | 改善：**インラインDB行ページのポップアップでプロパティも編集可能に（Phase 2b）**。DatabaseViewのセルエディタ群（Text/Number/Select/MultiSelect/Checkbox/Date/Url）と配色/型アイコンを共有モジュール `components/database/cells.tsx` に切り出し、DatabaseViewとインラインDBポップアップの両方で使用（循環import回避）。ポップアップでタイトル以外も `saveCell`（直近行へマージしてupdateRow）でその場編集。NotionEditor.tsx / DatabaseView.tsx / cells.tsx |

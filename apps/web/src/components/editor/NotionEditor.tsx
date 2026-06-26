@@ -1706,6 +1706,264 @@ const PageTableNode = TiptapNode.create({
   addNodeView() { return ReactNodeViewRenderer(PageTableView); },
 });
 
+// ── テーブルビュー（ページ＋説明の表）──────────────────────────────────
+// 看板（pageTable）と同じ並びの新ビュー。1行＝「左セル：ページリンク／右セル：そのページの説明文」。
+// データはノード attrs に保持（本文JSON内・新規DB不要）。
+interface PdRow { id: string; href: string; title: string; icon: string; desc: string }
+
+const PD_DEFAULT_LEFT_WIDTH = 240; // 左（ページ列）の既定幅(px)
+const PD_MIN_LEFT_WIDTH = 140;
+const PD_MAX_LEFT_WIDTH = 480;
+
+function pdParseRows(raw: unknown): PdRow[] {
+  let v: unknown = raw;
+  if (typeof v === 'string') { try { v = JSON.parse(v); } catch { v = null; } }
+  if (Array.isArray(v)) return v as PdRow[];
+  return [];
+}
+
+function PageDescTableView({ node, updateAttributes, editor: pdEditor }: NodeViewProps) {
+  const router = useRouter();
+  const onPageNavigate = useContext(PageNavigationContext);
+  const currentPageId = useContext(EditorPageIdContext);
+  const { user } = useAuthStore();
+  const pages = useNotionPageStore((s) => s.pages);
+  const addPage = useNotionPageStore((s) => s.add);
+
+  const rows = useMemo(() => pdParseRows(node.attrs.rows), [node.attrs.rows]);
+  const title = (node.attrs.title as string) || '';
+  const leftLabel = (node.attrs.leftLabel as string) || '';
+  const rightLabel = (node.attrs.rightLabel as string) || '';
+  const leftWidth = (node.attrs.leftWidth as number) || PD_DEFAULT_LEFT_WIDTH;
+
+  const commitRows = useCallback((next: PdRow[]) => updateAttributes({ rows: next }), [updateAttributes]);
+
+  const [picker, setPicker] = useState(false);
+  const [pickerPos, setPickerPos] = useState<{ top: number; left: number } | null>(null);
+  const [query, setQuery] = useState('');
+  const [resizing, setResizing] = useState<number | null>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const dragSrc = useRef<number | null>(null);
+
+  // 重複排除: 表に入れたページは、同じ本文内の単体ページリンクを削除（表を正の場所にする＝看板と同じ思想）
+  const removeBodyPageLink = (href: string) => {
+    const id = ptIdFromHref(href);
+    if (!id || !pdEditor) return;
+    const dels: { from: number; to: number }[] = [];
+    pdEditor.state.doc.descendants((n, pos) => {
+      if (n.type.name === 'pageLink') {
+        const h = n.attrs.href as string;
+        if (h && ptIdFromHref(h) === id) dels.push({ from: pos, to: pos + n.nodeSize });
+      }
+    });
+    if (!dels.length) return;
+    let tr = pdEditor.state.tr;
+    dels.sort((a, b) => b.from - a.from).forEach((d) => { tr = tr.delete(d.from, d.to); });
+    pdEditor.view.dispatch(tr);
+  };
+
+  const openPicker = (e: React.MouseEvent) => {
+    if (picker) { setPicker(false); setPickerPos(null); return; }
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const W = 260, H = 300;
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - W - 8));
+    let top = r.bottom + 4;
+    if (top + H > window.innerHeight) top = Math.max(8, r.top - H - 4);
+    setPickerPos({ top, left });
+    setPicker(true); setQuery('');
+  };
+  const closePicker = () => { setPicker(false); setPickerPos(null); setQuery(''); };
+
+  useEffect(() => {
+    if (!picker) return;
+    const h = (e: MouseEvent) => { if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) closePicker(); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [picker]);
+
+  // 既存ページを行として追加（本文の単体リンクは重複排除で消す）
+  const addRowFromPage = (p: NotionPage) => {
+    const href = `/notion-plus/${p.id}`;
+    if (rows.some((r) => r.href === href)) { closePicker(); return; } // 既に表にある
+    commitRows([...rows, { id: ptNewId(), href, title: p.title || 'Untitled', icon: p.icon || '📄', desc: '' }]);
+    removeBodyPageLink(href);
+    closePicker();
+  };
+  // 新規サブページを作成して行に追加（現在ページの子にする）
+  const createAndAdd = async () => {
+    if (!user) return;
+    const np = await addPage(user.uid, currentPageId ? { parentId: currentPageId } : {});
+    commitRows([...rows, { id: ptNewId(), href: `/notion-plus/${np.id}`, title: np.title || 'Untitled', icon: np.icon || '📄', desc: '' }]);
+    closePicker();
+  };
+
+  const setDesc = (i: number, desc: string) => commitRows(rows.map((r, k) => (k === i ? { ...r, desc } : r)));
+  const removeRow = (i: number) => commitRows(rows.filter((_, k) => k !== i));
+  const moveRow = (i: number, dir: -1 | 1) => {
+    const j = i + dir; if (j < 0 || j >= rows.length) return;
+    const next = [...rows]; [next[i], next[j]] = [next[j], next[i]]; commitRows(next);
+  };
+  // 行のドラッグ並べ替え（target の位置へ挿入）
+  const dropRow = (target: number) => {
+    const src = dragSrc.current; dragSrc.current = null;
+    if (src === null || src === target) return;
+    const next = [...rows];
+    const [moved] = next.splice(src, 1);
+    const idx = src < target ? target - 1 : target;
+    next.splice(idx, 0, moved);
+    commitRows(next);
+  };
+
+  const navigate = (href: string) => onPageNavigate ? onPageNavigate(href) : router.push(href);
+
+  // 左列幅のドラッグリサイズ（移動中はローカル state、離したら確定）
+  const startResize = (e: React.MouseEvent, startW: number) => {
+    e.preventDefault(); e.stopPropagation();
+    const startX = e.clientX;
+    const clamp = (w: number) => Math.max(PD_MIN_LEFT_WIDTH, Math.min(PD_MAX_LEFT_WIDTH, w));
+    setResizing(startW);
+    const onMove = (ev: MouseEvent) => setResizing(clamp(startW + (ev.clientX - startX)));
+    const onUp = (ev: MouseEvent) => {
+      window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp);
+      setResizing(null); updateAttributes({ leftWidth: clamp(startW + (ev.clientX - startX)) });
+    };
+    window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
+  };
+
+  // 検索なしでも最近更新したノートが上に来る（看板と同じ）
+  const filteredPages = pages
+    .filter((p) => (p.title || '').toLowerCase().includes(query.toLowerCase()))
+    .slice()
+    .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
+    .slice(0, 30);
+
+  const lw = resizing ?? leftWidth;
+
+  return (
+    <NodeViewWrapper data-type="page-desc-table" contentEditable={false}>
+      <div className="page-desc-table my-3" contentEditable={false}>
+        {/* タイトル（任意） */}
+        <input
+          value={title}
+          onChange={(e) => updateAttributes({ title: e.target.value })}
+          placeholder="テーブルのタイトル（任意）"
+          className="mb-2 w-full max-w-md bg-transparent text-lg font-bold text-gray-800 outline-none placeholder:font-normal placeholder:text-gray-300"
+        />
+        <div className="overflow-hidden rounded-xl border border-gray-200">
+          {/* ヘッダー行（列名は編集可・既定は「ページ」「説明」） */}
+          <div className="flex border-b border-gray-200 bg-gray-50">
+            <div className="relative shrink-0 border-r border-gray-200 px-3 py-2" style={{ width: lw }}>
+              <input value={leftLabel} onChange={(e) => updateAttributes({ leftLabel: e.target.value })}
+                placeholder="ページ" className="w-full bg-transparent text-xs font-semibold text-gray-500 outline-none placeholder:text-gray-400" />
+              {/* 左列リサイズハンドル */}
+              <div onMouseDown={(e) => startResize(e, leftWidth)}
+                className="absolute -right-1 top-0 z-10 h-full w-2 cursor-col-resize" title="幅を変更">
+                <span className="absolute right-1 top-1/2 h-4 w-1 -translate-y-1/2 rounded-full bg-gray-300 opacity-0 transition hover:opacity-100" />
+              </div>
+            </div>
+            <div className="flex-1 px-3 py-2">
+              <input value={rightLabel} onChange={(e) => updateAttributes({ rightLabel: e.target.value })}
+                placeholder="説明" className="w-full bg-transparent text-xs font-semibold text-gray-500 outline-none placeholder:text-gray-400" />
+            </div>
+          </div>
+          {/* データ行 */}
+          {rows.length === 0 ? (
+            <div className="px-3 py-4 text-center text-xs text-gray-400">行がありません。下の「＋ 行を追加」から始めましょう。</div>
+          ) : rows.map((r, i) => {
+            const live = pages.find((p) => p.id === ptIdFromHref(r.href));
+            const rTitle = live?.title || r.title || 'Untitled';
+            const rIcon = live?.icon || r.icon || '📄';
+            return (
+              <div key={r.id} className="group/row flex border-b border-gray-100 last:border-b-0"
+                onDragOver={(e) => { if (dragSrc.current !== null) { e.preventDefault(); } }}
+                onDrop={(e) => { if (dragSrc.current !== null) { e.preventDefault(); dropRow(i); } }}>
+                {/* 左：ページリンク */}
+                <div className="flex shrink-0 items-start gap-1 border-r border-gray-100 px-2 py-2" style={{ width: lw }}>
+                  <span draggable
+                    onDragStart={(e) => { dragSrc.current = i; e.dataTransfer.effectAllowed = 'move'; }}
+                    onDragEnd={() => { dragSrc.current = null; }}
+                    className="mt-0.5 cursor-grab select-none text-[11px] leading-none text-gray-300 opacity-0 transition group-hover/row:opacity-100 active:cursor-grabbing" title="ドラッグで並べ替え">⠿</span>
+                  <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden text-[13px] leading-none">{isImageSrc(rIcon)
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img src={rIcon} alt="" className="h-4 w-4 rounded object-cover" />
+                    : rIcon}</span>
+                  <button onClick={() => navigate(r.href)} className="min-w-0 flex-1 break-words text-left text-[13px] leading-snug text-gray-700 hover:text-brand-600" title={rTitle}>{rTitle}</button>
+                  <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover/row:opacity-100">
+                    {i > 0 && <button onClick={() => moveRow(i, -1)} className="flex h-5 w-5 items-center justify-center rounded text-gray-300 hover:bg-gray-100 hover:text-gray-600" title="上へ">↑</button>}
+                    {i < rows.length - 1 && <button onClick={() => moveRow(i, 1)} className="flex h-5 w-5 items-center justify-center rounded text-gray-300 hover:bg-gray-100 hover:text-gray-600" title="下へ">↓</button>}
+                    <button onClick={() => removeRow(i)} className="flex h-5 w-5 items-center justify-center rounded text-gray-300 hover:bg-gray-100 hover:text-red-400" title="行を削除">✕</button>
+                  </span>
+                </div>
+                {/* 右：説明（自動で高さが伸びる） */}
+                <div className="flex-1 px-2 py-1.5">
+                  <textarea value={r.desc} onChange={(e) => setDesc(i, e.target.value)} rows={1}
+                    placeholder="説明を入力..."
+                    onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = `${t.scrollHeight}px`; }}
+                    ref={(el) => { if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; } }}
+                    className="block w-full resize-none overflow-hidden bg-transparent text-[13px] leading-snug text-gray-700 outline-none placeholder:text-gray-300" />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {/* 行追加 */}
+        <button onClick={openPicker} className="mt-1.5 rounded-md px-2 py-1 text-xs text-gray-400 hover:bg-gray-50 hover:text-brand-500">
+          ＋ 行を追加
+        </button>
+      </div>
+      {/* ＋追加ピッカー: portal＋fixed で最前面（スクロール領域に切られない）*/}
+      {picker && pickerPos && typeof document !== 'undefined' && createPortal(
+        <div ref={pickerRef} style={{ position: 'fixed', top: pickerPos.top, left: pickerPos.left, width: 260 }}
+          className="z-[1000] rounded-xl border border-gray-200 bg-white p-2 shadow-2xl">
+          <button onMouseDown={(e) => { e.preventDefault(); createAndAdd(); }}
+            className="mb-1 flex w-full items-center gap-1.5 rounded-md bg-brand-50 px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-100">
+            ＋ 新規ページを作成して追加
+          </button>
+          <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="既存ページを検索..."
+            className="mb-1 w-full rounded border border-gray-200 px-2 py-1 text-xs outline-none focus:border-brand-400" />
+          <div className="max-h-52 overflow-y-auto">
+            {filteredPages.length === 0 ? (
+              <p className="px-2 py-1 text-xs text-gray-400">該当なし</p>
+            ) : filteredPages.map((p) => (
+              <button key={p.id} onMouseDown={(e) => { e.preventDefault(); addRowFromPage(p); }}
+                className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-xs text-gray-700 hover:bg-gray-50">
+                <span className="shrink-0 text-sm leading-none">{isImageSrc(p.icon)
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={p.icon} alt="" className="h-4 w-4 rounded object-cover" />
+                  : (p.icon || '📄')}</span>
+                <span className="truncate">{p.title || 'Untitled'}</span>
+              </button>
+            ))}
+          </div>
+        </div>,
+        document.body,
+      )}
+    </NodeViewWrapper>
+  );
+}
+
+const PageDescTableNode = TiptapNode.create({
+  name: 'pageDescTable',
+  group: 'block',
+  atom: true,
+  addAttributes() {
+    return {
+      title:      { default: '', parseHTML: (el) => el.getAttribute('data-title') || '', renderHTML: (attrs) => ({ 'data-title': attrs.title || '' }) },
+      leftLabel:  { default: '', parseHTML: (el) => el.getAttribute('data-left-label') || '', renderHTML: (attrs) => ({ 'data-left-label': attrs.leftLabel || '' }) },
+      rightLabel: { default: '', parseHTML: (el) => el.getAttribute('data-right-label') || '', renderHTML: (attrs) => ({ 'data-right-label': attrs.rightLabel || '' }) },
+      leftWidth:  { default: PD_DEFAULT_LEFT_WIDTH, parseHTML: (el) => Number(el.getAttribute('data-left-width')) || PD_DEFAULT_LEFT_WIDTH, renderHTML: (attrs) => ({ 'data-left-width': String(attrs.leftWidth ?? PD_DEFAULT_LEFT_WIDTH) }) },
+      rows: {
+        default: null,
+        parseHTML: (el) => { try { return JSON.parse(el.getAttribute('data-rows') || 'null'); } catch { return null; } },
+        renderHTML: (attrs) => ({ 'data-rows': JSON.stringify(attrs.rows ?? []) }),
+      },
+    };
+  },
+  parseHTML() { return [{ tag: 'div[data-type="page-desc-table"]' }]; },
+  renderHTML({ HTMLAttributes }) { return ['div', { ...HTMLAttributes, 'data-type': 'page-desc-table' }]; },
+  addNodeView() { return ReactNodeViewRenderer(PageDescTableView); },
+});
+
 // ── テーブル拡張（セル背景色対応）───────────────────────────────────
 
 const TABLE_CELL_COLORS = [
@@ -1906,6 +2164,7 @@ const SLASH_COMMANDS: SlashCommand[] = [
   { label: 'コード',             description: 'コードブロック',       icon: '</>', action: (e) => e?.chain().focus().toggleCodeBlock().run() },
   { label: '区切り線',           description: '水平線',               icon: '—',  action: (e) => e?.chain().focus().setHorizontalRule().run() },
   { label: 'ページテーブル',     description: 'ページリンクを整理する表', icon: '▦',  action: (e) => e?.chain().focus().insertContent({ type: 'pageTable', attrs: { sections: ptDefaultSections() } }).run() },
+  { label: 'テーブルビュー',     description: '左にページ・右に説明を並べる表', icon: '▤',  action: (e) => e?.chain().focus().insertContent({ type: 'pageDescTable', attrs: { rows: [] } }).run() },
   { label: 'ページリンク',       description: '既存ページへのショートカット（押すと移動）', icon: '🔗', openPageLinkPicker: true },
 ];
 
@@ -2162,6 +2421,7 @@ export function NotionEditor({
       TocNode,
       InlineDatabaseNode,
       PageTableNode,
+      PageDescTableNode,
       DragHandleExtension,
       HeadingOutlineIndent,
       MarkdownBulletShortcut,
