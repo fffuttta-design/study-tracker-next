@@ -335,54 +335,57 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
   }, [activeChapterId, page?.id, page?.type]);
 
   // ── スクロール位置の記憶 ───────────────────────────────────────
-  // スクロール容器は (app)/layout.tsx の <main>。スクロールするたびページIDごとに位置を記録。
+  // 実際にスクロールするのは <main> ではなく、エディタ本文の枠（NotionEditor の
+  // [data-scroll-container]＝overflow-y-auto の div）。ページは <main> を h-full で
+  // 埋めるため <main> 自身はスクロールしない。だから本文枠のスクロールを捕捉する。
+  // scroll はバブルしないので capture フェーズで document 全体から拾う（枠が後から
+  // 描画されても・ノート/ブックで枠が変わっても確実に拾える）。
   useEffect(() => {
-    const main = document.querySelector('main');
-    if (!main) return;
-    const onScroll = () => {
+    const onScroll = (e: Event) => {
       if (restoringScrollRef.current) return; // 復元中の暫定値で上書きしない
-      scrollByPage.set(id, main.scrollTop);
+      const el = e.target as HTMLElement | null;
+      if (el && el.nodeType === 1 && typeof el.matches === 'function' && el.matches('[data-scroll-container]')) {
+        scrollByPage.set(id, el.scrollTop);
+      }
     };
-    main.addEventListener('scroll', onScroll, { passive: true });
-    return () => main.removeEventListener('scroll', onScroll);
+    document.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    return () => document.removeEventListener('scroll', onScroll, { capture: true });
   }, [id]);
 
   // ── スクロール位置の復元 ───────────────────────────────────────
-  // 子ページへ入って戻ったとき、記録しておいた位置へ戻す。
-  // エディタ本文は遅れて高さが決まるため、rAFで一定時間リトライして確実に届かせる。
-  // ※通知ハイライト(?hl=)や章ディープリンク(?chapter=)のときは、そちらのスクロールを優先して復元しない。
+  // ページに入って戻ったとき、記録しておいた位置へ戻す。
+  // 本文枠は遅れて描画され高さも後から決まるため、rAF で枠を探しつつ毎フレーム当て込む。
+  // ※通知ハイライト(?hl=)や章ディープリンク(?chapter=)のときは、そちらを優先して復元しない。
   useEffect(() => {
     if (loading) return;
     if (searchParams.get('hl') || searchParams.get('chapter')) return;
     const target = scrollByPage.get(id);
     if (!target) return; // 未記録 or 先頭(0)は何もしない
-    const main = document.querySelector('main');
-    if (!main) return;
 
     restoringScrollRef.current = true;
     let done = false;
     let raf = 0;
     const start = performance.now();
-    const apply = () => { if (!done) main.scrollTop = target; };
+    const getEl = () => document.querySelector('[data-scroll-container]') as HTMLElement | null;
 
     const finish = () => {
       if (done) return;
       done = true;
       cancelAnimationFrame(raf);
-      ro.disconnect();
-      main.removeEventListener('wheel', cancel);
-      main.removeEventListener('touchstart', cancel);
+      document.removeEventListener('wheel', cancel, { capture: true });
+      document.removeEventListener('touchstart', cancel, { capture: true });
       window.removeEventListener('keydown', cancel);
       restoringScrollRef.current = false;
     };
     // ユーザーが自分でスクロール/操作したら復元をやめる（勝手に動かさない）
     const cancel = () => finish();
 
-    // 本文(エディタ)は遅れて高さが決まるため、毎フレーム当て込みつつ
-    // 到達して少し安定したら離す。最長 2.5 秒まで粘る（重いページ対策）。
+    // 枠が現れるまで探し、見つかったら毎フレーム当て込み。到達して少し安定したら離す。
+    // 本文の高さが遅れて伸びても追従できるよう最長 2.5 秒まで粘る。
     const tick = () => {
-      apply();
-      const reached = Math.abs(main.scrollTop - target) <= 2;
+      const el = getEl();
+      if (el) el.scrollTop = target;
+      const reached = !!el && Math.abs(el.scrollTop - target) <= 2;
       if ((reached && performance.now() - start > 600) || performance.now() - start > 2500) {
         finish();
         return;
@@ -390,13 +393,8 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
       raf = requestAnimationFrame(tick);
     };
 
-    // 画像やエディタの遅延描画で本文の高さが伸びたら、その都度当て直す
-    const ro = new ResizeObserver(() => apply());
-    ro.observe(main);
-    if (main.firstElementChild) ro.observe(main.firstElementChild);
-
-    main.addEventListener('wheel', cancel, { passive: true });
-    main.addEventListener('touchstart', cancel, { passive: true });
+    document.addEventListener('wheel', cancel, { capture: true, passive: true });
+    document.addEventListener('touchstart', cancel, { capture: true, passive: true });
     window.addEventListener('keydown', cancel);
 
     raf = requestAnimationFrame(tick);

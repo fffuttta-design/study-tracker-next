@@ -1748,11 +1748,20 @@ function PageDescTableView({ node, updateAttributes, editor: pdEditor }: NodeVie
   const pickerRef = useRef<HTMLDivElement>(null);
   const dragSrc = useRef<number | null>(null);
 
+  const openColorMenuAt = (x: number, y: number) => {
+    setColorPos({ top: y + 4, left: Math.max(8, Math.min(x - 80, window.innerWidth - 220)) });
+    setColorOpen(true);
+  };
+  // 色丸ボタン：その下に開く
   const openColorMenu = (e: React.MouseEvent) => {
     if (colorOpen) { setColorOpen(false); setColorPos(null); return; }
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setColorPos({ top: r.bottom + 6, left: Math.max(8, Math.min(r.left - 80, window.innerWidth - 220)) });
-    setColorOpen(true);
+    openColorMenuAt(r.left + 80, r.bottom + 2);
+  };
+  // ヘッダーを右クリック：マウス位置に開く
+  const openColorMenuCtx = (e: React.MouseEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    openColorMenuAt(e.clientX + 80, e.clientY);
   };
   // ヘッダー行の既定背景（色未指定のとき）
   const headerBg = headerColor || '#f9fafb';
@@ -1862,8 +1871,8 @@ function PageDescTableView({ node, updateAttributes, editor: pdEditor }: NodeVie
           className="mb-2 w-full max-w-md bg-transparent text-lg font-bold text-gray-800 outline-none placeholder:font-normal placeholder:text-gray-300"
         />
         <div className="overflow-hidden rounded-xl border border-gray-200">
-          {/* ヘッダー行（列名は編集可・既定は「ページ」「説明」・背景色は変更可） */}
-          <div className="group/hd flex border-b border-gray-200" style={{ background: headerBg }}>
+          {/* ヘッダー行（列名は編集可・既定は「ページ」「説明」・背景色は変更可。右クリックでも色メニュー） */}
+          <div className="group/hd flex border-b border-gray-200" style={{ background: headerBg }} onContextMenu={openColorMenuCtx}>
             <div className="relative shrink-0 border-r border-gray-200 px-3 py-2" style={{ width: lw }}>
               <input value={leftLabel} onChange={(e) => updateAttributes({ leftLabel: e.target.value })}
                 placeholder="ページ" className="w-full bg-transparent text-xs font-semibold text-gray-600 outline-none placeholder:font-normal placeholder:text-gray-400" />
@@ -1876,9 +1885,10 @@ function PageDescTableView({ node, updateAttributes, editor: pdEditor }: NodeVie
             <div className="flex flex-1 items-center px-3 py-2">
               <input value={rightLabel} onChange={(e) => updateAttributes({ rightLabel: e.target.value })}
                 placeholder="説明" className="min-w-0 flex-1 bg-transparent text-xs font-semibold text-gray-600 outline-none placeholder:font-normal placeholder:text-gray-400" />
-              {/* ヘッダー色を変更 */}
-              <button onClick={openColorMenu} className="ml-1 flex h-5 w-5 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-black/5 group-hover/hd:opacity-100" title="ヘッダーの色を変更">
+              {/* ヘッダー色を変更（常時表示の色丸。右クリックでも開く） */}
+              <button onClick={openColorMenu} className="ml-1 flex h-6 shrink-0 items-center gap-1 rounded px-1.5 text-[10px] text-gray-400 transition hover:bg-black/5 hover:text-gray-600" title="ヘッダーの色を変更（右クリックでも可）">
                 <span className="block h-3.5 w-3.5 rounded-full border border-black/15" style={{ background: headerBg }} />
+                <span>色</span>
               </button>
             </div>
           </div>
@@ -3029,6 +3039,7 @@ export function NotionEditor({
     <PageNavigationContext.Provider value={onPageNavigate ?? null}>
     <div
       className={outerClass}
+      data-scroll-container=""
       style={{
         '--para-lh': notionPlusParaLineHeight,
         '--soft-lh': notionPlusSoftLineHeight,
