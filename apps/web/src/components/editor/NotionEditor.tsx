@@ -43,7 +43,7 @@ import { useLearningStore } from '@/stores/learningStore';
 import { useNotionPageStore } from '@/stores/notionPageStore';
 import { useDbRowStore } from '@/stores/notionDatabaseRowStore';
 import { TextCell, NumberCell, SelectCell, MultiSelectCell, CheckboxCell, DateCell, UrlCell } from '@/components/database/cells';
-import { parseDbSchema, createBookChapter, serializeBookChapters, parseBookChapters, type NotionPage, type DbProperty, type DbRow } from '@study-tracker/core';
+import { parseDbSchema, createBookChapter, serializeBookChapters, parseBookChapters, localDateKey, type NotionPage, type DbProperty, type DbRow, type LearningItem } from '@study-tracker/core';
 import { IconImagePreview } from '@/components/IconImagePreview';
 import './editor.css';
 
@@ -2165,6 +2165,7 @@ interface SlashCommand {
   action?: (editor: ReturnType<typeof useEditor>) => void;
   asyncAction?: (editor: ReturnType<typeof useEditor>) => Promise<void>;
   openPageLinkPicker?: boolean; // 既存ページへのショートカット挿入：検索ピッカーを開く
+  openMemoPicker?: boolean;     // 未消化の特急メモをカーソル位置に挿入（消化）：検索ピッカーを開く
 }
 
 const SLASH_COMMANDS: SlashCommand[] = [
@@ -2209,6 +2210,7 @@ const SLASH_COMMANDS: SlashCommand[] = [
   { label: 'ページテーブル',     description: 'ページリンクを整理する表', icon: '▦',  action: (e) => e?.chain().focus().insertContent({ type: 'pageTable', attrs: { sections: ptDefaultSections() } }).run() },
   { label: 'テーブルビュー',     description: '左にページ・右に説明を並べる表', icon: '▤',  action: (e) => e?.chain().focus().insertContent({ type: 'pageDescTable', attrs: { rows: [] } }).run() },
   { label: 'ページリンク',       description: '既存ページへのショートカット（押すと移動）', icon: '🔗', openPageLinkPicker: true },
+  { label: '特急メモ',           description: '未消化の特急メモをここに挿入（消化）', icon: '⚡', openMemoPicker: true },
 ];
 
 // ── カラーパレット ────────────────────────────────────────────────────
@@ -2371,6 +2373,12 @@ export function NotionEditor({
   const allPages = useNotionPageStore((s) => s.pages);
   const [pageLinkPicker, setPageLinkPicker] = useState<{ top: number; left: number } | null>(null);
   const [pageLinkQuery, setPageLinkQuery] = useState('');
+  // 特急メモ挿入ピッカー（/特急メモ）：未消化メモをカーソル位置に挿入＝消化
+  const learningItems = useLearningStore((s) => s.items);
+  const addLearningItem = useLearningStore((s) => s.add);
+  const removeLearningItem = useLearningStore((s) => s.remove);
+  const [memoPicker, setMemoPicker] = useState<{ top: number; left: number } | null>(null);
+  const [memoQuery, setMemoQuery] = useState('');
   const activeSlashItemRef = useRef<HTMLButtonElement>(null);
   // 矢印キーで選択が移動したら、その項目をメニュー内に必ず見えるようスクロール追従させる
   useEffect(() => {
@@ -2568,6 +2576,13 @@ export function NotionEditor({
       setPageLinkPicker({ top: coords.bottom + 8, left: coords.left });
       return;
     }
+    // 特急メモを挿入（消化）：ピッカーを開く
+    if (cmd.openMemoPicker) {
+      const coords = editor.view.coordsAtPos(editor.state.selection.from);
+      setMemoQuery('');
+      setMemoPicker({ top: coords.bottom + 8, left: coords.left });
+      return;
+    }
     if (cmd.asyncAction) {
       await cmd.asyncAction(editor);
     } else if (cmd.action) {
@@ -2583,6 +2598,44 @@ export function NotionEditor({
       attrs: { href: `/notion-plus/${p.id}`, title: p.title || 'Untitled', icon: p.icon || '📄' },
     }).run();
   }, [editor]);
+
+  // 特急メモを「消化」：カーソル位置に 見出し3（タイトル）＋本文段落 を挿入し、
+  // その内容を学習アイテムとして復習登録（このページ紐づけ）、元の特急メモは削除する。
+  const insertMemoAtCursor = useCallback(async (memo: LearningItem) => {
+    setMemoPicker(null);
+    if (!editor) return;
+    const t = (memo.title || '').trim();
+    const body = memo.content || '';
+    const nodes: object[] = [];
+    if (t) nodes.push({ type: 'heading', attrs: { level: 3 }, content: [{ type: 'text', text: t }] });
+    const lines = body.replace(/\r\n/g, '\n').split('\n');
+    const hasBody = !(lines.length === 1 && lines[0].trim() === '');
+    if (hasBody) {
+      for (const line of lines) {
+        nodes.push(line.trim()
+          ? { type: 'paragraph', content: [{ type: 'text', text: line }] }
+          : { type: 'paragraph' });
+      }
+    }
+    if (nodes.length === 0) return;
+    // カーソル位置へ挿入
+    editor.chain().focus().insertContent(nodes).run();
+    // 復習登録＋元メモ削除（このページに紐づく学習アイテムとして）
+    // notionPageId が無い文脈では未消化の重複が生まれるので、挿入のみで止める
+    if (user && notionPageId) {
+      try {
+        await addLearningItem(user.uid, {
+          dateKey: localDateKey(),
+          title: memo.title,
+          content: memo.content,
+          sortOrder: Date.now(),
+          notionPageId: notionPageId,
+          notionPagePath: notionPagePath,
+        });
+        await removeLearningItem(user.uid, memo.id);
+      } catch { /* 挿入は成功しているので致命ではない */ }
+    }
+  }, [editor, user, addLearningItem, removeLearningItem, notionPageId, notionPagePath]);
 
   // ── ページ内 検索＆置換（Ctrl+R）─────────────────────────────────────
   // 本文テキストから findText の一致箇所（{from,to}）を全部集める（大文字小文字を無視）
@@ -3429,6 +3482,38 @@ export function NotionEditor({
                       : (p.icon || '📄')}</span>
                     <span className="truncate">{p.title || 'Untitled'}</span>
                     {p.type === 'book' && <span className="ml-auto shrink-0 text-[10px] text-gray-400">ブック</span>}
+                  </button>
+                ));
+              })()}
+            </div>
+          </div>
+        </>,
+        document.body,
+      )}
+
+      {/* 特急メモ挿入ピッカー（/特急メモ）＝カーソル位置に消化 */}
+      {memoPicker && typeof document !== 'undefined' && createPortal(
+        <>
+          <div className="fixed inset-0 z-[1000]" onMouseDown={() => setMemoPicker(null)} />
+          <div style={{ position: 'fixed', top: memoPicker.top, left: memoPicker.left, width: 300 }}
+            className="z-[1001] rounded-xl border border-gray-200 bg-white p-2 shadow-2xl">
+            <p className="px-1 pb-1 text-xs font-medium text-gray-400">ここに挿入する特急メモを選ぶ（消化）</p>
+            <input autoFocus value={memoQuery} onChange={(e) => setMemoQuery(e.target.value)} placeholder="メモを検索..."
+              className="mb-1 w-full rounded border border-gray-200 px-2 py-1 text-xs outline-none focus:border-brand-400" />
+            <div className="max-h-60 overflow-y-auto">
+              {(() => {
+                const list = learningItems
+                  .filter((m) => !m.notionPageId) // 未消化（特急メモ）のみ
+                  .filter((m) => `${m.title} ${m.content}`.toLowerCase().includes(memoQuery.toLowerCase()))
+                  .slice()
+                  .sort((a, b) => new Date(b.createdAt ?? b.dateKey).getTime() - new Date(a.createdAt ?? a.dateKey).getTime())
+                  .slice(0, 40);
+                if (list.length === 0) return <p className="px-2 py-2 text-xs text-gray-400">未消化の特急メモはありません</p>;
+                return list.map((m) => (
+                  <button key={m.id} onMouseDown={(e) => { e.preventDefault(); insertMemoAtCursor(m); }}
+                    className="flex w-full flex-col items-start gap-0.5 rounded px-2 py-1.5 text-left hover:bg-amber-50">
+                    <span className="w-full truncate text-xs font-medium text-gray-700">⚡ {m.title || '（タイトルなし）'}</span>
+                    {m.content && <span className="w-full truncate text-[10px] text-gray-400">{m.content}</span>}
                   </button>
                 ));
               })()}

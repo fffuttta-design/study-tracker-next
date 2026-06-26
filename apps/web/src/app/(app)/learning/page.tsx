@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback, memo, Suspense } from 'react';
+import { useState, useMemo, memo, Suspense } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/stores/authStore';
 import { useLearningStore } from '@/stores/learningStore';
@@ -97,7 +97,6 @@ function LearningPageContent() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [quickInboxOpen, setQuickInboxOpen] = useState(false);
-  const [digestItem, setDigestItem] = useState<LearningItem | null>(null);
   const dateKey = toDateKey(selectedDate);
 
   const todayItems = useMemo(
@@ -113,10 +112,6 @@ function LearningPageContent() {
     ),
     [items]
   );
-
-  const handleDigest = useCallback((item: LearningItem) => {
-    setDigestItem(item);
-  }, []);
 
   if (loading) {
     return <div className="flex h-full items-center justify-center"><Spinner /></div>;
@@ -192,23 +187,14 @@ function LearningPageContent() {
 
       {/* タブコンテンツ */}
       <div className="flex-1 overflow-y-auto bg-white">
-        {tab === 0 && <DashboardTab todayItems={todayItems} dueItems={dueItems} inboxItems={inboxItems} uid={user?.uid ?? ''} onAdd={() => setAddDialogOpen(true)} onQuickAdd={() => setQuickInboxOpen(true)} onDigest={handleDigest} />}
+        {tab === 0 && <DashboardTab todayItems={todayItems} dueItems={dueItems} inboxItems={inboxItems} uid={user?.uid ?? ''} onAdd={() => setAddDialogOpen(true)} onQuickAdd={() => setQuickInboxOpen(true)} />}
         {tab === 1 && <TodayTab items={todayItems} uid={user?.uid ?? ''} onAdd={() => setAddDialogOpen(true)} />}
         {tab === 2 && <ReviewTab dueItems={dueItems} uid={user?.uid ?? ''} />}
         {tab === 3 && <AchievementTab items={items} uid={user?.uid ?? ''} />}
         {tab === 4 && <AllItemsTab items={items} uid={user?.uid ?? ''} />}
         {tab === 5 && <LogTab />}
-        {tab === 6 && <QuickTab inboxItems={inboxItems} uid={user?.uid ?? ''} onDigest={handleDigest} />}
+        {tab === 6 && <QuickTab inboxItems={inboxItems} uid={user?.uid ?? ''} />}
       </div>
-
-      {/* 消化ダイアログ（特急メモ → 正式なメモへ移行） */}
-      {digestItem !== null && user && (
-        <DigestDialog
-          item={digestItem}
-          uid={user.uid}
-          onClose={() => setDigestItem(null)}
-        />
-      )}
 
       {/* AddItemDialog（通常の学習追加） */}
       {addDialogOpen && user && (
@@ -229,14 +215,13 @@ function LearningPageContent() {
 
 // ── ダッシュボードタブ ───────────────────────────────────────────────
 
-function DashboardTab({ todayItems, dueItems, inboxItems, uid, onAdd, onQuickAdd, onDigest }: {
+function DashboardTab({ todayItems, dueItems, inboxItems, uid, onAdd, onQuickAdd }: {
   todayItems: LearningItem[];
   dueItems: LearningItem[];
   inboxItems: LearningItem[];
   uid: string;
   onAdd: () => void;
   onQuickAdd: () => void;
-  onDigest: (item: LearningItem) => void;
 }) {
   const [reviewSortDir, setReviewSortDir] = useState<'asc' | 'desc'>('asc');
   const [expandedInboxIds, setExpandedInboxIds] = useState<Set<string>>(new Set());
@@ -343,10 +328,6 @@ function DashboardTab({ todayItems, dueItems, inboxItems, uid, onAdd, onQuickAdd
                                 onClick={() => setEditInboxItem(item)}
                                 className="rounded-lg border border-gray-200 px-2.5 py-1 text-[11px] font-medium text-gray-500 hover:border-amber-300 hover:text-amber-600"
                               >✏️ 編集</button>
-                              <button
-                                onClick={() => onDigest(item)}
-                                className="rounded-lg bg-brand-500 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-brand-600"
-                              >消化する →</button>
                               <button
                                 onClick={() => removeItem(uid, item.id)}
                                 className="rounded-lg border border-gray-200 px-2 py-1 text-[11px] text-gray-400 hover:border-red-200 hover:text-red-400"
@@ -1055,7 +1036,7 @@ function QuickInboxModal({ uid, onClose }: { uid: string; onClose: () => void })
             {saving ? '保存中...' : '⚡ 特急で保存'}
           </button>
         </div>
-        <p className="mt-2 text-center text-[10px] text-gray-400">NotionPlus への紐づけは「⚡ 特急」タブから消化できます</p>
+        <p className="mt-2 text-center text-[10px] text-gray-400">消化は、ノートを開いて「/特急メモ」でカーソル位置に挿入します</p>
       </div>
     </div>
   );
@@ -1122,10 +1103,9 @@ function InboxEditModal({ item, uid, onClose }: { item: LearningItem; uid: strin
 
 // ── ⚡ 特急タブ ─────────────────────────────────────────────────────────
 
-function QuickTab({ inboxItems, uid, onDigest }: {
+function QuickTab({ inboxItems, uid }: {
   inboxItems: LearningItem[];
   uid: string;
-  onDigest: (item: LearningItem) => void;
 }) {
   const { remove } = useLearningStore();
   const [editItem, setEditItem] = useState<LearningItem | null>(null);
@@ -1143,7 +1123,7 @@ function QuickTab({ inboxItems, uid, onDigest }: {
   return (
     <div className="p-6">
       <p className="mb-4 text-xs text-gray-400">
-        NotionPlus に紐づけていないメモです。「消化する」を押してページに関連付けましょう。
+        まだ消化していない特急メモです。消化するには、ノートを開いて「/特急メモ」でカーソル位置に挿入します。
       </p>
       <div className="space-y-3">
         {inboxItems.map((item) => (
@@ -1162,12 +1142,6 @@ function QuickTab({ inboxItems, uid, onDigest }: {
                   className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 hover:border-amber-300 hover:text-amber-600"
                 >
                   ✏️ 編集
-                </button>
-                <button
-                  onClick={() => onDigest(item)}
-                  className="rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-600"
-                >
-                  消化する →
                 </button>
                 <button
                   onClick={() => remove(uid, item.id)}
@@ -1610,196 +1584,3 @@ function Spinner() {
 
 const cls = 'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-500';
 
-// ── 消化（特急メモ → 正式なメモ）ダイアログ ───────────────────────────────
-
-function buildPagePath(pageId: string, pages: { id: string; title: string; parentId?: string }[]): string {
-  const parts: string[] = [];
-  let current = pages.find((p) => p.id === pageId);
-  while (current) {
-    parts.unshift(current.title || '（無題）');
-    current = current.parentId ? pages.find((p) => p.id === current!.parentId) : undefined;
-  }
-  return parts.join(' > ');
-}
-
-function PageIcon({ icon, size = 'base' }: { icon: string; size?: 'sm' | 'base' | 'lg' }) {
-  const sizeClass = size === 'sm' ? 'h-4 w-4' : size === 'lg' ? 'h-7 w-7' : 'h-5 w-5';
-  if (icon.startsWith('http://') || icon.startsWith('https://') || icon.startsWith('data:')) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={icon} alt="" className={`${sizeClass} shrink-0 rounded object-cover`} />;
-  }
-  return <span className={`shrink-0 leading-none ${size === 'lg' ? 'text-2xl' : size === 'sm' ? 'text-sm' : 'text-base'}`}>{icon}</span>;
-}
-
-// 特急メモの内容を、ページ本文(TipTap JSON)の末尾に「見出し3＋本文段落」として追記する。
-// 本文は改行ごとに段落へ分割。タイトル空なら段落のみ。本文空ならタイトル見出しのみ。
-function appendMemoToPageContent(content: string, title: string, body: string): string {
-  let doc: { type: string; content: unknown[] };
-  try {
-    const parsed = JSON.parse(content || '') as { type?: string; content?: unknown[] };
-    doc = (parsed && parsed.type === 'doc' && Array.isArray(parsed.content))
-      ? (parsed as { type: string; content: unknown[] })
-      : { type: 'doc', content: [] };
-  } catch {
-    doc = { type: 'doc', content: [] };
-  }
-  const blocks: unknown[] = [];
-  const t = title.trim();
-  if (t) {
-    blocks.push({ type: 'heading', attrs: { level: 3 }, content: [{ type: 'text', text: t }] });
-  }
-  const lines = body.replace(/\r\n/g, '\n').split('\n');
-  const hasBody = !(lines.length === 1 && lines[0].trim() === '');
-  if (hasBody) {
-    for (const line of lines) {
-      blocks.push(line.trim()
-        ? { type: 'paragraph', content: [{ type: 'text', text: line }] }
-        : { type: 'paragraph' });
-    }
-  }
-  if (blocks.length === 0) return content || JSON.stringify(doc);
-  return JSON.stringify({ ...doc, content: [...doc.content, ...blocks] });
-}
-
-function DigestDialog({ item, uid, onClose }: {
-  item: LearningItem;
-  uid: string;
-  onClose: () => void;
-}) {
-  const { pages, add: addPage, update: updatePage } = useNotionPageStore();
-  const { add: addItem, remove: removeItem } = useLearningStore();
-
-  const [title, setTitle] = useState(item.title);
-  const [content, setContent] = useState(item.content);
-  const [query, setQuery] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  // 配置先候補：通常ノートのみ（workspace／DB／ブックは除外）・更新日時の新しい順
-  const candidatePages = useMemo(
-    () =>
-      pages
-        .filter((p) => p.id !== 'workspace' && !p.type)
-        .filter((p) => (p.title || '').toLowerCase().includes(query.toLowerCase()))
-        .slice()
-        .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
-        .slice(0, 40),
-    [pages, query],
-  );
-
-  // 指定ページへ消化：本文へ追記＋復習登録＋元メモ削除
-  const digestInto = async (pageId: string, pageTitle: string, pageContent: string) => {
-    const newContent = appendMemoToPageContent(pageContent, title, content);
-    await updatePage(uid, pageId, { content: newContent });
-    await addItem(uid, {
-      dateKey: localDateKey(),
-      title: title.trim() || item.title,
-      content: content.trim(),
-      sortOrder: Date.now(),
-      notionPageId: pageId,
-      notionPagePath: pageTitle,
-    });
-    await removeItem(uid, item.id);
-    onClose();
-  };
-
-  const handlePick = async (pageId: string) => {
-    const page = pages.find((p) => p.id === pageId);
-    if (!page || saving) return;
-    setSaving(true);
-    try {
-      await digestInto(pageId, page.title || '（無題）', page.content);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleCreateNew = async () => {
-    if (saving) return;
-    setSaving(true);
-    try {
-      const newTitle = title.trim() || '無題メモ';
-      const np = await addPage(uid, { title: newTitle, icon: '📝' });
-      await digestInto(np.id, newTitle, np.content);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="flex w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        {/* ヘッダー */}
-        <div className="flex items-center justify-between border-b border-brand-100 bg-brand-50 px-5 py-3">
-          <div>
-            <h3 className="text-sm font-semibold text-brand-700">📥 消化（正式なメモへ移行）</h3>
-            <p className="mt-0.5 text-[11px] text-brand-500">選んだページの本文に書き写し、復習に登録します</p>
-          </div>
-          <button onClick={onClose} className="rounded p-1 text-brand-400 hover:bg-brand-100 hover:text-brand-600">✕</button>
-        </div>
-
-        <div className="max-h-[70vh] space-y-4 overflow-y-auto p-5">
-          {/* タイトル・本文（消化前に手直し可） */}
-          <div className="space-y-2">
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="タイトル"
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium outline-none focus:border-brand-400"
-            />
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              rows={4}
-              placeholder="内容"
-              className="w-full resize-none rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs outline-none focus:border-brand-400"
-            />
-          </div>
-
-          {/* 新規ページを作成して消化 */}
-          <button
-            onClick={handleCreateNew}
-            disabled={saving}
-            className="flex w-full items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-2 text-left text-xs font-medium text-brand-600 hover:bg-brand-100 disabled:opacity-40"
-          >
-            ＋ 新規ページを作成して消化（タイトル＝「{title.trim() || '無題メモ'}」）
-          </button>
-
-          {/* 既存ページに追記 */}
-          <div>
-            <p className="mb-1.5 text-xs font-semibold text-gray-500">📁 既存ページに追記（クリックで消化）</p>
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="ページを検索..."
-              className="mb-2 w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs outline-none focus:border-brand-400"
-            />
-            <div className="max-h-60 space-y-1 overflow-y-auto">
-              {candidatePages.length === 0 ? (
-                <p className="rounded-lg border border-gray-200 p-3 text-center text-xs text-gray-400">該当ページなし</p>
-              ) : (
-                candidatePages.map((p) => (
-                  <button
-                    key={p.id}
-                    disabled={saving}
-                    onClick={() => handlePick(p.id)}
-                    className="flex w-full items-center gap-2 rounded-lg border border-gray-100 px-3 py-2 text-left hover:border-brand-200 hover:bg-brand-50 disabled:opacity-40"
-                  >
-                    <PageIcon icon={p.icon} size="sm" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-xs font-medium text-gray-700">{p.title || '（無題）'}</span>
-                      <span className="block truncate text-[10px] text-gray-400">{buildPagePath(p.id, pages)}</span>
-                    </span>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-
-        {saving && (
-          <div className="border-t border-gray-100 bg-gray-50 px-5 py-2 text-center text-xs text-gray-400">消化中...</div>
-        )}
-      </div>
-    </div>
-  );
-}
