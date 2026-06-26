@@ -36,7 +36,6 @@ import Youtube from '@tiptap/extension-youtube';
 import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
 import { TableMap } from '@tiptap/pm/tables';
 import { DragHandleExtension, setDragHandleVertOffset } from './DragHandleExtension';
-import { HeadingOutlineIndent } from './HeadingOutlineIndent';
 import { AnnotationMark } from './AnnotationMark';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -2467,7 +2466,6 @@ export function NotionEditor({
       PageTableNode,
       PageDescTableNode,
       DragHandleExtension,
-      HeadingOutlineIndent,
       MarkdownBulletShortcut,
       MarkdownCodeBlockShortcut,
       LineBoldShortcut,
