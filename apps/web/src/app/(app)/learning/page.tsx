@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef, useCallback, useEffect, memo, Suspense } from 'react';
+import { useState, useMemo, useCallback, memo, Suspense } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/stores/authStore';
 import { useLearningStore } from '@/stores/learningStore';
@@ -88,7 +88,7 @@ export default function LearningPage() {
 
 function LearningPageContent() {
   const { user } = useAuthStore();
-  const { items, loading, remove } = useLearningStore();
+  const { items, loading } = useLearningStore();
   const searchParams = useSearchParams();
   const [tab, setTab] = useState(() => {
     const t = Number(searchParams.get('tab') ?? '0');
@@ -98,7 +98,6 @@ function LearningPageContent() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [quickInboxOpen, setQuickInboxOpen] = useState(false);
   const [digestItem, setDigestItem] = useState<LearningItem | null>(null);
-  const [aiTriageItem, setAiTriageItem] = useState<LearningItem | null>(null);
   const dateKey = toDateKey(selectedDate);
 
   const todayItems = useMemo(
@@ -118,16 +117,6 @@ function LearningPageContent() {
   const handleDigest = useCallback((item: LearningItem) => {
     setDigestItem(item);
   }, []);
-
-  const handleAiTriage = useCallback((item: LearningItem) => {
-    setAiTriageItem(item);
-  }, []);
-
-  const handleAfterRecord = useCallback(async () => {
-    if (!digestItem || !user) return;
-    await remove(user.uid, digestItem.id);
-    setDigestItem(null);
-  }, [digestItem, user, remove]);
 
   if (loading) {
     return <div className="flex h-full items-center justify-center"><Spinner /></div>;
@@ -203,31 +192,29 @@ function LearningPageContent() {
 
       {/* タブコンテンツ */}
       <div className="flex-1 overflow-y-auto bg-white">
-        {tab === 0 && <DashboardTab todayItems={todayItems} dueItems={dueItems} inboxItems={inboxItems} uid={user?.uid ?? ''} onAdd={() => setAddDialogOpen(true)} onQuickAdd={() => setQuickInboxOpen(true)} onDigest={handleDigest} onAiTriage={handleAiTriage} />}
+        {tab === 0 && <DashboardTab todayItems={todayItems} dueItems={dueItems} inboxItems={inboxItems} uid={user?.uid ?? ''} onAdd={() => setAddDialogOpen(true)} onQuickAdd={() => setQuickInboxOpen(true)} onDigest={handleDigest} />}
         {tab === 1 && <TodayTab items={todayItems} uid={user?.uid ?? ''} onAdd={() => setAddDialogOpen(true)} />}
         {tab === 2 && <ReviewTab dueItems={dueItems} uid={user?.uid ?? ''} />}
         {tab === 3 && <AchievementTab items={items} uid={user?.uid ?? ''} />}
         {tab === 4 && <AllItemsTab items={items} uid={user?.uid ?? ''} />}
         {tab === 5 && <LogTab />}
-        {tab === 6 && <QuickTab inboxItems={inboxItems} uid={user?.uid ?? ''} onDigest={handleDigest} onAiTriage={handleAiTriage} />}
+        {tab === 6 && <QuickTab inboxItems={inboxItems} uid={user?.uid ?? ''} onDigest={handleDigest} />}
       </div>
 
-      {/* AI整理モーダル */}
-      {aiTriageItem && user && (
-        <AiTriageModal
-          item={aiTriageItem}
+      {/* 消化ダイアログ（特急メモ → 正式なメモへ移行） */}
+      {digestItem !== null && user && (
+        <DigestDialog
+          item={digestItem}
           uid={user.uid}
-          onClose={() => setAiTriageItem(null)}
-          onManualDigest={(item) => { setAiTriageItem(null); setDigestItem(item); }}
+          onClose={() => setDigestItem(null)}
         />
       )}
 
-      {/* AddItemDialog（通常 or 特急消化） */}
-      {(addDialogOpen || digestItem !== null) && user && (
+      {/* AddItemDialog（通常の学習追加） */}
+      {addDialogOpen && user && (
         <AddItemDialog
           uid={user.uid}
-          onClose={() => { setAddDialogOpen(false); setDigestItem(null); }}
-          onAfterRecord={digestItem ? handleAfterRecord : undefined}
+          onClose={() => setAddDialogOpen(false)}
         />
       )}
 
@@ -242,7 +229,7 @@ function LearningPageContent() {
 
 // ── ダッシュボードタブ ───────────────────────────────────────────────
 
-function DashboardTab({ todayItems, dueItems, inboxItems, uid, onAdd, onQuickAdd, onDigest, onAiTriage }: {
+function DashboardTab({ todayItems, dueItems, inboxItems, uid, onAdd, onQuickAdd, onDigest }: {
   todayItems: LearningItem[];
   dueItems: LearningItem[];
   inboxItems: LearningItem[];
@@ -250,7 +237,6 @@ function DashboardTab({ todayItems, dueItems, inboxItems, uid, onAdd, onQuickAdd
   onAdd: () => void;
   onQuickAdd: () => void;
   onDigest: (item: LearningItem) => void;
-  onAiTriage: (item: LearningItem) => void;
 }) {
   const [reviewSortDir, setReviewSortDir] = useState<'asc' | 'desc'>('asc');
   const [expandedInboxIds, setExpandedInboxIds] = useState<Set<string>>(new Set());
@@ -357,10 +343,6 @@ function DashboardTab({ todayItems, dueItems, inboxItems, uid, onAdd, onQuickAdd
                                 onClick={() => setEditInboxItem(item)}
                                 className="rounded-lg border border-gray-200 px-2.5 py-1 text-[11px] font-medium text-gray-500 hover:border-amber-300 hover:text-amber-600"
                               >✏️ 編集</button>
-                              <button
-                                onClick={() => onAiTriage(item)}
-                                className="rounded-lg bg-purple-500 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-purple-600"
-                              >✨ AI整理</button>
                               <button
                                 onClick={() => onDigest(item)}
                                 className="rounded-lg bg-brand-500 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-brand-600"
@@ -1140,11 +1122,10 @@ function InboxEditModal({ item, uid, onClose }: { item: LearningItem; uid: strin
 
 // ── ⚡ 特急タブ ─────────────────────────────────────────────────────────
 
-function QuickTab({ inboxItems, uid, onDigest, onAiTriage }: {
+function QuickTab({ inboxItems, uid, onDigest }: {
   inboxItems: LearningItem[];
   uid: string;
   onDigest: (item: LearningItem) => void;
-  onAiTriage: (item: LearningItem) => void;
 }) {
   const { remove } = useLearningStore();
   const [editItem, setEditItem] = useState<LearningItem | null>(null);
@@ -1181,12 +1162,6 @@ function QuickTab({ inboxItems, uid, onDigest, onAiTriage }: {
                   className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 hover:border-amber-300 hover:text-amber-600"
                 >
                   ✏️ 編集
-                </button>
-                <button
-                  onClick={() => onAiTriage(item)}
-                  className="rounded-lg bg-purple-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-600"
-                >
-                  ✨ AI整理
                 </button>
                 <button
                   onClick={() => onDigest(item)}
@@ -1635,14 +1610,7 @@ function Spinner() {
 
 const cls = 'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-500';
 
-// ── AI整理モーダル ────────────────────────────────────────────────────
-
-interface TriageSuggestion {
-  pageId: string;
-  title: string;
-  icon: string;
-  reason: string;
-}
+// ── 消化（特急メモ → 正式なメモ）ダイアログ ───────────────────────────────
 
 function buildPagePath(pageId: string, pages: { id: string; title: string; parentId?: string }[]): string {
   const parts: string[] = [];
@@ -1663,100 +1631,95 @@ function PageIcon({ icon, size = 'base' }: { icon: string; size?: 'sm' | 'base' 
   return <span className={`shrink-0 leading-none ${size === 'lg' ? 'text-2xl' : size === 'sm' ? 'text-sm' : 'text-base'}`}>{icon}</span>;
 }
 
-function extractPageHeadings(content: string): { level: number; text: string }[] {
+// 特急メモの内容を、ページ本文(TipTap JSON)の末尾に「見出し3＋本文段落」として追記する。
+// 本文は改行ごとに段落へ分割。タイトル空なら段落のみ。本文空ならタイトル見出しのみ。
+function appendMemoToPageContent(content: string, title: string, body: string): string {
+  let doc: { type: string; content: unknown[] };
   try {
-    const json = JSON.parse(content) as { content?: unknown[] };
-    const headings: { level: number; text: string }[] = [];
-    function traverse(node: { type?: string; text?: string; content?: unknown[]; attrs?: { level?: number } }) {
-      if (node.type === 'heading' && node.attrs?.level) {
-        const text = ((node.content ?? []) as { text?: string }[]).map((c) => c.text ?? '').join('');
-        if (text.trim()) headings.push({ level: node.attrs.level, text: text.trim() });
-      }
-      if (Array.isArray(node.content)) (node.content as typeof node[]).forEach(traverse);
-    }
-    if (Array.isArray(json?.content)) (json.content as typeof json[]).forEach(traverse);
-    return headings;
+    const parsed = JSON.parse(content || '') as { type?: string; content?: unknown[] };
+    doc = (parsed && parsed.type === 'doc' && Array.isArray(parsed.content))
+      ? (parsed as { type: string; content: unknown[] })
+      : { type: 'doc', content: [] };
   } catch {
-    return [];
+    doc = { type: 'doc', content: [] };
   }
+  const blocks: unknown[] = [];
+  const t = title.trim();
+  if (t) {
+    blocks.push({ type: 'heading', attrs: { level: 3 }, content: [{ type: 'text', text: t }] });
+  }
+  const lines = body.replace(/\r\n/g, '\n').split('\n');
+  const hasBody = !(lines.length === 1 && lines[0].trim() === '');
+  if (hasBody) {
+    for (const line of lines) {
+      blocks.push(line.trim()
+        ? { type: 'paragraph', content: [{ type: 'text', text: line }] }
+        : { type: 'paragraph' });
+    }
+  }
+  if (blocks.length === 0) return content || JSON.stringify(doc);
+  return JSON.stringify({ ...doc, content: [...doc.content, ...blocks] });
 }
 
-function AiTriageModal({ item, uid, onClose, onManualDigest }: {
+function DigestDialog({ item, uid, onClose }: {
   item: LearningItem;
   uid: string;
   onClose: () => void;
-  onManualDigest: (item: LearningItem) => void;
 }) {
-  const { pages } = useNotionPageStore();
+  const { pages, add: addPage, update: updatePage } = useNotionPageStore();
   const { add: addItem, remove: removeItem } = useLearningStore();
 
-  const [status, setStatus] = useState<'loading' | 'done' | 'error'>('loading');
-  const [errorMsg, setErrorMsg] = useState('');
-  const [suggestions, setSuggestions] = useState<TriageSuggestion[]>([]);
-  const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
-  const [selectedSection, setSelectedSection] = useState<string | null>(null);
-  const [refinedTitle, setRefinedTitle] = useState(item.title);
-  const [refinedContent, setRefinedContent] = useState(item.content);
+  const [title, setTitle] = useState(item.title);
+  const [content, setContent] = useState(item.content);
+  const [query, setQuery] = useState('');
   const [saving, setSaving] = useState(false);
-  const calledRef = useRef(false);
 
-  useEffect(() => {
-    if (calledRef.current) return;
-    calledRef.current = true;
+  // 配置先候補：通常ノートのみ（workspace／DB／ブックは除外）・更新日時の新しい順
+  const candidatePages = useMemo(
+    () =>
+      pages
+        .filter((p) => p.id !== 'workspace' && !p.type)
+        .filter((p) => (p.title || '').toLowerCase().includes(query.toLowerCase()))
+        .slice()
+        .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
+        .slice(0, 40),
+    [pages, query],
+  );
 
-    const triagePages = pages
-      .filter((p) => p.id !== 'workspace' && !p.type)
-      .map((p) => ({
-        id: p.id,
-        title: p.title || '（無題）',
-        icon: p.icon,
-        path: buildPagePath(p.id, pages),
-      }));
+  // 指定ページへ消化：本文へ追記＋復習登録＋元メモ削除
+  const digestInto = async (pageId: string, pageTitle: string, pageContent: string) => {
+    const newContent = appendMemoToPageContent(pageContent, title, content);
+    await updatePage(uid, pageId, { content: newContent });
+    await addItem(uid, {
+      dateKey: localDateKey(),
+      title: title.trim() || item.title,
+      content: content.trim(),
+      sortOrder: Date.now(),
+      notionPageId: pageId,
+      notionPagePath: pageTitle,
+    });
+    await removeItem(uid, item.id);
+    onClose();
+  };
 
-    fetch('/api/ai-triage', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: item.title, content: item.content, pages: triagePages }),
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error((err as { error?: string }).error ?? `HTTP ${res.status}`);
-        }
-        return res.json() as Promise<{ suggestions: TriageSuggestion[]; refinedTitle: string; refinedContent: string }>;
-      })
-      .then((data) => {
-        setSuggestions(data.suggestions);
-        setRefinedTitle(data.refinedTitle || item.title);
-        setRefinedContent(data.refinedContent || item.content);
-        setSelectedPageId(data.suggestions[0]?.pageId ?? null);
-        setStatus('done');
-      })
-      .catch((e: Error) => {
-        setErrorMsg(e.message);
-        setStatus('error');
-      });
-  // 初回マウント時のみ実行
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleConfirm = async () => {
-    if (!selectedPageId) return;
-    const page = pages.find((p) => p.id === selectedPageId);
+  const handlePick = async (pageId: string) => {
+    const page = pages.find((p) => p.id === pageId);
+    if (!page || saving) return;
     setSaving(true);
     try {
-      const pageTitle = page?.title || '（無題）';
-      const pagePath = selectedSection ? `${pageTitle} > ${selectedSection}` : pageTitle;
-      await addItem(uid, {
-        dateKey: localDateKey(),
-        title: refinedTitle.trim() || item.title,
-        content: refinedContent.trim(),
-        sortOrder: Date.now(),
-        notionPageId: selectedPageId,
-        notionPagePath: pagePath,
-      });
-      await removeItem(uid, item.id);
-      onClose();
+      await digestInto(pageId, page.title || '（無題）', page.content);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCreateNew = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const newTitle = title.trim() || '無題メモ';
+      const np = await addPage(uid, { title: newTitle, icon: '📝' });
+      await digestInto(np.id, newTitle, np.content);
     } finally {
       setSaving(false);
     }
@@ -1764,180 +1727,78 @@ function AiTriageModal({ item, uid, onClose, onManualDigest }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="flex w-full max-w-lg flex-col gap-0 overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="flex w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
         {/* ヘッダー */}
-        <div className="flex items-center justify-between border-b border-purple-100 bg-purple-50 px-5 py-3">
+        <div className="flex items-center justify-between border-b border-brand-100 bg-brand-50 px-5 py-3">
           <div>
-            <h3 className="text-sm font-semibold text-purple-800">✨ AI整理アシスト</h3>
-            <p className="text-[11px] text-purple-500 mt-0.5">特急メモを整理してNotionPlusへ配置を提案します</p>
+            <h3 className="text-sm font-semibold text-brand-700">📥 消化（正式なメモへ移行）</h3>
+            <p className="mt-0.5 text-[11px] text-brand-500">選んだページの本文に書き写し、復習に登録します</p>
           </div>
-          <button onClick={onClose} className="rounded p-1 text-purple-400 hover:bg-purple-100 hover:text-purple-600">✕</button>
+          <button onClick={onClose} className="rounded p-1 text-brand-400 hover:bg-brand-100 hover:text-brand-600">✕</button>
         </div>
 
-        <div className="max-h-[70vh] overflow-y-auto p-5 space-y-4">
-          {/* 元のメモ */}
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-amber-500">⚡ 元の特急メモ</p>
-            <p className="text-sm font-medium text-gray-800">{item.title || '（タイトルなし）'}</p>
-            {item.content && (
-              <p className="mt-1 line-clamp-2 text-xs text-gray-500">{item.content}</p>
-            )}
+        <div className="max-h-[70vh] space-y-4 overflow-y-auto p-5">
+          {/* タイトル・本文（消化前に手直し可） */}
+          <div className="space-y-2">
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="タイトル"
+              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium outline-none focus:border-brand-400"
+            />
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              rows={4}
+              placeholder="内容"
+              className="w-full resize-none rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs outline-none focus:border-brand-400"
+            />
           </div>
 
-          {/* ローディング */}
-          {status === 'loading' && (
-            <div className="flex flex-col items-center gap-3 py-6">
-              <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-purple-500 border-t-transparent" />
-              <p className="text-xs text-gray-400">AIが整理中です…</p>
-            </div>
-          )}
-
-          {/* エラー */}
-          {status === 'error' && (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-center">
-              <p className="text-sm text-red-600">⚠️ {errorMsg || 'AIの応答に失敗しました'}</p>
-              <p className="mt-1 text-xs text-red-400">手動で消化するか、閉じてから再試行してください</p>
-            </div>
-          )}
-
-          {/* 結果 */}
-          {status === 'done' && (
-            <>
-              {/* 配置先候補 */}
-              <div>
-                <p className="mb-2 text-xs font-semibold text-gray-500">📁 配置先の候補（クリックで選択）</p>
-                {suggestions.length === 0 ? (
-                  <p className="rounded-xl border border-gray-200 p-3 text-center text-xs text-gray-400">
-                    適切なページが見つかりませんでした。手動で選んでください。
-                  </p>
-                ) : (
-                  <>
-                  <div className="space-y-2">
-                    {suggestions.map((s, i) => (
-                      <button
-                        key={s.pageId}
-                        onClick={() => {
-                          if (selectedPageId !== s.pageId) setSelectedSection(null);
-                          setSelectedPageId(s.pageId);
-                        }}
-                        className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-all ${
-                          selectedPageId === s.pageId
-                            ? 'border-purple-400 bg-purple-50 ring-2 ring-purple-300'
-                            : 'border-gray-200 bg-white hover:border-purple-200 hover:bg-purple-50/50'
-                        }`}
-                      >
-                        <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white ${
-                          i === 0 ? 'bg-purple-500' : 'bg-gray-300'
-                        }`}>{i + 1}</span>
-                        <PageIcon icon={s.icon} size="base" />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-gray-800">{s.title || '（無題）'}</p>
-                          <p className="mt-0.5 text-[11px] text-purple-600">{s.reason}</p>
-                        </div>
-                        {selectedPageId === s.pageId && (
-                          <span className="shrink-0 text-purple-500">✓</span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* 選択中ページのアウトライン */}
-                  {selectedPageId && (() => {
-                    const selPage = pages.find((p) => p.id === selectedPageId);
-                    if (!selPage) return null;
-                    const headings = extractPageHeadings(selPage.content);
-                    return (
-                      <div className="mt-1 rounded-xl border border-purple-200 bg-purple-50/40 p-3">
-                        <div className="mb-2 flex items-center gap-1.5">
-                          <PageIcon icon={selPage.icon} size="sm" />
-                          <p className="text-xs font-semibold text-purple-700 truncate">{selPage.title || '（無題）'} の構成</p>
-                        </div>
-                        {headings.length === 0 ? (
-                          <p className="text-xs text-gray-400">見出しなし — 末尾に追加されます</p>
-                        ) : (
-                          <div className="space-y-1">
-                            <p className="text-[10px] text-gray-400 mb-1.5">どのセクションに追加しますか？</p>
-                            <button
-                              onClick={() => setSelectedSection(null)}
-                              className={`flex w-full items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-left text-xs transition ${
-                                selectedSection === null
-                                  ? 'bg-purple-500 text-white'
-                                  : 'bg-white text-gray-500 hover:bg-purple-100'
-                              }`}
-                            >
-                              <span>↓</span>
-                              <span>末尾に追加</span>
-                            </button>
-                            {headings.map((h, hi) => (
-                              <button
-                                key={hi}
-                                onClick={() => setSelectedSection(h.text)}
-                                style={{ paddingLeft: `${(h.level - 1) * 10 + 10}px` }}
-                                className={`flex w-full items-center gap-1.5 rounded-lg py-1.5 pr-2.5 text-left text-xs transition ${
-                                  selectedSection === h.text
-                                    ? 'bg-purple-500 text-white'
-                                    : 'bg-white text-gray-500 hover:bg-purple-100'
-                                }`}
-                              >
-                                <span className={`shrink-0 text-[10px] ${selectedSection === h.text ? 'text-purple-200' : 'text-gray-300'}`}>H{h.level}</span>
-                                <span className="truncate">{h.text}</span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
-                  </>
-                )}
-              </div>
-
-              {/* 整理後の内容 */}
-              <div>
-                <p className="mb-2 text-xs font-semibold text-gray-500">📝 整理されたタイトル・内容（編集可）</p>
-                <div className="space-y-2 rounded-xl border border-gray-200 bg-gray-50 p-3">
-                  <input
-                    value={refinedTitle}
-                    onChange={(e) => setRefinedTitle(e.target.value)}
-                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium outline-none focus:border-purple-400"
-                    placeholder="タイトル"
-                  />
-                  <textarea
-                    value={refinedContent}
-                    onChange={(e) => setRefinedContent(e.target.value)}
-                    rows={4}
-                    className="w-full resize-none rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs outline-none focus:border-purple-400"
-                    placeholder="内容"
-                  />
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* フッターボタン */}
-        <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50 px-5 py-3">
+          {/* 新規ページを作成して消化 */}
           <button
-            onClick={() => onManualDigest(item)}
-            className="rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-500 hover:bg-gray-100"
+            onClick={handleCreateNew}
+            disabled={saving}
+            className="flex w-full items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-2 text-left text-xs font-medium text-brand-600 hover:bg-brand-100 disabled:opacity-40"
           >
-            手動で消化する
+            ＋ 新規ページを作成して消化（タイトル＝「{title.trim() || '無題メモ'}」）
           </button>
-          <div className="flex gap-2">
-            <button onClick={onClose} className="rounded-lg px-3 py-2 text-xs text-gray-400 hover:bg-gray-100">
-              キャンセル
-            </button>
-            <button
-              onClick={handleConfirm}
-              disabled={status !== 'done' || !selectedPageId || saving}
-              className="rounded-lg bg-purple-500 px-4 py-2 text-xs font-medium text-white hover:bg-purple-600 disabled:opacity-40"
-            >
-              {saving ? '保存中...' : selectedSection
-                ? `「${selectedSection.length > 12 ? selectedSection.slice(0, 12) + '…' : selectedSection}」へ追加`
-                : 'この内容で消化する'}
-            </button>
+
+          {/* 既存ページに追記 */}
+          <div>
+            <p className="mb-1.5 text-xs font-semibold text-gray-500">📁 既存ページに追記（クリックで消化）</p>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="ページを検索..."
+              className="mb-2 w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs outline-none focus:border-brand-400"
+            />
+            <div className="max-h-60 space-y-1 overflow-y-auto">
+              {candidatePages.length === 0 ? (
+                <p className="rounded-lg border border-gray-200 p-3 text-center text-xs text-gray-400">該当ページなし</p>
+              ) : (
+                candidatePages.map((p) => (
+                  <button
+                    key={p.id}
+                    disabled={saving}
+                    onClick={() => handlePick(p.id)}
+                    className="flex w-full items-center gap-2 rounded-lg border border-gray-100 px-3 py-2 text-left hover:border-brand-200 hover:bg-brand-50 disabled:opacity-40"
+                  >
+                    <PageIcon icon={p.icon} size="sm" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-xs font-medium text-gray-700">{p.title || '（無題）'}</span>
+                      <span className="block truncate text-[10px] text-gray-400">{buildPagePath(p.id, pages)}</span>
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
           </div>
         </div>
+
+        {saving && (
+          <div className="border-t border-gray-100 bg-gray-50 px-5 py-2 text-center text-xs text-gray-400">消化中...</div>
+        )}
       </div>
     </div>
   );
