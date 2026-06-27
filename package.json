@@ -1,6 +1,6 @@
 {
   "name": "study-tracker",
-  "version": "1.0.260",
+  "version": "1.0.261",
   "private": true,
   "type": "module",
   "main": "electron/main.js",

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef, useCallback, memo, Suspense } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect, memo, Suspense } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useAuthStore } from '@/stores/authStore';
@@ -1664,6 +1664,14 @@ function DigestDialog({ item, uid, onClose }: {
   const contentRef = useRef<(() => string) | null>(null);
   const insertRef = useRef<((nodes: object[]) => void) | null>(null);
 
+  // ⚠️ Electron 対策：モーダルを開いた直後にウィンドウへフォーカスを当て直す。
+  // これをしないと、内部にエディタを持たないモーダル（ページ未選択時）でクリック・キー入力を
+  // 受け付けない不具合が出る（NotionEditor の onCreate と同じ対策）。
+  useEffect(() => {
+    const t = setTimeout(() => { try { window.electronAPI?.focusWindow?.(); } catch { /* noop */ } }, 50);
+    return () => clearTimeout(t);
+  }, []);
+
   const [mode, setMode] = useState<'existing' | 'new'>('existing');
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState(item.title || '無題メモ');
@@ -1761,7 +1769,7 @@ function DigestDialog({ item, uid, onClose }: {
               className="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm outline-none focus:border-brand-400" />
           ) : (
             <>
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="ページを検索..."
+              <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="ページを検索..."
                 className="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-brand-400" />
               <div className="flex gap-1 overflow-x-auto pb-1">
                 {candidatePages.length === 0 ? (

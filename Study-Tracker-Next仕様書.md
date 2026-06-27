@@ -920,6 +920,7 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-06-27 | （次回配信） | バグ修正：**消化モーダル（v1.0.260）でページ検索・選択など全操作が反応しない**不具合を修正。原因＝Electron特有のフォーカス不具合（内部にエディタを持たないモーダルだとクリック/キー入力を受け付けない）。従来の消化モーダルは常時エディタを内包し `NotionEditor.onCreate` の `focusWindow()` で回避できていたが、新方式はページ選択までエディタが無く未回避だった。対策＝モーダルマウント時に `window.electronAPI?.focusWindow?.()` を呼ぶ＋検索inputに `autoFocus`。learning/page.tsx（DigestDialog） |
 | 2026-06-27 | （次回配信） | 改修（消化・挿入位置の最終形）：ブロック間クリックのピッカーは手間なので廃止し、**「追記先ノートを本物の編集画面でそのまま開き、カーソル位置に挿入」**方式へ。消化モーダルで追記先を選ぶと対象ノートが `NotionEditor` で開く → カーソルを置いて「📥 カーソル位置にメモを挿入」（`NotionEditor.insertAtCursorRef` 追加）→ 整えて確定（エディタ最終内容を保存＋復習登録＋元メモ削除）。`InsertPositionPicker`/`insertDocIntoPageContent`/`pageBlocks`/`blockPreview` 等は撤去。learning/page.tsx / NotionEditor.tsx |
 | 2026-06-27 | v1.0.258-259 | （旧・置換済）改善：消化の**挿入位置を「ノートを直接開いて視覚的に選ぶ」方式**に変更。見出しチップ一覧（無題見出しが並んで分かりにくい）を廃止し、「📍 ノートを開いて選ぶ」→ 別モーダル `InsertPositionPicker` で対象ノートの全ブロックをプレビュー（`pageBlocks`/`blockText`/`blockPreview`）、**ブロック間の線クリック**で先頭/末尾/任意位置を指定。挿入は `insertDocIntoPageContent(atIndex=splice位置)` に変更（afterIndex→atIndex）。learning/page.tsx |
 | 2026-06-26 | v1.0.257 | （旧・置換済）追加：消化モーダルで挿入位置を選べるように（見出し一覧から末尾/見出し直下）。`insertDocIntoPageContent(afterIndex)`。learning/page.tsx |
