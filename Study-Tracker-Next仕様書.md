@@ -189,12 +189,12 @@ Firebase Firestore（users/{uid}/コレクション）
 > 消化＝特急メモを「正式なメモ」へ移行する。要件定義の正本は `特急メモ消化要件定義.md`。
 
 - ⚡ 特急メモの「**消化する →**」→ **消化モーダル**（`DigestDialog`・`learning/page.tsx`）。
-- モーダルの中身：
-  - **埋め込みノートエディタ**（`NotionEditor` を動的importで流用・`hideTitle`・`stickyToolbar`）。開いた時点で**そのメモが入っている**（見出し3＝タイトル＋本文段落）。スラッシュ全部使える（`/特急メモ` で他メモも挿入可。モーダル内は `notionPageId` 無し＝挿入のみで消化はしない）。
-  - **追記先トグル**：「既存ページ」（検索＋一覧・通常ノートのみ・更新日時順・40件）/「新規ページ」（タイトル入力）。
-  - **挿入位置**：既存ページ選択時、「📍 ノートを開いて選ぶ」で別モーダル `InsertPositionPicker` を開き、対象ノートの全ブロックをプレビュー（`pageBlocks`/`blockPreview`）。ブロック間の線クリックで位置決定（先頭/末尾/任意ブロック間）。`insertDocIntoPageContent(atIndex)` で splice 挿入。既定は末尾。
-  - フッター「キャンセル」「**確定して復習に登録**」。
-- 「確定」で：①エディタの現在内容を `contentGetterRef`（`NotionEditor` に追加した即時ゲッター）で取得 → ②既存ページの指定位置へ挿入 or 新規ページ作成して書き込み（`insertDocIntoPageContent`・afterIndex で末尾/見出し直後を指定）③`learningItem` を1件作成（content＝整えた内容のプレーンテキスト・`notionPageId`＝追記先）→ 復習へ ④元の特急メモ削除。
+- モーダルの中身（**実際の対象ノートを開いてカーソル位置に挿入**する方式）：
+  - 上部に**追記先トグル**：「既存ページ」（検索＋横並びチップ・通常ノートのみ）/「新規ページ」（タイトル入力）。
+  - 追記先を選ぶと、**対象ノートが本物の編集画面（`NotionEditor` 動的import流用・`hideTitle`・`stickyToolbar`）でそのまま開く**（既存＝実内容／新規＝空・`key` で切替時リロード・`notionPageId` 無し＝`/特急メモ` は挿入のみ）。
+  - 入れたい場所に**カーソルを置いて**フッター「**📥 カーソル位置にメモを挿入**」→ その場に特急メモ（見出し3＋本文）を挿入（`NotionEditor.insertAtCursorRef`）。続けて整形可。挿入せず確定したら末尾追記（`appendBlocksToDoc`）。
+  - フッター「📥 カーソル位置にメモを挿入」/「キャンセル」/「**確定して復習に登録**」。
+- 「確定」で：①対象ノートエディタの現在内容を `contentGetterRef` で取得（＝挿入後の最終形）→ ②既存ページを更新 or 新規ページ作成して書き込み ③`learningItem` を1件作成（content＝元メモ本文・`notionPageId`＝追記先）→ 復習へ ④元の特急メモ削除。
 - ※ `/特急メモ` スラッシュ（NotionPlus ページでカーソル位置にメモ挿入＝`openMemoPicker`/`insertMemoAtCursor`）は機能として残置。旧「AI整理モーダル」と一時版（v1.0.254 末尾追記／v1.0.255 カーソル挿入のみ）は置換済み（`/api/ai-triage` は未使用で残置）。
 
 ---
@@ -920,7 +920,8 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
-| 2026-06-27 | （次回配信） | 改善：消化の**挿入位置を「ノートを直接開いて視覚的に選ぶ」方式**に変更。見出しチップ一覧（無題見出しが並んで分かりにくい）を廃止し、「📍 ノートを開いて選ぶ」→ 別モーダル `InsertPositionPicker` で対象ノートの全ブロックをプレビュー（`pageBlocks`/`blockText`/`blockPreview`）、**ブロック間の線クリック**で先頭/末尾/任意位置を指定。挿入は `insertDocIntoPageContent(atIndex=splice位置)` に変更（afterIndex→atIndex）。learning/page.tsx |
+| 2026-06-27 | （次回配信） | 改修（消化・挿入位置の最終形）：ブロック間クリックのピッカーは手間なので廃止し、**「追記先ノートを本物の編集画面でそのまま開き、カーソル位置に挿入」**方式へ。消化モーダルで追記先を選ぶと対象ノートが `NotionEditor` で開く → カーソルを置いて「📥 カーソル位置にメモを挿入」（`NotionEditor.insertAtCursorRef` 追加）→ 整えて確定（エディタ最終内容を保存＋復習登録＋元メモ削除）。`InsertPositionPicker`/`insertDocIntoPageContent`/`pageBlocks`/`blockPreview` 等は撤去。learning/page.tsx / NotionEditor.tsx |
+| 2026-06-27 | v1.0.258-259 | （旧・置換済）改善：消化の**挿入位置を「ノートを直接開いて視覚的に選ぶ」方式**に変更。見出しチップ一覧（無題見出しが並んで分かりにくい）を廃止し、「📍 ノートを開いて選ぶ」→ 別モーダル `InsertPositionPicker` で対象ノートの全ブロックをプレビュー（`pageBlocks`/`blockText`/`blockPreview`）、**ブロック間の線クリック**で先頭/末尾/任意位置を指定。挿入は `insertDocIntoPageContent(atIndex=splice位置)` に変更（afterIndex→atIndex）。learning/page.tsx |
 | 2026-06-26 | v1.0.257 | （旧・置換済）追加：消化モーダルで挿入位置を選べるように（見出し一覧から末尾/見出し直下）。`insertDocIntoPageContent(afterIndex)`。learning/page.tsx |
 | 2026-06-26 | （次回配信） | 改修（消化・最終形）：**「消化する」→ 消化モーダル**方式に確定。モーダルに**本物のノートエディタ（NotionEditor）を埋め込み**（最初からそのメモ入り・スラッシュ可・`/特急メモ`で他メモも挿入可）、整えて「**確定**」で **既存ページ追記 or 新規ページ作成**＋復習登録＋元メモ削除。確定時の本文取得用に NotionEditor へ `contentGetterRef`（即時ゲッター）を追加。helpers＝`memoToDocJson`/`appendDocToPageContent`/`docToPlainText`/`buildPagePath`。`/特急メモ` スラッシュ自体は残置。learning/page.tsx（DigestDialog）/ NotionEditor.tsx |
 | 2026-06-26 | v1.0.255 | （旧・置換済）改修：**消化の挿入位置を「カーソル位置（ユーザー指定）」に変更**し、動線を**エディタ側「/特急メモ」**へ移行（要件定義更新）。NotionPlus ページで `/特急メモ`（`openMemoPicker`）→ 未消化メモのピッカー → 選んだメモを**カーソル位置に挿入**（`insertMemoAtCursor`＝見出し3＋本文段落）＋学習アイテム作成（開いているページ紐づけ）＋元メモ削除。直前の v1.0.254「カード側 DigestDialog（末尾追記）」は撤去（DigestDialog/appendMemoToPageContent/buildPagePath/PageIcon 削除・インボックスカードの「消化する」ボタンも撤去）。NotionEditor.tsx / learning/page.tsx |

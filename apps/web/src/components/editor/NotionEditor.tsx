@@ -2326,6 +2326,7 @@ interface NotionEditorProps {
   onCreateSubPage?: () => Promise<{ id: string; title: string }>;
   recordTriggerRef?: React.MutableRefObject<(() => void) | null>;
   contentGetterRef?: React.MutableRefObject<(() => string) | null>; // 現在の本文(TipTap JSON文字列)を即時取得する（消化モーダル等）
+  insertAtCursorRef?: React.MutableRefObject<((nodes: object[]) => void) | null>; // 現在のカーソル位置へブロックを挿入する（消化モーダル等）
   onRecordText?: (text: string) => void;
   notionPageId?: string;
   notionPagePath?: string;
@@ -2350,7 +2351,7 @@ interface PastePopup {
 
 export function NotionEditor({
   initialTitle, initialContent, onSave, onCreateSubPage,
-  recordTriggerRef, contentGetterRef, onRecordText, notionPageId, notionPagePath, highlightText, onPageNavigate,
+  recordTriggerRef, contentGetterRef, insertAtCursorRef, onRecordText, notionPageId, notionPagePath, highlightText, onPageNavigate,
   hideTitle, compact, onEditorFocus, hideToolbar, stickyToolbar, numberHeadings, headingNumberColor, chapterHeading,
 }: NotionEditorProps) {
   const notionPlusLayout = useSettingsStore((s) => s.notionPlusLayout);
@@ -2959,6 +2960,11 @@ export function NotionEditor({
   useEffect(() => {
     if (contentGetterRef) { contentGetterRef.current = () => (editor ? JSON.stringify(editor.getJSON()) : ''); }
   }, [contentGetterRef, editor]);
+
+  // 消化モーダル等から、現在のカーソル位置へブロックを挿入できるようにする
+  useEffect(() => {
+    if (insertAtCursorRef) { insertAtCursorRef.current = (nodes: object[]) => { editor?.chain().focus().insertContent(nodes).run(); }; }
+  }, [insertAtCursorRef, editor]);
 
   const handleCtxCreatePage = useCallback(async () => {
     setCtxMenu(null);
