@@ -1647,8 +1647,8 @@ function memoToDocJson(title: string, body: string): string {
 
 // 合成した doc の中身ブロックを、対象ページ本文(doc)の末尾に追記する
 // 合成した doc を、対象ページ本文の指定位置に挿入する。
-// afterIndex: null=末尾 / 数値=そのトップレベルブロック(=見出し)の直後に挿入。
-function insertDocIntoPageContent(pageContent: string, addedDocJson: string, afterIndex: number | null): string {
+// atIndex: null=末尾 / 数値=そのトップレベルブロック配列の splice 位置（0=先頭, len=末尾）。
+function insertDocIntoPageContent(pageContent: string, addedDocJson: string, atIndex: number | null): string {
   let base: { type: string; content: unknown[] };
   try {
     const p = JSON.parse(pageContent || '') as { type?: string; content?: unknown[] };
@@ -1658,29 +1658,56 @@ function insertDocIntoPageContent(pageContent: string, addedDocJson: string, aft
   try { added = JSON.parse(addedDocJson || '') as { content?: unknown[] }; } catch { added = { content: [] }; }
   const addedBlocks = Array.isArray(added.content) ? added.content : [];
   if (addedBlocks.length === 0) return pageContent || JSON.stringify(base);
+  const blocks = base.content;
   let content: unknown[];
-  if (afterIndex === null || afterIndex < 0 || afterIndex >= base.content.length - 1) {
-    content = [...base.content, ...addedBlocks]; // 末尾
-  } else {
-    content = [...base.content.slice(0, afterIndex + 1), ...addedBlocks, ...base.content.slice(afterIndex + 1)];
-  }
+  if (atIndex === null || atIndex >= blocks.length) content = [...blocks, ...addedBlocks];
+  else if (atIndex <= 0) content = [...addedBlocks, ...blocks];
+  else content = [...blocks.slice(0, atIndex), ...addedBlocks, ...blocks.slice(atIndex)];
   return JSON.stringify({ ...base, content });
 }
 
-// ページ本文のトップレベル見出しを抽出（挿入位置の選択用）
-function pageHeadings(pageContent: string): { index: number; level: number; text: string }[] {
+// ページ本文のトップレベルブロック一覧（挿入位置プレビュー用）
+function pageBlocks(pageContent: string): { type?: string; attrs?: { level?: number; title?: string }; content?: unknown[] }[] {
   try {
-    const doc = JSON.parse(pageContent || '') as { content?: { type?: string; attrs?: { level?: number }; content?: { text?: string }[] }[] };
-    const blocks = Array.isArray(doc.content) ? doc.content : [];
-    const res: { index: number; level: number; text: string }[] = [];
-    blocks.forEach((b, i) => {
-      if (b.type === 'heading') {
-        const text = (b.content ?? []).map((c) => c.text ?? '').join('').trim();
-        res.push({ index: i, level: b.attrs?.level ?? 1, text: text || '（無題の見出し）' });
-      }
-    });
-    return res;
+    const d = JSON.parse(pageContent || '') as { content?: unknown[] };
+    return Array.isArray(d?.content) ? (d.content as { type?: string; attrs?: { level?: number; title?: string }; content?: unknown[] }[]) : [];
   } catch { return []; }
+}
+
+// ブロック内の全テキストを連結
+function blockText(node: { type?: string; text?: string; content?: unknown[] }): string {
+  const parts: string[] = [];
+  const walk = (n: { type?: string; text?: string; content?: unknown[] }) => {
+    if (n.type === 'text' && n.text) parts.push(n.text);
+    if (Array.isArray(n.content)) (n.content as { type?: string; text?: string; content?: unknown[] }[]).forEach(walk);
+  };
+  walk(node);
+  return parts.join('').trim();
+}
+
+// ブロックを「ラベル＋プレビュー文」に
+function blockPreview(block: { type?: string; attrs?: { level?: number; title?: string }; content?: unknown[] }): { label: string; text: string } {
+  const t = blockText(block);
+  switch (block.type) {
+    case 'heading':        return { label: 'H' + (block.attrs?.level ?? 1), text: t || '（無題の見出し）' };
+    case 'paragraph':      return { label: '¶',   text: t || '（空行）' };
+    case 'bulletList':     return { label: '•',   text: t || 'リスト' };
+    case 'orderedList':    return { label: '1.',  text: t || 'リスト' };
+    case 'taskList':       return { label: '☑',  text: t || 'Todo' };
+    case 'blockquote':     return { label: '❝',  text: t || '引用' };
+    case 'codeBlock':      return { label: '</>', text: t || 'コード' };
+    case 'horizontalRule': return { label: '—',  text: '区切り線' };
+    case 'callout':        return { label: '💡', text: t || 'コールアウト' };
+    case 'toggleHeading':  return { label: '▶',  text: t || 'トグル見出し' };
+    case 'pageTable':      return { label: '📋', text: '看板（ページテーブル）' };
+    case 'pageDescTable':  return { label: '▤',  text: 'テーブルビュー' };
+    case 'pageLink':       return { label: '🔗', text: block.attrs?.title || 'ページリンク' };
+    case 'inlineDatabase': return { label: '▦',  text: 'データベース' };
+    case 'image':          return { label: '🖼', text: '画像' };
+    case 'table':          return { label: '⊞',  text: '表' };
+    case 'toc':            return { label: '≡',  text: '目次' };
+    default:               return { label: '▫',  text: block.type || '' };
+  }
 }
 
 // doc から復習アイテム用のプレーンテキストを抽出（ブロックごとに改行）
@@ -1713,19 +1740,25 @@ function DigestDialog({ item, uid, onClose }: {
 
   const [mode, setMode] = useState<'existing' | 'new'>('existing');
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
-  const [insertPos, setInsertPos] = useState<number | 'end'>('end'); // 末尾 or 見出しブロックindexの直後
+  const [insertAt, setInsertAt] = useState<number | null>(null); // null=末尾 / 数値=splice位置
+  const [posPickerOpen, setPosPickerOpen] = useState(false);
   const [newTitle, setNewTitle] = useState(item.title || '無題メモ');
   const [query, setQuery] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // 選んだページの見出し一覧（挿入位置の選択用）
-  const selectedHeadings = useMemo(() => {
-    const page = pages.find((p) => p.id === selectedPageId);
-    return page ? pageHeadings(page.content) : [];
-  }, [pages, selectedPageId]);
+  const selectedPage = useMemo(() => pages.find((p) => p.id === selectedPageId) ?? null, [pages, selectedPageId]);
+  // 現在の挿入位置のサマリー表示
+  const insertSummary = useMemo(() => {
+    if (!selectedPage) return '';
+    if (insertAt === null) return 'ページの末尾';
+    if (insertAt <= 0) return 'ページの先頭';
+    const blocks = pageBlocks(selectedPage.content);
+    const prev = blocks[insertAt - 1];
+    return prev ? `「${blockPreview(prev).text}」の後` : 'ページの末尾';
+  }, [selectedPage, insertAt]);
 
   // ページを選び直したら挿入位置は末尾に戻す
-  const pickPage = (pageId: string) => { setSelectedPageId(pageId); setInsertPos('end'); };
+  const pickPage = (pageId: string) => { setSelectedPageId(pageId); setInsertAt(null); };
 
   // 最初からこのメモを入れておく（推奨A）
   const initialDoc = useMemo(() => memoToDocJson(item.title, item.content), [item.title, item.content]);
@@ -1759,8 +1792,7 @@ function DigestDialog({ item, uid, onClose }: {
       } else {
         const page = pages.find((p) => p.id === selectedPageId);
         if (!page) { setSaving(false); return; }
-        const after = insertPos === 'end' ? null : insertPos;
-        await updatePage(uid, page.id, { content: insertDocIntoPageContent(page.content, composed, after) });
+        await updatePage(uid, page.id, { content: insertDocIntoPageContent(page.content, composed, insertAt) });
         targetId = page.id;
         targetPath = buildPagePath(page.id, pages);
       }
@@ -1839,24 +1871,13 @@ function DigestDialog({ item, uid, onClose }: {
                 ))}
               </div>
 
-              {/* 挿入位置（ページ選択後に表示）：末尾 or 見出しの直下 */}
-              {selectedPageId && (
-                <div className="rounded-lg border border-gray-200 bg-white p-2">
-                  <p className="mb-1 text-[10px] font-semibold text-gray-500">挿入位置</p>
-                  <div className="flex max-h-24 flex-wrap gap-1 overflow-y-auto">
-                    <button onClick={() => setInsertPos('end')}
-                      className={`rounded px-2 py-1 text-[11px] ${insertPos === 'end' ? 'bg-brand-500 font-medium text-white' : 'border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>📄 ページの末尾</button>
-                    {selectedHeadings.map((h) => (
-                      <button key={h.index} onClick={() => setInsertPos(h.index)}
-                        title={`「${h.text}」の直下に挿入`}
-                        className={`max-w-[200px] truncate rounded px-2 py-1 text-[11px] ${insertPos === h.index ? 'bg-brand-500 font-medium text-white' : 'border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
-                        {'#'.repeat(Math.min(h.level, 4))} {h.text} の下
-                      </button>
-                    ))}
-                  </div>
-                  {selectedHeadings.length === 0 && (
-                    <p className="mt-1 text-[10px] text-gray-400">このページには見出しがないため、末尾に追記します。</p>
-                  )}
+              {/* 挿入位置（ページ選択後）：ノートを開いて視覚的に選ぶ */}
+              {selectedPage && (
+                <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2">
+                  <span className="shrink-0 text-[10px] font-semibold text-gray-500">挿入位置</span>
+                  <span className="min-w-0 flex-1 truncate text-xs text-gray-700">{insertSummary}</span>
+                  <button onClick={() => setPosPickerOpen(true)}
+                    className="shrink-0 rounded-lg border border-brand-200 px-2.5 py-1 text-[11px] font-medium text-brand-600 hover:bg-brand-50">📍 ノートを開いて選ぶ</button>
                 </div>
               )}
             </>
@@ -1870,6 +1891,77 @@ function DigestDialog({ item, uid, onClose }: {
             className="rounded-lg bg-brand-500 px-4 py-2 text-xs font-medium text-white hover:bg-brand-600 disabled:opacity-40">
             {saving ? '消化中...' : '確定して復習に登録'}
           </button>
+        </div>
+      </div>
+
+      {/* 挿入位置ピッカー（ノートを直接開いてブロック間をクリック） */}
+      {posPickerOpen && selectedPage && (
+        <InsertPositionPicker
+          pageTitle={selectedPage.title || '（無題）'}
+          pageContent={selectedPage.content}
+          current={insertAt}
+          onPick={(at) => { setInsertAt(at); setPosPickerOpen(false); }}
+          onClose={() => setPosPickerOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// 挿入位置ピッカー：対象ノートの中身をプレビューし、ブロックの間をクリックして位置を決める
+function InsertPositionPicker({ pageTitle, pageContent, current, onPick, onClose }: {
+  pageTitle: string;
+  pageContent: string;
+  current: number | null;
+  onPick: (atIndex: number | null) => void;
+  onClose: () => void;
+}) {
+  const blocks = useMemo(() => pageBlocks(pageContent), [pageContent]);
+  const endIndex = blocks.length;
+  const sel = current === null ? endIndex : current;
+
+  // 挿入バー（クリックでその位置に決定）。at===endIndex は末尾（null）として返す。
+  const Bar = ({ at }: { at: number }) => (
+    <button onClick={() => onPick(at >= endIndex ? null : at)}
+      className="group flex w-full items-center gap-2 py-1" title="ここに挿入">
+      <span className={`h-0.5 flex-1 rounded ${sel === at ? 'bg-brand-500' : 'bg-gray-200 group-hover:bg-brand-300'}`} />
+      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${sel === at ? 'bg-brand-500 text-white' : 'border border-gray-200 text-gray-400 group-hover:border-brand-300 group-hover:text-brand-500'}`}>
+        {sel === at ? 'ここ ✓' : 'ここに挿入'}
+      </span>
+      <span className={`h-0.5 flex-1 rounded ${sel === at ? 'bg-brand-500' : 'bg-gray-200 group-hover:bg-brand-300'}`} />
+    </button>
+  );
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="flex h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 py-3">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700">📍 挿入位置を選ぶ</h3>
+            <p className="mt-0.5 text-[11px] text-gray-400">「{pageTitle}」のどこに入れるか、線をクリックして選んでください</p>
+          </div>
+          <button onClick={onClose} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">✕</button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-3">
+          {blocks.length === 0 ? (
+            <p className="py-8 text-center text-xs text-gray-400">このページは空です。先頭（＝末尾）に挿入します。</p>
+          ) : (
+            <>
+              <Bar at={0} />
+              {blocks.map((b, i) => {
+                const pv = blockPreview(b);
+                return (
+                  <div key={i}>
+                    <div className="flex items-start gap-2 rounded-lg bg-gray-50 px-3 py-2">
+                      <span className="mt-0.5 shrink-0 text-[10px] font-semibold text-gray-400">{pv.label}</span>
+                      <span className="min-w-0 flex-1 truncate text-xs text-gray-700">{pv.text}</span>
+                    </div>
+                    <Bar at={i + 1} />
+                  </div>
+                );
+              })}
+            </>
+          )}
         </div>
       </div>
     </div>
