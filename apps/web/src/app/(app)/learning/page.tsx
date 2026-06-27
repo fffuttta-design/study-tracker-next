@@ -1646,7 +1646,9 @@ function memoToDocJson(title: string, body: string): string {
 }
 
 // 合成した doc の中身ブロックを、対象ページ本文(doc)の末尾に追記する
-function appendDocToPageContent(pageContent: string, addedDocJson: string): string {
+// 合成した doc を、対象ページ本文の指定位置に挿入する。
+// afterIndex: null=末尾 / 数値=そのトップレベルブロック(=見出し)の直後に挿入。
+function insertDocIntoPageContent(pageContent: string, addedDocJson: string, afterIndex: number | null): string {
   let base: { type: string; content: unknown[] };
   try {
     const p = JSON.parse(pageContent || '') as { type?: string; content?: unknown[] };
@@ -1656,7 +1658,29 @@ function appendDocToPageContent(pageContent: string, addedDocJson: string): stri
   try { added = JSON.parse(addedDocJson || '') as { content?: unknown[] }; } catch { added = { content: [] }; }
   const addedBlocks = Array.isArray(added.content) ? added.content : [];
   if (addedBlocks.length === 0) return pageContent || JSON.stringify(base);
-  return JSON.stringify({ ...base, content: [...base.content, ...addedBlocks] });
+  let content: unknown[];
+  if (afterIndex === null || afterIndex < 0 || afterIndex >= base.content.length - 1) {
+    content = [...base.content, ...addedBlocks]; // 末尾
+  } else {
+    content = [...base.content.slice(0, afterIndex + 1), ...addedBlocks, ...base.content.slice(afterIndex + 1)];
+  }
+  return JSON.stringify({ ...base, content });
+}
+
+// ページ本文のトップレベル見出しを抽出（挿入位置の選択用）
+function pageHeadings(pageContent: string): { index: number; level: number; text: string }[] {
+  try {
+    const doc = JSON.parse(pageContent || '') as { content?: { type?: string; attrs?: { level?: number }; content?: { text?: string }[] }[] };
+    const blocks = Array.isArray(doc.content) ? doc.content : [];
+    const res: { index: number; level: number; text: string }[] = [];
+    blocks.forEach((b, i) => {
+      if (b.type === 'heading') {
+        const text = (b.content ?? []).map((c) => c.text ?? '').join('').trim();
+        res.push({ index: i, level: b.attrs?.level ?? 1, text: text || '（無題の見出し）' });
+      }
+    });
+    return res;
+  } catch { return []; }
 }
 
 // doc から復習アイテム用のプレーンテキストを抽出（ブロックごとに改行）
@@ -1689,9 +1713,19 @@ function DigestDialog({ item, uid, onClose }: {
 
   const [mode, setMode] = useState<'existing' | 'new'>('existing');
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
+  const [insertPos, setInsertPos] = useState<number | 'end'>('end'); // 末尾 or 見出しブロックindexの直後
   const [newTitle, setNewTitle] = useState(item.title || '無題メモ');
   const [query, setQuery] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // 選んだページの見出し一覧（挿入位置の選択用）
+  const selectedHeadings = useMemo(() => {
+    const page = pages.find((p) => p.id === selectedPageId);
+    return page ? pageHeadings(page.content) : [];
+  }, [pages, selectedPageId]);
+
+  // ページを選び直したら挿入位置は末尾に戻す
+  const pickPage = (pageId: string) => { setSelectedPageId(pageId); setInsertPos('end'); };
 
   // 最初からこのメモを入れておく（推奨A）
   const initialDoc = useMemo(() => memoToDocJson(item.title, item.content), [item.title, item.content]);
@@ -1719,13 +1753,14 @@ function DigestDialog({ item, uid, onClose }: {
       if (mode === 'new') {
         const t = newTitle.trim() || '無題メモ';
         const np = await addPage(uid, { title: t, icon: '📝' });
-        await updatePage(uid, np.id, { content: appendDocToPageContent('', composed) });
+        await updatePage(uid, np.id, { content: insertDocIntoPageContent('', composed, null) });
         targetId = np.id;
         targetPath = t;
       } else {
         const page = pages.find((p) => p.id === selectedPageId);
         if (!page) { setSaving(false); return; }
-        await updatePage(uid, page.id, { content: appendDocToPageContent(page.content, composed) });
+        const after = insertPos === 'end' ? null : insertPos;
+        await updatePage(uid, page.id, { content: insertDocIntoPageContent(page.content, composed, after) });
         targetId = page.id;
         targetPath = buildPagePath(page.id, pages);
       }
@@ -1785,11 +1820,11 @@ function DigestDialog({ item, uid, onClose }: {
             <>
               <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="ページを検索..."
                 className="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-brand-400" />
-              <div className="max-h-32 space-y-1 overflow-y-auto">
+              <div className="max-h-28 space-y-1 overflow-y-auto">
                 {candidatePages.length === 0 ? (
                   <p className="rounded-lg border border-gray-200 bg-white p-2 text-center text-xs text-gray-400">該当ページなし</p>
                 ) : candidatePages.map((p) => (
-                  <button key={p.id} onClick={() => setSelectedPageId(p.id)}
+                  <button key={p.id} onClick={() => pickPage(p.id)}
                     className={`flex w-full items-center gap-2 rounded-lg border px-3 py-1.5 text-left ${selectedPageId === p.id ? 'border-brand-400 bg-brand-50' : 'border-gray-100 bg-white hover:bg-gray-50'}`}>
                     <span className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden text-sm leading-none">{isImg(p.icon)
                       // eslint-disable-next-line @next/next/no-img-element
@@ -1803,6 +1838,27 @@ function DigestDialog({ item, uid, onClose }: {
                   </button>
                 ))}
               </div>
+
+              {/* 挿入位置（ページ選択後に表示）：末尾 or 見出しの直下 */}
+              {selectedPageId && (
+                <div className="rounded-lg border border-gray-200 bg-white p-2">
+                  <p className="mb-1 text-[10px] font-semibold text-gray-500">挿入位置</p>
+                  <div className="flex max-h-24 flex-wrap gap-1 overflow-y-auto">
+                    <button onClick={() => setInsertPos('end')}
+                      className={`rounded px-2 py-1 text-[11px] ${insertPos === 'end' ? 'bg-brand-500 font-medium text-white' : 'border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>📄 ページの末尾</button>
+                    {selectedHeadings.map((h) => (
+                      <button key={h.index} onClick={() => setInsertPos(h.index)}
+                        title={`「${h.text}」の直下に挿入`}
+                        className={`max-w-[200px] truncate rounded px-2 py-1 text-[11px] ${insertPos === h.index ? 'bg-brand-500 font-medium text-white' : 'border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                        {'#'.repeat(Math.min(h.level, 4))} {h.text} の下
+                      </button>
+                    ))}
+                  </div>
+                  {selectedHeadings.length === 0 && (
+                    <p className="mt-1 text-[10px] text-gray-400">このページには見出しがないため、末尾に追記します。</p>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
