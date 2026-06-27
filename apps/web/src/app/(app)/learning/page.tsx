@@ -1871,15 +1871,15 @@ function DigestDialog({ item, uid, onClose }: {
                 ))}
               </div>
 
-              {/* 挿入位置（ページ選択後）：ノートを開いて視覚的に選ぶ */}
-              {selectedPage && (
-                <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2">
-                  <span className="shrink-0 text-[10px] font-semibold text-gray-500">挿入位置</span>
-                  <span className="min-w-0 flex-1 truncate text-xs text-gray-700">{insertSummary}</span>
-                  <button onClick={() => setPosPickerOpen(true)}
-                    className="shrink-0 rounded-lg border border-brand-200 px-2.5 py-1 text-[11px] font-medium text-brand-600 hover:bg-brand-50">📍 ノートを開いて選ぶ</button>
-                </div>
-              )}
+              {/* 挿入位置：ページ未選択でも常に表示（選ぶまでは案内＋ボタン無効） */}
+              <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2">
+                <span className="shrink-0 text-[10px] font-semibold text-gray-500">挿入位置</span>
+                <span className={`min-w-0 flex-1 truncate text-xs ${selectedPage ? 'text-gray-700' : 'text-gray-400'}`}>
+                  {selectedPage ? insertSummary : '↑ まず追記先ページを選んでください'}
+                </span>
+                <button disabled={!selectedPage} onClick={() => setPosPickerOpen(true)}
+                  className="shrink-0 rounded-lg border border-brand-200 px-2.5 py-1 text-[11px] font-medium text-brand-600 hover:bg-brand-50 disabled:opacity-40">📍 ノートを開いて選ぶ</button>
+              </div>
             </>
           )}
         </div>
