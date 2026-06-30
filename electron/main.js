@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, Tray, Menu, nativeImage, dialog, ipcMain, Notification } from 'electron'
+import { app, BrowserWindow, shell, Tray, Menu, nativeImage, dialog, ipcMain, Notification, globalShortcut } from 'electron'
 import updaterPkg from 'electron-updater'
 const { autoUpdater } = updaterPkg
 import { readFile, writeFile, mkdir, readdir, unlink, copyFile, appendFile } from 'fs/promises'
@@ -27,6 +27,7 @@ const APP_URL = isDev ? DEV_URL : VERCEL_URL
 
 // ── 状態 ──────────────────────────────────────────────────────────
 let mainWin    = null
+let quickWin   = null   // 特急メモ クイック入力ポップアップ（グローバルホットキー）
 let tray       = null
 let isQuitting = false
 let latestReviewCount    = 0
@@ -189,6 +190,10 @@ function createTray() {
       label: '学習トラッカーを開く',
       click: () => { mainWin?.show(); mainWin?.focus() },
     },
+    {
+      label: '特急メモを追加  (Ctrl+Alt+S)',
+      click: () => showQuickCapture(),
+    },
     { type: 'separator' },
     {
       label: '最新版を確認',
@@ -212,6 +217,79 @@ function createTray() {
 
   // ダブルクリックでウィンドウを開く
   tray.on('double-click', () => { mainWin?.show(); mainWin?.focus() })
+}
+
+// ── 特急メモ クイック入力ポップアップ ─────────────────────────────
+// グローバルホットキー（Ctrl+Alt+S）でどのアプリからでも呼び出せる小窓。
+// 既存の Web ルート /clip を流用（ログイン状態はメイン窓と共有・特急メモに1件記録して自動で閉じる）。
+function showQuickCapture() {
+  // 既に開いていれば前面に出すだけ
+  if (quickWin && !quickWin.isDestroyed()) {
+    quickWin.show()
+    quickWin.focus()
+    quickWin.webContents.focus()
+    return
+  }
+
+  quickWin = new BrowserWindow({
+    width: 440,
+    height: 560,
+    frame: false,            // 枠なしのスッキリした小窓（ページ側に✕ボタンあり）
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    skipTaskbar: true,       // タスクバーに出さない
+    alwaysOnTop: true,       // 最前面（Discord等の上に出す）
+    show: false,
+    title: '特急メモ',
+    icon: getTrayIconPath() ?? undefined,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: preloadPath,
+    },
+  })
+
+  quickWin.loadURL(`${APP_URL}/clip`)
+
+  quickWin.once('ready-to-show', () => {
+    quickWin.center()
+    quickWin.show()
+    quickWin.focus()
+    quickWin.webContents.focus()
+  })
+
+  // Escape で閉じる
+  quickWin.webContents.on('before-input-event', (e, input) => {
+    if (input.type === 'keyDown' && input.key === 'Escape') {
+      e.preventDefault()
+      if (quickWin && !quickWin.isDestroyed()) quickWin.close()
+    }
+  })
+
+  // 未ログイン時の Google ログインポップアップを許可（基本はメイン窓と認証共有のため不要だが保険）
+  quickWin.webContents.setWindowOpenHandler(({ url: popupUrl }) => {
+    const isAuth =
+      !popupUrl || popupUrl === 'about:blank' ||
+      popupUrl.includes('firebaseapp.com') ||
+      popupUrl.includes('accounts.google.com') ||
+      popupUrl.includes('googleapis.com') ||
+      popupUrl.includes('google.com/o/oauth2')
+    if (isAuth) {
+      quickWin?.setAlwaysOnTop(false) // ログイン窓が背面に隠れないように
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          width: 500, height: 660, title: 'Googleでログイン',
+          webPreferences: { nodeIntegration: false, contextIsolation: true },
+        },
+      }
+    }
+    if (popupUrl.startsWith('http://') || popupUrl.startsWith('https://')) shell.openExternal(popupUrl)
+    return { action: 'deny' }
+  })
+
+  quickWin.on('closed', () => { quickWin = null })
 }
 
 // ── BrowserWindow 作成 ────────────────────────────────────────────
@@ -574,6 +652,11 @@ if (!gotLock) {
 
     createWindow()
     createTray()
+
+    // 特急メモ クイック入力のグローバルホットキー（Ctrl+Alt+S）
+    const hotkeyOk = globalShortcut.register('CommandOrControl+Alt+S', () => showQuickCapture())
+    debugLog(`[hotkey] Ctrl+Alt+S 登録: ${hotkeyOk ? '成功' : '失敗（他アプリが使用中の可能性）'}`)
+
     mainWin.once('ready-to-show', () => {
       // 起動3秒後に確認 → バックグラウンド自動DL → DL完了でダイアログ
       if (!isDev) {
@@ -591,3 +674,4 @@ if (!gotLock) {
 // トレイ常駐: 全ウィンドウを閉じてもプロセスは終了しない
 app.on('window-all-closed', () => { /* noop */ })
 app.on('before-quit', () => { isQuitting = true })
+app.on('will-quit', () => { globalShortcut.unregisterAll() })

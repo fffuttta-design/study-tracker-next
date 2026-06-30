@@ -37,7 +37,9 @@ function ClipInner() {
 
   const handleSave = async () => {
     if (!user || saving) return;
-    const t = (title.trim() || sourceUrl || 'クリップ').slice(0, 300);
+    // タイトル未入力なら本文1行目をタイトルに流用（ホットキーで本文だけ書いた時用）
+    const firstLine = content.split('\n').map((s) => s.trim()).find((s) => s.length > 0) ?? '';
+    const t = (title.trim() || firstLine || sourceUrl || 'クリップ').slice(0, 300);
     setSaving(true);
     try {
       await add(user.uid, {
