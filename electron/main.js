@@ -40,6 +40,7 @@ let notifTimerId         = null
 let backupTimerId        = null
 let backupHour           = 3    // 毎日03:00
 let backupMinute         = 0
+let updateDialogOpen     = false // アップデート確認ダイアログを表示中か（多重表示防止）
 let lastBackupInfo       = null // { time: ISO文字列, path: string, success: boolean }
 let driveBackupPath      = null // Google Drive バックアップ先フォルダ
 
@@ -508,6 +509,13 @@ if (!isDev) {
   autoUpdater.on('update-downloaded', (info) => {
     debugLog(`[update] ダウンロード完了: v${info.version}`)
     mainWin?.webContents.send('update-downloaded', { version: info.version })
+
+    // すでにダイアログを表示中なら多重表示しない（閉じた後に新しい版が来たら再表示する）
+    if (updateDialogOpen) {
+      debugLog('[update] ダイアログ表示中のため再表示しません')
+      return
+    }
+    updateDialogOpen = true
     dialog.showMessageBox(mainWin, {
       type: 'info',
       title: '学習トラッカー - アップデート準備完了',
@@ -517,8 +525,9 @@ if (!isDev) {
       defaultId: 0,
       cancelId: 1,
     }).then(({ response }) => {
+      updateDialogOpen = false
       if (response === 0) autoUpdater.quitAndInstall()
-    })
+    }).catch(() => { updateDialogOpen = false })
   })
 
   autoUpdater.on('error', (err) => {
