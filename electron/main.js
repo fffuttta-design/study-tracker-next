@@ -2,6 +2,7 @@ import { app, BrowserWindow, shell, Tray, Menu, nativeImage, dialog, ipcMain, No
 import updaterPkg from 'electron-updater'
 const { autoUpdater } = updaterPkg
 import { readFile, writeFile, mkdir, readdir, unlink, copyFile, appendFile } from 'fs/promises'
+import { spawn } from 'child_process'
 import { join } from 'path'
 import { fileURLToPath } from 'url'
 import { existsSync } from 'fs'
@@ -191,7 +192,7 @@ function createTray() {
       click: () => { mainWin?.show(); mainWin?.focus() },
     },
     {
-      label: '特急メモを追加  (Ctrl+Shift+S)',
+      label: '特急メモを追加  (Ctrl+Alt+S)',
       click: () => showQuickCapture(),
     },
     { type: 'separator' },
@@ -222,7 +223,59 @@ function createTray() {
 // ── 特急メモ クイック入力ポップアップ ─────────────────────────────
 // グローバルホットキー（Ctrl+Alt+S）でどのアプリからでも呼び出せる小窓。
 // 既存の Web ルート /clip を流用（ログイン状態はメイン窓と共有・特急メモに1件記録して自動で閉じる）。
-function showQuickCapture() {
+// 選択なし判定用のセンチネル（このリテラルが選択テキストと一致することは事実上ない）
+const SELECTION_SENTINEL = '__ST_NO_SELECTION_SENTINEL__'
+
+// 前面アプリ（Discord等）へ Ctrl+C を合成送出して「選択テキスト」をコピーさせる。
+// 我々のグローバルホットキーが Ctrl+Alt を握っている可能性があるので、まず修飾キーを
+// 明示的に離して(keyup)からクリーンに Ctrl+C を叩く（押しっぱなし誤爆を防ぐ）。
+function sendCopyKeystroke() {
+  return new Promise((resolve) => {
+    if (process.platform !== 'win32') return resolve(false)
+    const psScript = [
+      '$ErrorActionPreference="SilentlyContinue"',
+      '$sig=@"',
+      '[DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, System.UIntPtr dwExtraInfo);',
+      '"@',
+      '$k=Add-Type -MemberDefinition $sig -Name K -Namespace W -PassThru',
+      'Start-Sleep -Milliseconds 80',           // ユーザーが指を離す時間を少し待つ
+      '$UP=0x2',
+      // Alt(L/R/汎用)・Ctrl(L/R/汎用) を強制的に離す
+      'foreach($vk in 0xA4,0xA5,0x12,0xA2,0xA3,0x11){ $k::keybd_event([byte]$vk,0,$UP,[System.UIntPtr]::Zero) }',
+      'Start-Sleep -Milliseconds 25',
+      // クリーンな Ctrl+C
+      '$k::keybd_event(0x11,0,0,[System.UIntPtr]::Zero)',
+      '$k::keybd_event(0x43,0,0,[System.UIntPtr]::Zero)',
+      '$k::keybd_event(0x43,0,$UP,[System.UIntPtr]::Zero)',
+      '$k::keybd_event(0x11,0,$UP,[System.UIntPtr]::Zero)',
+    ].join('\n')
+    try {
+      const encoded = Buffer.from(psScript, 'utf16le').toString('base64')
+      const ps = spawn('powershell.exe',
+        ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-EncodedCommand', encoded],
+        { windowsHide: true })
+      ps.on('error', () => resolve(false))
+      ps.on('exit', () => setTimeout(() => resolve(true), 170)) // コピー反映を少し待つ
+    } catch { resolve(false) }
+  })
+}
+
+// 選択テキストを取得（選択があればそれ、無ければ既存クリップボードを流用）
+async function captureSelectionText() {
+  const before = clipboard.readText() || ''
+  try { clipboard.writeText(SELECTION_SENTINEL) } catch { /* noop */ }
+  const ok = await sendCopyKeystroke()
+  if (!ok) { try { clipboard.writeText(before) } catch { /* noop */ } ; return before }
+  const after = clipboard.readText() || ''
+  if (after === SELECTION_SENTINEL || after.trim() === '') {
+    // 何も選択されていなかった → クリップボードを元に戻し、既存内容を使う（従来動作）
+    try { clipboard.writeText(before) } catch { /* noop */ }
+    return before
+  }
+  return after // 選択テキスト取得成功
+}
+
+async function showQuickCapture() {
   // 既に開いていれば前面に出すだけ
   if (quickWin && !quickWin.isDestroyed()) {
     quickWin.show()
@@ -231,8 +284,8 @@ function showQuickCapture() {
     return
   }
 
-  // クリップボードの内容を流し込む（先頭の非空行→タイトル / 残り→本文）
-  const raw = (clipboard.readText() || '').replace(/\r\n/g, '\n')
+  // 選択テキスト（無ければ既存クリップボード）を流し込む（先頭の非空行→タイトル / 残り→本文）
+  const raw = (await captureSelectionText()).replace(/\r\n/g, '\n')
   let clipTitle = ''
   let clipBody = ''
   if (raw.trim()) {
@@ -669,9 +722,9 @@ if (!gotLock) {
     createWindow()
     createTray()
 
-    // 特急メモ クイック入力のグローバルホットキー（Ctrl+Shift+S）
-    const hotkeyOk = globalShortcut.register('CommandOrControl+Shift+S', () => showQuickCapture())
-    debugLog(`[hotkey] Ctrl+Shift+S 登録: ${hotkeyOk ? '成功' : '失敗（他アプリが使用中の可能性）'}`)
+    // 特急メモ クイック入力のグローバルホットキー（Ctrl+Alt+S）
+    const hotkeyOk = globalShortcut.register('CommandOrControl+Alt+S', () => { showQuickCapture() })
+    debugLog(`[hotkey] Ctrl+Alt+S 登録: ${hotkeyOk ? '成功' : '失敗（他アプリが使用中の可能性）'}`)
 
     mainWin.once('ready-to-show', () => {
       // 起動3秒後に確認 → バックグラウンド自動DL → DL完了でダイアログ
