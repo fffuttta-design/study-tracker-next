@@ -16,8 +16,8 @@ import DeviceInfo from 'react-native-device-info';
 const PREFS_PATH = `${RNFS.DocumentDirectoryPath}/update_prefs.json`;
 
 // フォールバック定数（build-and-sync.mjs が自動更新する。react-native-device-info 失敗時のみ使用）
-export const FALLBACK_BUILD_NUMBER = 284;
-export const FALLBACK_VERSION      = '1.0.264';
+export const FALLBACK_BUILD_NUMBER = 285;
+export const FALLBACK_VERSION      = '1.0.265';
 
 async function getDismissedBuild(): Promise<number> {
   try {

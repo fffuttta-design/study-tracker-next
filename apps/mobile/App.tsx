@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { StatusBar } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { StatusBar, Alert } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import auth from '@react-native-firebase/auth';
@@ -9,6 +9,8 @@ import { useLearningStore } from './src/store/learningStore';
 import { useNotionStore } from './src/store/notionStore';
 import { checkForUpdate } from './src/services/updateService';
 import { navigationRef } from './src/navigation';
+import { getInitialSharedText, onSharedText } from './src/services/sharedText';
+import { localDateKey } from './src/types';
 
 /**
  * Firebase Auth リスナー
@@ -77,12 +79,52 @@ function AuthListener() {
 }
 
 
+/**
+ * 共有(ACTION_SEND)・テキスト選択メニュー(PROCESS_TEXT)から飛んできたテキストを
+ * 特急メモ（notionPageId 未設定・復習スケジュールなし）として保存する。
+ * 先頭の非空行＝タイトル / 残り＝本文。未ログイン中は保持し、ログイン後に保存。
+ */
+function SharedTextCapture() {
+  const user = useAuthStore(s => s.user);
+  const addItem = useLearningStore(s => s.addItem);
+  const [pending, setPending] = useState<string | null>(null);
+
+  // コールドスタート分の取得 ＋ 起動中の受信を購読
+  useEffect(() => {
+    let mounted = true;
+    getInitialSharedText().then(t => { if (mounted && t) setPending(t); });
+    const off = onSharedText(t => setPending(t));
+    return () => { mounted = false; off(); };
+  }, []);
+
+  // pending と user が揃ったら保存
+  useEffect(() => {
+    if (!pending || !user) return; // 未ログインなら保持したまま、ログイン後に再実行
+
+    const text = pending.replace(/\r\n/g, '\n');
+    const lines = text.split('\n');
+    let i = 0;
+    while (i < lines.length && lines[i].trim() === '') i++; // 先頭の空行を飛ばす
+    const title = (lines[i] ?? '').trim().slice(0, 300);
+    const content = lines.slice(i + 1).join('\n').replace(/^\n+/, '').trim();
+    const finalTitle = (title || content.slice(0, 300) || 'メモ').slice(0, 300);
+
+    setPending(null); // 二重保存防止
+    addItem(user.uid, { title: finalTitle, content, dateKey: localDateKey() }, true)
+      .then(() => Alert.alert('⚡ 特急メモに追加しました', finalTitle))
+      .catch(() => Alert.alert('保存に失敗しました', 'もう一度お試しください'));
+  }, [pending, user, addItem]);
+
+  return null;
+}
+
 export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <StatusBar barStyle="dark-content" backgroundColor="#f9fafb" />
         <AuthListener />
+        <SharedTextCapture />
         <AppNavigator />
       </SafeAreaProvider>
     </GestureHandlerRootView>
