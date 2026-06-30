@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, Tray, Menu, nativeImage, dialog, ipcMain, Notification, globalShortcut } from 'electron'
+import { app, BrowserWindow, shell, Tray, Menu, nativeImage, dialog, ipcMain, Notification, globalShortcut, clipboard } from 'electron'
 import updaterPkg from 'electron-updater'
 const { autoUpdater } = updaterPkg
 import { readFile, writeFile, mkdir, readdir, unlink, copyFile, appendFile } from 'fs/promises'
@@ -191,7 +191,7 @@ function createTray() {
       click: () => { mainWin?.show(); mainWin?.focus() },
     },
     {
-      label: '特急メモを追加  (Ctrl+Alt+S)',
+      label: '特急メモを追加  (Ctrl+Shift+S)',
       click: () => showQuickCapture(),
     },
     { type: 'separator' },
@@ -231,6 +231,22 @@ function showQuickCapture() {
     return
   }
 
+  // クリップボードの内容を流し込む（先頭の非空行→タイトル / 残り→本文）
+  const raw = (clipboard.readText() || '').replace(/\r\n/g, '\n')
+  let clipTitle = ''
+  let clipBody = ''
+  if (raw.trim()) {
+    const lines = raw.split('\n')
+    let i = 0
+    while (i < lines.length && lines[i].trim() === '') i++ // 先頭の空行を飛ばす
+    clipTitle = (lines[i] ?? '').trim()
+    clipBody = lines.slice(i + 1).join('\n').replace(/^\n+/, '') // タイトル行より後を本文へ
+  }
+  const qs = new URLSearchParams()
+  if (clipTitle) qs.set('title', clipTitle)
+  if (clipBody)  qs.set('content', clipBody)
+  const clipUrl = `${APP_URL}/clip${qs.toString() ? `?${qs.toString()}` : ''}`
+
   quickWin = new BrowserWindow({
     width: 440,
     height: 560,
@@ -250,7 +266,7 @@ function showQuickCapture() {
     },
   })
 
-  quickWin.loadURL(`${APP_URL}/clip`)
+  quickWin.loadURL(clipUrl)
 
   quickWin.once('ready-to-show', () => {
     quickWin.center()
@@ -653,9 +669,9 @@ if (!gotLock) {
     createWindow()
     createTray()
 
-    // 特急メモ クイック入力のグローバルホットキー（Ctrl+Alt+S）
-    const hotkeyOk = globalShortcut.register('CommandOrControl+Alt+S', () => showQuickCapture())
-    debugLog(`[hotkey] Ctrl+Alt+S 登録: ${hotkeyOk ? '成功' : '失敗（他アプリが使用中の可能性）'}`)
+    // 特急メモ クイック入力のグローバルホットキー（Ctrl+Shift+S）
+    const hotkeyOk = globalShortcut.register('CommandOrControl+Shift+S', () => showQuickCapture())
+    debugLog(`[hotkey] Ctrl+Shift+S 登録: ${hotkeyOk ? '成功' : '失敗（他アプリが使用中の可能性）'}`)
 
     mainWin.once('ready-to-show', () => {
       // 起動3秒後に確認 → バックグラウンド自動DL → DL完了でダイアログ
