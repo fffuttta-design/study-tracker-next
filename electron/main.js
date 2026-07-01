@@ -193,7 +193,7 @@ function createTray() {
       click: () => { mainWin?.show(); mainWin?.focus() },
     },
     {
-      label: '特急メモを追加  (Ctrl+Alt+S)',
+      label: '特急メモを追加  (Alt+Shift+S)',
       click: () => showQuickCapture(),
     },
     { type: 'separator' },
@@ -731,9 +731,9 @@ if (!gotLock) {
     createWindow()
     createTray()
 
-    // 特急メモ クイック入力のグローバルホットキー（Ctrl+Alt+S）
-    const hotkeyOk = globalShortcut.register('CommandOrControl+Alt+S', () => { showQuickCapture() })
-    debugLog(`[hotkey] Ctrl+Alt+S 登録: ${hotkeyOk ? '成功' : '失敗（他アプリが使用中の可能性）'}`)
+    // 特急メモ クイック入力のグローバルホットキー（Alt+Shift+S・Chrome拡張と統一）
+    const hotkeyOk = globalShortcut.register('Alt+Shift+S', () => { showQuickCapture() })
+    debugLog(`[hotkey] Alt+Shift+S 登録: ${hotkeyOk ? '成功' : '失敗（他アプリが使用中の可能性）'}`)
 
     mainWin.once('ready-to-show', () => {
       // 起動3秒後に確認 → バックグラウンド自動DL → DL完了でダイアログ
