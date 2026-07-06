@@ -82,6 +82,23 @@ function dailyQuote(): string {
   return DAILY_QUOTES[dayOfYear % DAILY_QUOTES.length];
 }
 
+// ── GoalManager「学びブリッジ」──────────────────────────────────────
+// 学びアイテム／特急メモを GoalManager の「今日の振り返り＞今日の学び」へ送る。
+// 別Firebaseプロジェクトなので、URLパラメータ経由で受け渡す（GoalManager側が受け口を持つ）。
+const GOALMANAGER_WEB_URL = 'https://goal-manager-todo.web.app';
+
+function buildReflectionText(item: LearningItem): string {
+  const raw = [item.title, item.content].filter(Boolean).join(' — ');
+  return raw.replace(/[#*`_~>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 300);
+}
+
+function openReflectionFor(item: LearningItem): void {
+  const text = buildReflectionText(item);
+  if (!text) return;
+  const url = `${GOALMANAGER_WEB_URL}/?reflect_learned=${encodeURIComponent(text)}&reflect_date=${localDateKey()}`;
+  window.open(url, '_blank', 'noopener');
+}
+
 
 // ── メインページ ─────────────────────────────────────────────────────
 
@@ -344,6 +361,11 @@ function DashboardTab({ todayItems, dueItems, inboxItems, uid, onAdd, onQuickAdd
                                 onClick={() => setEditInboxItem(item)}
                                 className="rounded-lg border border-gray-200 px-2.5 py-1 text-[11px] font-medium text-gray-500 hover:border-amber-300 hover:text-amber-600"
                               >✏️ 編集</button>
+                              <button
+                                onClick={() => openReflectionFor(item)}
+                                className="rounded-lg border border-gray-200 px-2.5 py-1 text-[11px] font-medium text-gray-500 hover:border-rose-300 hover:text-rose-500"
+                                title="GoalManagerの今日の振り返りへ学びとして送る"
+                              >📝 振り返りへ</button>
                               <button
                                 onClick={() => onDigest(item)}
                                 className="rounded-lg bg-brand-500 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-brand-600"
@@ -1165,6 +1187,13 @@ function QuickTab({ inboxItems, uid, onDigest }: {
                   ✏️ 編集
                 </button>
                 <button
+                  onClick={() => openReflectionFor(item)}
+                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 hover:border-rose-300 hover:text-rose-500"
+                  title="GoalManagerの今日の振り返りへ学びとして送る"
+                >
+                  📝 振り返りへ
+                </button>
+                <button
                   onClick={() => onDigest(item)}
                   className="rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-600"
                 >
@@ -1325,6 +1354,7 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
               <span>📖</span><span>ノートを開く</span>
             </Link>
           )}
+          <button onClick={(e) => { e.stopPropagation(); openReflectionFor(item); }} className={`rounded p-1 hover:bg-rose-50 hover:text-rose-500 ${pageDeleted ? 'text-gray-500' : 'text-gray-300'}`} title="GoalManagerの今日の振り返りへ学びとして送る">📝</button>
           <button onClick={(e) => { e.stopPropagation(); copyContent(); }} className={`rounded p-1 hover:bg-gray-100 hover:text-gray-500 ${pageDeleted ? 'text-gray-500' : 'text-gray-300'}`} title="コピー">⎘</button>
           <button onClick={(e) => { e.stopPropagation(); setEditing(true); }} className={`rounded p-1 hover:bg-gray-100 hover:text-gray-500 ${pageDeleted ? 'text-gray-500' : 'text-gray-300'}`} title="編集">✎</button>
           <button onClick={(e) => { e.stopPropagation(); handleDelete(); }} className={`rounded p-1 hover:bg-red-50 hover:text-red-400 ${pageDeleted ? 'text-gray-500' : 'text-gray-300'}`} title="削除">✕</button>
@@ -1445,7 +1475,8 @@ const ItemCard = memo(function ItemCard({ item, uid, showReviewAction, compact =
                 <span>📖</span><span>ノートを開く</span>
               </Link>
             )}
-            <button onClick={(e) => { e.stopPropagation(); copyContent(); }} className={`rounded p-1 hover:bg-gray-100 hover:text-gray-500 ${pageDeleted ? 'text-gray-500' : 'text-gray-300'}`} title="コピー">⎘</button>
+            <button onClick={(e) => { e.stopPropagation(); openReflectionFor(item); }} className={`rounded p-1 hover:bg-rose-50 hover:text-rose-500 ${pageDeleted ? 'text-gray-500' : 'text-gray-300'}`} title="GoalManagerの今日の振り返りへ学びとして送る">📝</button>
+          <button onClick={(e) => { e.stopPropagation(); copyContent(); }} className={`rounded p-1 hover:bg-gray-100 hover:text-gray-500 ${pageDeleted ? 'text-gray-500' : 'text-gray-300'}`} title="コピー">⎘</button>
             <button onClick={(e) => { e.stopPropagation(); setEditing(true); }} className={`rounded p-1 hover:bg-gray-100 hover:text-gray-500 ${pageDeleted ? 'text-gray-500' : 'text-gray-300'}`} title="編集">✎</button>
             <button onClick={(e) => { e.stopPropagation(); handleDelete(); }} className={`rounded p-1 hover:bg-red-50 hover:text-red-400 ${pageDeleted ? 'text-gray-500' : 'text-gray-300'}`} title="削除">✕</button>
           </div>
