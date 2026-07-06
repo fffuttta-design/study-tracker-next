@@ -276,35 +276,31 @@ async function captureSelectionText() {
   return after // 選択テキスト取得成功
 }
 
-async function showQuickCapture() {
-  // 既に開いていれば前面に出すだけ
-  if (quickWin && !quickWin.isDestroyed()) {
-    quickWin.show()
-    quickWin.focus()
-    quickWin.webContents.focus()
-    return
-  }
-
-  // 選択テキスト（無ければ既存クリップボード）を流し込む（先頭の非空行→タイトル / 残り→本文）
-  const raw = (await captureSelectionText()).replace(/\r\n/g, '\n')
-  let clipTitle = ''
-  let clipBody = ''
+// 取得テキストを「先頭の非空行→タイトル / 残り→本文」に分解
+function parseClip(rawText) {
+  const raw = (rawText || '').replace(/\r\n/g, '\n')
+  let title = ''
+  let body = ''
   if (raw.trim()) {
     const lines = raw.split('\n')
     let i = 0
     while (i < lines.length && lines[i].trim() === '') i++ // 先頭の空行を飛ばす
-    clipTitle = (lines[i] ?? '').trim()
-    clipBody = lines.slice(i + 1).join('\n').replace(/^\n+/, '') // タイトル行より後を本文へ
+    title = (lines[i] ?? '').trim()
+    body = lines.slice(i + 1).join('\n').replace(/^\n+/, '') // タイトル行より後を本文へ
   }
-  const qs = new URLSearchParams()
-  if (clipTitle) qs.set('title', clipTitle)
-  if (clipBody)  qs.set('content', clipBody)
-  const clipUrl = `${APP_URL}/clip${qs.toString() ? `?${qs.toString()}` : ''}`
+  return { title, body }
+}
+
+// ── 特急メモ ポップアップ窓を生成（隠したまま事前生成＝プリウォーム）─────
+// 毎回「窓を作ってネットから読み込む」のをやめ、1個を使い回す（起動を高速化）。
+// 閉じても破棄せず hide する（次回は show するだけ）。
+function createQuickWindow() {
+  if (quickWin && !quickWin.isDestroyed()) return quickWin
 
   quickWin = new BrowserWindow({
     width: 440,
     height: 560,
-    frame: false,            // 枠なしのスッキリした小窓（ページ側に✕ボタンあり）
+    frame: false,            // 枠なしのスッキリした小窓（ページ側に✕ボタン・ヘッダーでドラッグ移動）
     resizable: false,
     minimizable: false,
     maximizable: false,
@@ -320,21 +316,22 @@ async function showQuickCapture() {
     },
   })
 
-  quickWin.loadURL(clipUrl)
+  // パラメータ無しで一度だけ読み込んでおく（以後は IPC で中身だけ差し替える）
+  quickWin.loadURL(`${APP_URL}/clip`)
 
-  quickWin.once('ready-to-show', () => {
-    quickWin.center()
-    quickWin.show()
-    quickWin.focus()
-    quickWin.webContents.focus()
-  })
-
-  // Escape で閉じる
+  // Escape で閉じる（破棄せず hide）
   quickWin.webContents.on('before-input-event', (e, input) => {
     if (input.type === 'keyDown' && input.key === 'Escape') {
       e.preventDefault()
-      if (quickWin && !quickWin.isDestroyed()) quickWin.close()
+      hideQuickCapture()
     }
+  })
+
+  // ✕ や保存完了の window.close() を「破棄」ではなく「隠す」に読み替える（使い回すため）
+  quickWin.on('close', (e) => {
+    if (isQuitting) return // アプリ終了時は本当に閉じる
+    e.preventDefault()
+    hideQuickCapture()
   })
 
   // 未ログイン時の Google ログインポップアップを許可（基本はメイン窓と認証共有のため不要だが保険）
@@ -360,6 +357,32 @@ async function showQuickCapture() {
   })
 
   quickWin.on('closed', () => { quickWin = null })
+  return quickWin
+}
+
+// 特急メモ窓を隠す（次回のために状態はページ側でリセットする）
+function hideQuickCapture() {
+  if (quickWin && !quickWin.isDestroyed()) quickWin.hide()
+}
+
+async function showQuickCapture() {
+  // 事前生成した窓を使い回す（無ければ作る）
+  if (!quickWin || quickWin.isDestroyed()) createQuickWindow()
+
+  // ① まず即座に表示（体感の起動速度アップ）。
+  //    show+focus ではなく showInactive でフォーカスを奪わない
+  //    → 背面のテキストを選択・コピーできる状態を保つ（要望③）。
+  quickWin.setAlwaysOnTop(true)
+  if (!quickWin.isVisible()) quickWin.center()
+  quickWin.showInactive()
+  quickWin.webContents.send('clip-reset') // 前回の内容・保存完了表示をクリア
+
+  // ② 選択テキストを非同期で取り込んでフォームに流し込む。
+  //    窓はフォーカスを持っていない＝背面アプリが前面のままなので Ctrl+C が効く。
+  const { title, body } = parseClip(await captureSelectionText())
+  if (quickWin && !quickWin.isDestroyed()) {
+    quickWin.webContents.send('clip-fill', { title, content: body })
+  }
 }
 
 // ── BrowserWindow 作成 ────────────────────────────────────────────
@@ -586,6 +609,11 @@ ipcMain.on('app-relaunch', () => {
   app.exit(0)
 })
 
+// 特急メモ: 現在のクリップボード文字列を返す（背面で選択→Ctrl+C→「取り込む」ボタン用）
+ipcMain.handle('clip-read-clipboard', () => {
+  try { return clipboard.readText() || '' } catch { return '' }
+})
+
 // 新規ノート遷移直後に入力（クリック・キー）を受け付けず、最小化で復帰する問題への対策。
 // 送信元ウィンドウの webContents へ確実にフォーカスを戻す。
 ipcMain.on('focus-window', (e) => {
@@ -730,6 +758,7 @@ if (!gotLock) {
 
     createWindow()
     createTray()
+    createQuickWindow() // 特急メモ窓を隠したまま事前生成（初回ホットキーも高速化）
 
     // 特急メモ クイック入力のグローバルホットキー（Alt+Shift+S・Chrome拡張と統一）
     const hotkeyOk = globalShortcut.register('Alt+Shift+S', () => { showQuickCapture() })

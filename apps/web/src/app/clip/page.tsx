@@ -12,6 +12,18 @@ import { useLearningStore } from '@/stores/learningStore';
 import { localDateKey } from '@study-tracker/core';
 import { RegisterCelebration } from '@/components/RegisterCelebration';
 
+// Electron（特急メモ ポップアップ）から中身を差し替えるための橋渡し。
+// 拡張機能（通常ブラウザ）では electronAPI が無いので undefined になるだけ。
+type ClipElectronAPI = {
+  onClipReset?: (cb: () => void) => void;
+  onClipFill?: (cb: (data: { title?: string; content?: string }) => void) => void;
+  readClipboard?: () => Promise<string>;
+};
+function getClipAPI(): ClipElectronAPI | undefined {
+  if (typeof window === 'undefined') return undefined;
+  return (window as Window & { electronAPI?: ClipElectronAPI }).electronAPI;
+}
+
 function ClipInner() {
   const params = useSearchParams();
   const { user, loading, signIn } = useAuthStore();
@@ -34,6 +46,40 @@ function ClipInner() {
   // params は初回で確定。以後ユーザー編集を優先するので依存に入れない
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Electron ポップアップは窓を使い回すため、開くたびに main から
+  // 「リセット」「選択テキストの流し込み」を IPC で受け取る。
+  useEffect(() => {
+    const api = getClipAPI();
+    if (!api?.onClipReset || !api?.onClipFill) return;
+    api.onClipReset(() => {
+      setTitle('');
+      setContent('');
+      setSourceUrl('');
+      setSaving(false);
+      setSaved(false);
+    });
+    api.onClipFill((data) => {
+      setTitle((data.title ?? '').slice(0, 300));
+      setContent(data.content ?? '');
+      setSaved(false);
+      setSaving(false);
+    });
+  }, []);
+
+  // 背面で選択して Ctrl+C した文字を、現在のクリップボードから本文に取り込む。
+  const handlePasteFromClipboard = async () => {
+    const api = getClipAPI();
+    if (!api?.readClipboard) return;
+    const text = (await api.readClipboard()).trim();
+    if (!text) return;
+    setContent((prev) => (prev.trim() ? `${prev.trimEnd()}\n${text}` : text));
+    if (!title.trim()) {
+      const firstLine = text.split('\n').map((s) => s.trim()).find((s) => s.length > 0) ?? '';
+      if (firstLine) setTitle(firstLine.slice(0, 300));
+    }
+  };
+  const isElectron = !!getClipAPI()?.readClipboard;
 
   const handleSave = async () => {
     if (!user || saving) return;
@@ -95,9 +141,18 @@ function ClipInner() {
   // 記録フォーム
   return (
     <div className="flex min-h-screen flex-col bg-white">
-      <div className="flex items-center justify-between border-b border-gray-100 px-4 py-2.5">
+      {/* ヘッダー全体をドラッグ領域にして枠なし窓を移動できるようにする（Electron のみ有効／ブラウザでは無視） */}
+      <div
+        className="flex items-center justify-between border-b border-gray-100 px-4 py-2.5"
+        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      >
         <span className="flex items-center gap-1.5 text-sm font-bold text-gray-800">⚡ StudyTracker に記録</span>
-        <button onClick={() => window.close()} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" title="閉じる">✕</button>
+        <button
+          onClick={() => window.close()}
+          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          title="閉じる"
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        >✕</button>
       </div>
 
       <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
@@ -113,7 +168,17 @@ function ClipInner() {
         </label>
 
         <label className="flex flex-1 flex-col gap-1">
-          <span className="text-[11px] font-semibold text-gray-400">内容（選択テキスト＋元ページのリンク）</span>
+          <span className="flex items-center justify-between text-[11px] font-semibold text-gray-400">
+            <span>内容（選択テキスト＋元ページのリンク）</span>
+            {isElectron && (
+              <button
+                type="button"
+                onClick={handlePasteFromClipboard}
+                className="rounded-md border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-500 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-600"
+                title="背面で選択して Ctrl+C したテキストを取り込みます"
+              >📋 コピーした文字を取り込む</button>
+            )}
+          </span>
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}

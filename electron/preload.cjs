@@ -7,6 +7,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   relaunch: () => ipcRenderer.send('app-relaunch'),
   // ウィンドウへ確実に入力フォーカスを戻す（新規ノート遷移直後の入力不能対策）
   focusWindow: () => ipcRenderer.send('focus-window'),
+  // 特急メモ ポップアップ（使い回すためIPCで中身を差し替える）
+  onClipReset: (cb) => ipcRenderer.on('clip-reset', () => cb()),
+  onClipFill:  (cb) => ipcRenderer.on('clip-fill', (_, data) => cb(data)),
+  readClipboard: () => ipcRenderer.invoke('clip-read-clipboard'),
   // 復習通知
   setReviewCount:      (count) => ipcRenderer.send('review-count-update', count),
   setNotificationTime: (time)  => ipcRenderer.send('notification-time-update', time),
