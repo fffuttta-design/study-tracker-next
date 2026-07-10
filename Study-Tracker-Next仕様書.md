@@ -920,6 +920,7 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-07-10 | （次回配信） | 変更：**NotionPlusエディタの見出し（H1/H2）の上に自動で引かれていた「うっすら区切り線（border-top）」を廃止**。見出しごとに薄いグレー線が自動で入る挙動をやめ、線なしのすっきり表示に。editor.css（`.notion-editor h1/h2` の `border-top`/`padding-top` 指定と `:first-child` 例外ルールを削除） |
 | 2026-07-10 | （次回配信） | バグ修正：**NotionPlusにWeb（Google検索のAI概要など）から表を貼り付けるとアプリが真っ白（Application error）になる/貼り付けが壊れる**問題を修正。原因＝コピー元HTMLに紛れ込む「セルの無い行（`<tr></tr>`）」「行の無い空テーブル（`<table></table>`／`<colgroup>`だけ 等）」を貼ると、TipTapの列リサイズ機能が TableMap を作れず `RangeError: Index NaN out of range` で落ちる。対策＝①**貼り付けHTMLをサニタイズ**（`transformPastedHTML`＝`sanitizePastedHTML`：セルの無い行と行の無いテーブルを除去。通常の表は無傷）②**エディタを ErrorBoundary で保護**（`EditorErrorBoundary`）—万一エディタ内で例外が出てもアプリ全体を白画面にせず、その場で「読み込み直す」ボタンで復帰。ローカル本番ビルドで空テーブル/セル無し行/正常テーブル/通常テキストを検証済み。NotionEditor.tsx（sanitizePastedHTML/transformPastedHTML）/ EditorErrorBoundary.tsx（新規）/ notion-plus/[id]/page.tsx（ノート・ブック両エディタを内包） |
 | 2026-06-30 | （次回配信） | 変更：特急メモのグローバルホットキーを **`Ctrl+Alt+S` → `Alt+Shift+S`** に変更し、**Chrome拡張「StudyTrackerクリッパー」と同一キーに統一**。理由＝Chrome拡張は仕様上 `Ctrl+Alt+◯` を登録できず（AltGr衝突回避のため Ctrl か Alt の一方＋Shift のみ可）、かつデスクトップ常駐時はグローバルホットキーがブラウザより先に発火して食い合うため。統一により「常駐あり＝デスクトップ小窓／ブラウザ単体＝拡張」で同じ `Alt+Shift+S`。electron/main.js |
 | 2026-06-30 | （次回配信） | バグ修正（Windows）：**アップデート準備完了ダイアログが何度もポップアップする**問題を修正。`update-downloaded` が起きるたび無条件に `dialog.showMessageBox` していたため、3分おきの自動チェック＋頻繁な新版配信で多重表示されていた。`updateDialogOpen` フラグを追加し、**ダイアログ表示中は再表示しない**（ユーザーが閉じた後に新版が来たら再表示）。electron/main.js |
