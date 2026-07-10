@@ -14,6 +14,7 @@ import { type NotionPage, type BookChapter, parseBookChapters, serializeBookChap
 import { chapterLabel, numberHeadings, type BookChapterFormat } from '@/lib/bookNumbering';
 import { DatabaseView } from '@/components/database/DatabaseView';
 import { IconImagePreview } from '@/components/IconImagePreview';
+import { EditorErrorBoundary } from '@/components/editor/EditorErrorBoundary';
 
 const NotionEditor = dynamic(
   () => import('@/components/editor/NotionEditor').then((m) => ({ default: m.NotionEditor })),
@@ -1098,38 +1099,42 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
               const activeChapter = bookChapters[activeIdx];
               if (!activeChapter) return null;
               return (
-                <NotionEditor
-                  key={`${page.id}-${activeChapterId}-${editorKey}`}
-                  initialTitle=""
-                  initialContent={activeChapter.content}
-                  chapterHeading={bookShowChapterHeading ? chapterLabel(activeIdx, activeChapter.title, bookChapterFormat) : undefined}
-                  onSave={handleBookChapterSave}
-                  onCreateSubPage={handleCreateSubPage}
-                  recordTriggerRef={recordTriggerRef}
-                  notionPageId={page.id}
-                  notionPagePath={`${breadcrumbs.map((p) => p.title || 'Untitled').join(' / ')} / ${activeChapter.title}`}
-                  highlightText={highlightText}
-                  hideTitle
-                  stickyToolbar
-                  numberHeadings={bookNumberHeadings}
-                  headingNumberColor={bookHeadingNumberColor}
-                />
+                <EditorErrorBoundary onReset={() => setEditorKey((k) => k + 1)}>
+                  <NotionEditor
+                    key={`${page.id}-${activeChapterId}-${editorKey}`}
+                    initialTitle=""
+                    initialContent={activeChapter.content}
+                    chapterHeading={bookShowChapterHeading ? chapterLabel(activeIdx, activeChapter.title, bookChapterFormat) : undefined}
+                    onSave={handleBookChapterSave}
+                    onCreateSubPage={handleCreateSubPage}
+                    recordTriggerRef={recordTriggerRef}
+                    notionPageId={page.id}
+                    notionPagePath={`${breadcrumbs.map((p) => p.title || 'Untitled').join(' / ')} / ${activeChapter.title}`}
+                    highlightText={highlightText}
+                    hideTitle
+                    stickyToolbar
+                    numberHeadings={bookNumberHeadings}
+                    headingNumberColor={bookHeadingNumberColor}
+                  />
+                </EditorErrorBoundary>
               );
             })()
           )}
         </>
       ) : (
-        <NotionEditor
-          key={`${page.id}-${editorKey}`}
-          initialTitle={page.title}
-          initialContent={page.content}
-          onSave={handleSave}
-          onCreateSubPage={handleCreateSubPage}
-          recordTriggerRef={recordTriggerRef}
-          notionPageId={page.id}
-          notionPagePath={breadcrumbs.map((p) => p.title || 'Untitled').join(' / ')}
-          highlightText={highlightText}
-        />
+        <EditorErrorBoundary onReset={() => setEditorKey((k) => k + 1)}>
+          <NotionEditor
+            key={`${page.id}-${editorKey}`}
+            initialTitle={page.title}
+            initialContent={page.content}
+            onSave={handleSave}
+            onCreateSubPage={handleCreateSubPage}
+            recordTriggerRef={recordTriggerRef}
+            notionPageId={page.id}
+            notionPagePath={breadcrumbs.map((p) => p.title || 'Untitled').join(' / ')}
+            highlightText={highlightText}
+          />
+        </EditorErrorBoundary>
       )}
 
       {historyOpen && user && (

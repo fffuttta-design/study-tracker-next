@@ -144,6 +144,31 @@ function isImageSrc(s: string) {
   return s.startsWith('http://') || s.startsWith('https://') || s.startsWith('data:');
 }
 
+// ── 貼り付けHTMLのテーブル正規化 ──────────────────────────────────────
+// Google検索の抜粋・AI概要・Excel等からコピーしたHTMLには、セルの無い行や
+// 行の無い空テーブル（レイアウト用の骨組みだけの <table>）が混じることがある。
+// これをそのまま貼ると TipTap の列リサイズ機能が TableMap を作れず
+// 「RangeError: Index NaN out of range」で貼り付けが壊れる（アプリが固まる/落ちる）。
+// 貼り付け前に「セルの無い行」「行の無いテーブル」を取り除いて事故を防ぐ。
+function sanitizePastedHTML(html: string): string {
+  if (!html || (typeof window === 'undefined')) return html;
+  if (!/<table/i.test(html)) return html; // テーブルが無ければ何もしない
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    doc.querySelectorAll('table').forEach((table) => {
+      // セル（th/td）を1つも持たない行は削除
+      table.querySelectorAll('tr').forEach((tr) => {
+        if (!tr.querySelector('th, td')) tr.remove();
+      });
+      // 行が1つも残らなかったテーブルは丸ごと削除
+      if (!table.querySelector('tr')) table.remove();
+    });
+    return doc.body.innerHTML;
+  } catch {
+    return html;
+  }
+}
+
 // ── 絵文字プリセット ──────────────────────────────────────────────────
 
 const EMOJI_PRESETS = [
@@ -2490,6 +2515,8 @@ export function NotionEditor({
     })(),
     editorProps: {
       attributes: { class: compact ? 'notion-editor notion-editor-compact' : 'notion-editor' },
+      // 壊れたテーブル（セルの無い行・行の無い空テーブル）を貼り付け前に除去して事故を防ぐ
+      transformPastedHTML: (html) => sanitizePastedHTML(html),
       handlePaste(view, event) {
         const items = event.clipboardData?.items;
         if (items) {
