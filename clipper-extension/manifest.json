@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "StudyTracker クリッパー",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "見ているWebページや選択テキストを StudyTracker の特急メモにサッと記録するクリッパー。",
-  "permissions": ["contextMenus", "scripting", "activeTab"],
+  "permissions": ["contextMenus", "scripting", "activeTab", "alarms"],
   "background": {
     "service_worker": "background.js"
   },

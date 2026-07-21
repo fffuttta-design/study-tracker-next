@@ -67,3 +67,45 @@ chrome.commands.onCommand.addListener(async (command) => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (tab) clipTab(tab);
 });
+
+// ============================================================
+// コードを直したら、拡張が自分で読み込み直す（chrome://extensions の ↻ を押さなくてよい）
+// ============================================================
+//
+// 仕掛け：**ディスク上の manifest.json の version** と、**いま動いている自分の version** を
+// 1分おきに見比べて、違ったら `chrome.runtime.reload()`。
+// 読み込み直せば両者は一致するので、無限に繰り返すことはない。
+//
+// 🔥 だから **コードを直したら manifest.json の version を必ず上げること。**
+//    上げないと自動更新は起きない＝「直したのに反映されない」に戻る
+//    （そのときは従来どおり chrome://extensions の ↻ で読み込める）。
+// ⚠ これは **未パッケージ拡張（ファイルがディスクにそのまま置いてある）専用**の仕掛け。
+//    Chromeウェブストアのパッケージ版には効かない（読めないだけで害はない）。
+
+const RELOAD_ALARM = 'clipper:selfReload';
+
+function initSelfReload() {
+  chrome.alarms.create(RELOAD_ALARM, { periodInMinutes: 1 });
+  chrome.alarms.onAlarm.addListener((a) => {
+    // ⚠ アラーム名を必ず見る（他の用途のアラームで誤って読み込み直さないため）
+    if (a.name !== RELOAD_ALARM) return;
+    checkSelfUpdate();
+  });
+  checkSelfUpdate();
+}
+
+async function checkSelfUpdate() {
+  try {
+    const url = chrome.runtime.getURL('manifest.json') + '?t=' + Date.now();
+    const disk = await (await fetch(url, { cache: 'no-store' })).json();
+    const running = chrome.runtime.getManifest().version;
+    if (disk.version && disk.version !== running) {
+      console.log(`[StudyTrackerクリッパー] ${running} → ${disk.version} に読み込み直します`);
+      chrome.runtime.reload();
+    }
+  } catch (e) {
+    // 読めない＝パッケージ版や一時的な失敗。何もせず次のアラームでまた見る
+  }
+}
+
+initSelfReload();

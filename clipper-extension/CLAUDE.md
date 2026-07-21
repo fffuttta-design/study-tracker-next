@@ -26,6 +26,11 @@
 
 ## 変更時のルール
 
+- **コードを直したら `manifest.json` の `version` を必ず上げる（パッチ+1）。**
+  拡張は**自分で読み込み直す**（`background.js` の `initSelfReload`＝ディスクの manifest の version と
+  動いている自分の version を1分おきに見比べ、違えば `chrome.runtime.reload()`）。
+  つまり **`chrome://extensions` の ↻ は不要**。ただし **version を上げないと自動更新は起きない**
+  （上げ忘れたときの逃げ道が従来どおりの ↻）。※未パッケージ拡張専用の仕掛け。
 - 機能を変えたら `version`（manifest.json）を上げ、仕様書 `StudyTrackerクリッパー仕様書.md` を更新する。
 - `/clip` 側（Web）を変えたら StudyTracker-Next を配信（`npm run dist:win:sync` か Web のみ `git push`）。
 - アイコンは `icons/`（sharp で⚡を生成。再生成スクリプトは git 履歴/この PJ のメモ参照）。
