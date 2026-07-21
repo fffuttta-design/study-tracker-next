@@ -73,7 +73,7 @@ chrome.commands.onCommand.addListener(async (command) => {
 // ============================================================
 //
 // 仕掛け：**ディスク上の manifest.json の version** と、**いま動いている自分の version** を
-// 1分おきに見比べて、違ったら `chrome.runtime.reload()`。
+// 3分おきに見比べて、違ったら `chrome.runtime.reload()`。
 // 読み込み直せば両者は一致するので、無限に繰り返すことはない。
 //
 // 🔥 だから **コードを直したら manifest.json の version を必ず上げること。**
@@ -85,7 +85,9 @@ chrome.commands.onCommand.addListener(async (command) => {
 const RELOAD_ALARM = 'clipper:selfReload';
 
 function initSelfReload() {
-  chrome.alarms.create(RELOAD_ALARM, { periodInMinutes: 1 });
+  // ⚠ 3分おきなのは**PCのメモリのため**（本人指定・2026-07-21）。裏方は起こされると約30秒起きているので、
+  //    間隔を詰めるほど「起きている時間」が増える。1分だと常時起きているのに近くなる。
+  chrome.alarms.create(RELOAD_ALARM, { periodInMinutes: 3 });
   chrome.alarms.onAlarm.addListener((a) => {
     // ⚠ アラーム名を必ず見る（他の用途のアラームで誤って読み込み直さないため）
     if (a.name !== RELOAD_ALARM) return;

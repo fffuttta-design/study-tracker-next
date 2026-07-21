@@ -53,7 +53,7 @@
 ## 6. 権限
 
 - `contextMenus`：右クリックメニュー。
-- `alarms`：1分おきの自己更新チェック（下記「自己リロード」）。
+- `alarms`：3分おきの自己更新チェック（下記「自己リロード」）。
 - `activeTab` + `scripting`：アイコンクリック時にアクティブタブの選択テキストを読む（クリック時のみ・全サイト常時権限は持たない）。
 - host_permissions なし＝プライバシーに配慮（クリックした時だけそのタブにアクセス）。
 
@@ -69,7 +69,7 @@
 
 ## 8-2. 自己リロード（v1.2.2〜）
 
-`background.js` が1分おきにディスクの `manifest.json` の `version` を読み、動作中の version と
+`background.js` が3分おきにディスクの `manifest.json` の `version` を読み、動作中の version と
 違えば `chrome.runtime.reload()` する。**コードを直しても `chrome://extensions` の ↻ は不要**。
 ただし **`version` を上げないと自動更新は起きない**（改修時は必ずパッチ+1）。未パッケージ拡張専用。
 
