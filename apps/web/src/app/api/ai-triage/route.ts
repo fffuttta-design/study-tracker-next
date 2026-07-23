@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { wrapAnthropic } from "@/lib/aiUsage";
 
 export interface TriagePage {
   id: string;
@@ -27,7 +28,7 @@ export interface TriageResponse {
   refinedContent: string;
 }
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const client = wrapAnthropic(new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }), "ai-triage");
 
 export async function POST(req: NextRequest) {
   if (!process.env.ANTHROPIC_API_KEY) {
