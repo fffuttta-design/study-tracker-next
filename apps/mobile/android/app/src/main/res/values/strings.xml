@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">StudyTracker</string>
+    <string name="app_name_notionplus">NotionPlus</string>
 </resources>

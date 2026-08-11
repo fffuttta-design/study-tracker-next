@@ -46,6 +46,13 @@ let driveBackupPath      = null // Google Drive バックアップ先フォル�
 
 const preloadPath = join(__dirname, 'preload.cjs')
 
+// NotionPlus を専用アイコンから起動するときの目印（ショートカットの引数）
+const NP_ARG = '--notionplus'
+const NP_APP_ID = 'com.studytracker.notionplus'
+function wantsNotionPlus(argv) {
+  return Array.isArray(argv) && argv.includes(NP_ARG)
+}
+
 // Windows タスクバー・通知・スタートメニューのアプリIDを設定（package.json の appId と合わせる）
 if (process.platform === 'win32') {
   app.setAppUserModelId('com.studytracker.app')
@@ -175,6 +182,16 @@ function getTrayIconPath() {
   if (!isDev && existsSync(prodPath)) return prodPath
   const devPng = join(__dirname, '../build/icon.png')
   if (existsSync(devPng)) return devPng
+  return null
+}
+
+// ── NotionPlus アイコンのパス ─────────────────────────────────────
+function getNotionIconPath() {
+  const devPath  = join(__dirname, '../build/icon-notionplus.ico')
+  const prodPath = join(process.resourcesPath ?? '', 'icon-notionplus.ico')
+  if (isDev && existsSync(devPath))   return devPath
+  if (!isDev && existsSync(prodPath)) return prodPath
+  if (existsSync(devPath))            return devPath
   return null
 }
 
@@ -385,6 +402,139 @@ async function showQuickCapture() {
   }
 }
 
+// ── ウィンドウ内 window.open / 外部リンクの共通ハンドラ ──────────────
+// メイン窓・NotionPlus窓の両方で同じ挙動（Googleログインポップアップ許可・
+// アプリ内ルートは新窓・外部リンクは既定ブラウザ）にするため関数化。
+function handleWindowOpen({ url: popupUrl }) {
+  debugLog(`[setWindowOpenHandler] url="${popupUrl}"`)
+
+  const authWindowOptions = {
+    width: 500,
+    height: 660,
+    title: 'Googleでログイン',
+    webPreferences: { nodeIntegration: false, contextIsolation: true },
+  }
+
+  // about:blank / 空URL: Firebase signInWithPopup の中間ウィンドウ
+  if (!popupUrl || popupUrl === 'about:blank') {
+    return { action: 'allow', overrideBrowserWindowOptions: authWindowOptions }
+  }
+
+  const isAuthPopup =
+    popupUrl.includes('firebaseapp.com') ||
+    popupUrl.includes('accounts.google.com') ||
+    popupUrl.includes('googleapis.com') ||
+    popupUrl.includes('google.com/o/oauth2')
+  if (isAuthPopup) {
+    return { action: 'allow', overrideBrowserWindowOptions: authWindowOptions }
+  }
+
+  // 同一オリジン（アプリ内ルート）は新しいアプリウィンドウで開く
+  if (popupUrl.startsWith(APP_URL)) {
+    return {
+      action: 'allow',
+      overrideBrowserWindowOptions: {
+        width: 1000,
+        height: 800,
+        minWidth: 700,
+        minHeight: 500,
+        title: '学習トラッカー',
+        icon: getTrayIconPath() ?? undefined,
+        webPreferences: { nodeIntegration: false, contextIsolation: true, preload: preloadPath },
+      },
+    }
+  }
+
+  // http/https の外部リンクのみブラウザで開く
+  if (popupUrl.startsWith('http://') || popupUrl.startsWith('https://')) {
+    shell.openExternal(popupUrl)
+  }
+  return { action: 'deny' }
+}
+
+// ── NotionPlus 専用ウィンドウ ─────────────────────────────────────
+// 学習トラッカーと同じ Web UI の /notion-plus を、独立したアイコン・
+// タスクバー枠で開く（見た目は別アプリ、更新の仕組みは共用）。
+let notionWin = null
+
+function createNotionWindow() {
+  if (notionWin && !notionWin.isDestroyed()) return notionWin
+
+  notionWin = new BrowserWindow({
+    width: 1200,
+    height: 820,
+    minWidth: 900,
+    minHeight: 600,
+    title: 'NotionPlus',
+    icon: getNotionIconPath() ?? getTrayIconPath() ?? undefined,
+    show: false,
+    webPreferences: { nodeIntegration: false, contextIsolation: true, preload: preloadPath },
+  })
+
+  notionWin.loadURL(`${APP_URL}/notion-plus`)
+
+  // Windows のタスクバーで「学習トラッカー」と別グループ・別アイコンにする
+  if (process.platform === 'win32') {
+    try {
+      const npIcon = getNotionIconPath()
+      notionWin.setAppDetails({
+        appId: NP_APP_ID,
+        relaunchCommand: `"${app.getPath('exe')}" ${NP_ARG}`,
+        relaunchDisplayName: 'NotionPlus',
+        ...(npIcon ? { appIconPath: npIcon, appIconIndex: 0 } : {}),
+      })
+    } catch (e) { debugLog(`[notionplus] setAppDetails error: ${e.message}`) }
+  }
+
+  notionWin.webContents.setWindowOpenHandler(handleWindowOpen)
+
+  // × は破棄せず隠す（エディタ状態を保持・再表示を高速化）
+  notionWin.on('close', (e) => {
+    if (isQuitting) return
+    e.preventDefault()
+    notionWin.hide()
+  })
+  notionWin.on('closed', () => { notionWin = null })
+
+  return notionWin
+}
+
+function showNotionPlus() {
+  if (!notionWin || notionWin.isDestroyed()) createNotionWindow()
+  if (notionWin.isMinimized()) notionWin.restore()
+  notionWin.show()
+  notionWin.focus()
+}
+
+// ── NotionPlus ショートカットの自己修復（デスクトップ＋スタートメニュー）─────
+// インストーラ版でも開発機(robocopy)版でも、毎回起動時にショートカットを
+// 用意/更新する（更新でパスが変わっても追随する）。
+function ensureNotionPlusShortcuts() {
+  if (process.platform !== 'win32') return
+  try {
+    const exe = app.getPath('exe')
+    const npIcon = getNotionIconPath()
+    const targets = [
+      join(app.getPath('desktop'), 'NotionPlus.lnk'),
+      join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'NotionPlus.lnk'),
+    ]
+    for (const linkPath of targets) {
+      const op = existsSync(linkPath) ? 'update' : 'create'
+      shell.writeShortcutLink(linkPath, op, {
+        target: exe,
+        args: NP_ARG,
+        icon: npIcon ?? exe,
+        iconIndex: 0,
+        appUserModelId: NP_APP_ID,
+        description: 'NotionPlus',
+      })
+    }
+    debugLog('[notionplus] ショートカット用意完了')
+  } catch (e) {
+    debugLog(`[notionplus] ショートカット作成失敗: ${e.message}`)
+  }
+}
+
 // ── BrowserWindow 作成 ────────────────────────────────────────────
 function createWindow() {
   mainWin = new BrowserWindow({
@@ -406,8 +556,8 @@ function createWindow() {
 
   // ページ読み込み完了後に表示（チラつき防止）
   mainWin.once('ready-to-show', () => {
-    // 自動起動時（openAsHidden）は非表示のまま
-    if (!app.getLoginItemSettings().wasOpenedAsHidden) {
+    // 自動起動時（openAsHidden）／NotionPlus 専用アイコンからの起動時は非表示のまま
+    if (!app.getLoginItemSettings().wasOpenedAsHidden && !wantsNotionPlus(process.argv)) {
       mainWin.show()
     }
   })
@@ -745,8 +895,13 @@ const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
   app.quit()
 } else {
-  app.on('second-instance', () => {
-    if (mainWin) { mainWin.show(); mainWin.focus() }
+  app.on('second-instance', (_evt, argv) => {
+    // NotionPlus 専用アイコンから起動されたら NotionPlus 窓を出す
+    if (wantsNotionPlus(argv)) {
+      showNotionPlus()
+    } else if (mainWin) {
+      mainWin.show(); mainWin.focus()
+    }
   })
 
   app.whenReady().then(async () => {
@@ -759,6 +914,10 @@ if (!gotLock) {
     createWindow()
     createTray()
     createQuickWindow() // 特急メモ窓を隠したまま事前生成（初回ホットキーも高速化）
+    ensureNotionPlusShortcuts() // NotionPlus 専用アイコン（デスクトップ／スタート）を用意
+
+    // NotionPlus 専用アイコンから起動された場合は NotionPlus 窓を開く
+    if (wantsNotionPlus(process.argv)) showNotionPlus()
 
     // 特急メモ クイック入力のグローバルホットキー（Alt+Shift+S・Chrome拡張と統一）
     const hotkeyOk = globalShortcut.register('Alt+Shift+S', () => { showQuickCapture() })

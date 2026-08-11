@@ -1,9 +1,15 @@
 {
   "manifest_version": 3,
   "name": "StudyTracker クリッパー",
-  "version": "1.2.3",
+  "version": "1.2.4",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApjpZHAHxLb8bjU7EDmqfK7iDlO2Uo5FC0RwvR7tc0g27FgBUdhDAUUEDc0IAKbHnXAzBxZeskI8OfKcLAeI8dSH1RbBNZCMepup18wAx4IQ+vYg/r8Chwv/5qt0iu+XfRUX4GePgWQab8z0IWHMaX6nAKCrbYvkcy8wxLlz9jViNAAjMT530lGvfv8rPJRfP7MORB9uJMyY5yMnavVNOxunixSlWaLjGVmyWqxuLx4E2K4o/S955r2di7x591KTRs3EFplppGxMwv+Nh06luQQaf0W10HEh8s2sIVVemXEYrPg5kvenVWOHz470L1esHk3OqBwvbRtmx+LDPKiiBFQIDAQAB",
   "description": "見ているWebページや選択テキストを StudyTracker の特急メモにサッと記録するクリッパー。",
-  "permissions": ["contextMenus", "scripting", "activeTab", "alarms"],
+  "permissions": [
+    "contextMenus",
+    "scripting",
+    "activeTab",
+    "alarms"
+  ],
   "background": {
     "service_worker": "background.js"
   },

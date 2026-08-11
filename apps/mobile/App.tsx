@@ -10,6 +10,7 @@ import { useNotionStore } from './src/store/notionStore';
 import { checkForUpdate } from './src/services/updateService';
 import { navigationRef } from './src/navigation';
 import { getInitialSharedText, onSharedText } from './src/services/sharedText';
+import { getInitialLaunchRoute, onLaunchRoute } from './src/services/launchRoute';
 import { localDateKey } from './src/types';
 
 /**
@@ -118,6 +119,41 @@ function SharedTextCapture() {
   return null;
 }
 
+/**
+ * NotionPlus 専用ランチャーアイコンから起動されたら、最初に NotionPlus タブを開く。
+ * コールドスタートは getInitialLaunchRoute、起動中の再タップは onLaunchRoute で受ける。
+ * ナビゲータ準備＆ログイン完了を待ってから遷移する（未ログインなら保持してログイン後に適用）。
+ */
+function LaunchRouter() {
+  const user = useAuthStore(s => s.user);
+  const [pending, setPending] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    getInitialLaunchRoute().then(r => { if (mounted && r) setPending(r); });
+    const off = onLaunchRoute(r => setPending(r));
+    return () => { mounted = false; off(); };
+  }, []);
+
+  useEffect(() => {
+    if (pending !== 'NotionPlus') return;
+    let cancelled = false;
+    const tryNav = (n = 0) => {
+      if (cancelled) return;
+      if (navigationRef.current && user) {
+        navigationRef.current.navigate('Main', { screen: 'NotionPlus' });
+        setPending(null);
+      } else if (n < 20) {
+        setTimeout(() => tryNav(n + 1), 300); // ナビゲータ／ログイン待ち（最大約6秒）
+      }
+    };
+    tryNav();
+    return () => { cancelled = true; };
+  }, [pending, user]);
+
+  return null;
+}
+
 export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -125,6 +161,7 @@ export default function App() {
         <StatusBar barStyle="dark-content" backgroundColor="#f9fafb" />
         <AuthListener />
         <SharedTextCapture />
+        <LaunchRouter />
         <AppNavigator />
       </SafeAreaProvider>
     </GestureHandlerRootView>

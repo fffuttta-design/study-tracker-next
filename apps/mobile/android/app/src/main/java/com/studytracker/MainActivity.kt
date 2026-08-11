@@ -19,6 +19,8 @@ class MainActivity : ReactActivity() {
     super.onNewIntent(intent)
     setIntent(intent)
     SharedTextHolder.push(SharedTextHolder.extract(intent))
+    // 専用アイコン（activity-alias）から起動された場合、開く画面を JS へ通知
+    LaunchRouteHolder.push(LaunchRouteHolder.extract(intent))
   }
 
   /**

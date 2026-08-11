@@ -13,3 +13,10 @@ out/
 dist-electron/
 .sync-dest
 .vercel
+
+# Chrome拡張の秘密鍵・パッケージ（拡張IDの素。絶対にgitに載せない）
+*.pem
+*.crx
+
+# 開発用コピー（ext-pack.py --dev が作る使い捨て）
+*-dev/

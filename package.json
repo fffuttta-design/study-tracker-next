@@ -1,6 +1,6 @@
 {
   "name": "study-tracker",
-  "version": "1.0.271",
+  "version": "1.0.272",
   "private": true,
   "type": "module",
   "main": "electron/main.js",
@@ -31,6 +31,10 @@
       {
         "from": "build/icon.ico",
         "to": "icon.ico"
+      },
+      {
+        "from": "build/icon-notionplus.ico",
+        "to": "icon-notionplus.ico"
       }
     ],
     "win": {
