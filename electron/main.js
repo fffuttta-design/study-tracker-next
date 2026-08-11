@@ -488,6 +488,9 @@ function createNotionWindow() {
 
   notionWin.webContents.setWindowOpenHandler(handleWindowOpen)
 
+  // ウィンドウタイトルは「NotionPlus」で固定（ページ側の document.title で上書きさせない）
+  notionWin.on('page-title-updated', (e) => { e.preventDefault() })
+
   // × は破棄せず隠す（エディタ状態を保持・再表示を高速化）
   notionWin.on('close', (e) => {
     if (isQuitting) return
