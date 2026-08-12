@@ -19,20 +19,37 @@ function OpenInner() {
   const [tried, setTried] = useState(false);
 
   useEffect(() => {
-    // ① Windowsアプリを起動（未インストールなら何も起きない）
+    const scheme = `studytracker://open?to=${encodeURIComponent(to)}`;
+
+    // アプリが前面に出た＝起動できた、をイベントで確実に記録する（1時点の hidden 判定は
+    // 起動ダイアログで一瞬隠れると誤作動して固まるため使わない）。
+    let launched = false;
+    const markLaunched = () => { launched = true; };
+    const onVis = () => { if (document.hidden) launched = true; };
+    window.addEventListener('blur', markLaunched);
+    window.addEventListener('pagehide', markLaunched);
+    document.addEventListener('visibilitychange', onVis);
+
+    // ① Windowsアプリを起動（未インストール/未許可なら前面に出ない）
     try {
-      window.location.href = `studytracker://open?to=${encodeURIComponent(to)}`;
+      window.location.href = scheme;
     } catch {
       /* noop */
     }
     setTried(true);
 
-    // ② 一定時間後、まだこのタブが見えている（＝アプリが前面に出ていない＝未インストール）なら
-    //    Web版で開く。アプリが起動して前面を奪っていれば document.hidden になり、Webは開かない。
+    // ② 2.5秒待って、一度も前面が奪われていない＝アプリが開けなかった → Web版で開く。
+    //    アプリが開けていれば launched=true になり、Webへは飛ばさない（二重に開かない）。
     const t = setTimeout(() => {
-      if (!document.hidden) window.location.replace(to);
-    }, 1800);
-    return () => clearTimeout(t);
+      if (!launched && !document.hidden) window.location.replace(to);
+    }, 2500);
+
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('blur', markLaunched);
+      window.removeEventListener('pagehide', markLaunched);
+      document.removeEventListener('visibilitychange', onVis);
+    };
   }, [to]);
 
   return (
