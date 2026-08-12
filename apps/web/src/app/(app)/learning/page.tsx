@@ -30,7 +30,7 @@ import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 
 // ── 定数 ──────────────────────────────────────────────────────────────
 
@@ -123,6 +123,19 @@ function LearningPageContent() {
   const [quickInboxOpen, setQuickInboxOpen] = useState(false);
   const [digestItem, setDigestItem] = useState<LearningItem | null>(null);
   const dateKey = toDateKey(selectedDate);
+  const router = useRouter();
+
+  // /learning?digest=<id> で来たら、そのアイテムの消化モーダルを開く
+  // （カード専用ページ /learning/[id] の「消化する」ボタンからの遷移）。
+  const digestParam = searchParams.get('digest');
+  useEffect(() => {
+    if (!digestParam) return;
+    const it = items.find((i) => i.id === digestParam);
+    if (!it) return; // items のロード待ち
+    setDigestItem(it);
+    setTab(6);
+    router.replace('/learning?tab=6', { scroll: false }); // 閉じても再オープンしないよう param を消す
+  }, [digestParam, items, router]);
 
   const todayItems = useMemo(
     () => items.filter((i) => i.dateKey === dateKey).sort((a, b) => a.sortOrder - b.sortOrder),

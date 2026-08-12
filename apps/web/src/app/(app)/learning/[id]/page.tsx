@@ -151,6 +151,15 @@ export default function LearningItemPage({ params }: { params: Promise<{ id: str
             📖 元ノートを開く
           </Link>
         )}
+        {/* 特急メモ（未消化＝ページ未ひも付け）だけ、標準機能と同じ消化モーダルへ */}
+        {!item.notionPageId && (
+          <Link
+            href={`/learning?digest=${item.id}`}
+            className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100"
+          >
+            🔀 消化する
+          </Link>
+        )}
         <Link
           href="/learning?tab=2"
           className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
