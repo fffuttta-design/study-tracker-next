@@ -16,6 +16,7 @@ const DigestEditor = dynamic(
 import { RegisterCelebration } from '@/components/RegisterCelebration';
 import {
   type LearningItem,
+  type NotionPage,
   hasDueReview,
   isFullyCompleted,
   localDateKey,
@@ -1722,6 +1723,7 @@ function DigestDialog({ item, uid, onClose }: {
   const [query, setQuery] = useState('');
   const [inserted, setInserted] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   const selectedPage = useMemo(() => pages.find((p) => p.id === selectedPageId) ?? null, [pages, selectedPageId]);
 
@@ -1731,15 +1733,24 @@ function DigestDialog({ item, uid, onClose }: {
     catch { return []; }
   }, [item.title, item.content]);
 
-  const candidatePages = useMemo(
-    () => pages
-      .filter((p) => p.id !== 'workspace' && !p.type)
-      .filter((p) => (p.title || '').toLowerCase().includes(query.toLowerCase()))
-      .slice()
-      .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
-      .slice(0, 40),
-    [pages, query],
+  // 追記先ツリー（お気に入り＋親子階層）。追記先は「素のページ（!type）」だけ選べる。
+  const favorites = useMemo(
+    () => pages.filter((p) => p.isFavorite && p.id !== 'workspace' && !p.type).sort((a, b) => a.order - b.order),
+    [pages],
   );
+  const roots = useMemo(
+    () => pages.filter((p) => !p.type && !p.parentId && p.id !== 'workspace').sort((a, b) => a.order - b.order),
+    [pages],
+  );
+  // 検索時はツリーを畳んで一致ページを平ら表示。
+  const searchMatches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return null;
+    return pages
+      .filter((p) => p.id !== 'workspace' && !p.type && (p.title || '').toLowerCase().includes(q))
+      .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
+      .slice(0, 50);
+  }, [pages, query]);
 
   const targetChosen = mode === 'new' ? newTitle.trim().length > 0 : !!selectedPageId;
   // エディタに読み込む対象ノートの内容（既存=そのページ／新規=空）
@@ -1785,90 +1796,145 @@ function DigestDialog({ item, uid, onClose }: {
     }
   };
 
+  // ツリー/検索の1行（追記先ページ）
+  const pageRow = (page: NotionPage, onClick: () => void, flex = false) => {
+    const selected = selectedPageId === page.id;
+    return (
+      <button onClick={onClick}
+        className={`flex ${flex ? 'flex-1' : 'w-full'} items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors ${selected ? 'bg-white font-semibold text-gray-900 shadow-sm ring-1 ring-brand-200' : 'text-gray-600 hover:bg-white hover:text-gray-900'}`}>
+        <span className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden text-sm leading-none">{isImg(page.icon)
+          // eslint-disable-next-line @next/next/no-img-element
+          ? <img src={page.icon} alt="" className="h-4 w-4 rounded object-cover" />
+          : (page.icon || '📄')}</span>
+        <span className="min-w-0 flex-1 truncate text-left">{page.title || '（無題）'}</span>
+      </button>
+    );
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="flex h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        {/* ヘッダー */}
-        <div className="flex shrink-0 items-center justify-between border-b border-brand-100 bg-brand-50 px-5 py-3">
-          <div>
-            <h3 className="text-sm font-semibold text-brand-700">📥 消化（正式なメモへ移行）</h3>
-            <p className="mt-0.5 text-[11px] text-brand-500">追記先のノートを開き、入れたい場所にカーソルを置いて「メモを挿入」→ 整えて確定</p>
-          </div>
-          <button onClick={onClose} className="rounded p-1 text-brand-400 hover:bg-brand-100 hover:text-brand-600">✕</button>
-        </div>
+      <div className="flex h-[88vh] w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
 
-        {/* 追記先の選択（上部・コンパクト） */}
-        <div className="shrink-0 space-y-2 border-b border-gray-100 bg-gray-50 px-5 py-3">
-          <div className="flex items-center gap-2 text-xs">
-            <span className="font-semibold text-gray-500">追記先：</span>
+        {/* 左：追記先ツリー（ふたメモ風サイドバー） */}
+        <div className="flex w-64 shrink-0 flex-col border-r border-gray-100 bg-gray-50">
+          <div className="shrink-0 border-b border-gray-100 px-3 py-3">
+            <span className="text-sm font-semibold text-gray-700">📥 消化先を選ぶ</span>
+          </div>
+          {/* 既存 / 新規 切替 */}
+          <div className="flex gap-1 px-2 pt-2 text-xs">
             <button onClick={() => switchMode('existing')}
-              className={`rounded-full px-3 py-1 ${mode === 'existing' ? 'bg-brand-500 font-medium text-white' : 'border border-gray-200 text-gray-500 hover:bg-gray-100'}`}>既存ページ</button>
+              className={`flex-1 rounded-md px-2 py-1 ${mode === 'existing' ? 'bg-brand-500 font-medium text-white' : 'border border-gray-200 text-gray-500 hover:bg-gray-100'}`}>既存ページ</button>
             <button onClick={() => switchMode('new')}
-              className={`rounded-full px-3 py-1 ${mode === 'new' ? 'bg-brand-500 font-medium text-white' : 'border border-gray-200 text-gray-500 hover:bg-gray-100'}`}>新規ページ</button>
-            {mode === 'existing' && selectedPage && <span className="ml-1 truncate text-[11px] text-gray-400">→ {buildPagePath(selectedPage.id, pages)} を開いています</span>}
+              className={`flex-1 rounded-md px-2 py-1 ${mode === 'new' ? 'bg-brand-500 font-medium text-white' : 'border border-gray-200 text-gray-500 hover:bg-gray-100'}`}>＋新規</button>
           </div>
 
           {mode === 'new' ? (
-            <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="新しいページのタイトル"
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm outline-none focus:border-brand-400" />
+            <div className="px-3 py-3">
+              <label className="mb-1 block text-[11px] font-medium text-gray-500">新しいページのタイトル</label>
+              <input autoFocus value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="無題メモ"
+                className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-brand-400" />
+              <p className="mt-2 text-[11px] text-gray-400">確定すると新しいページを作り、このメモを入れます。</p>
+            </div>
           ) : (
             <>
-              <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="ページを検索..."
-                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-brand-400" />
-              <div className="flex gap-1 overflow-x-auto pb-1">
-                {candidatePages.length === 0 ? (
-                  <p className="px-2 py-1 text-xs text-gray-400">該当ページなし</p>
-                ) : candidatePages.map((p) => (
-                  <button key={p.id} onClick={() => pickPage(p.id)}
-                    className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-left ${selectedPageId === p.id ? 'border-brand-400 bg-brand-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}>
-                    <span className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden text-sm leading-none">{isImg(p.icon)
-                      // eslint-disable-next-line @next/next/no-img-element
-                      ? <img src={p.icon} alt="" className="h-4 w-4 rounded object-cover" />
-                      : (p.icon || '📄')}</span>
-                    <span className="max-w-[160px] truncate text-xs font-medium text-gray-700">{p.title || '（無題）'}</span>
-                    {selectedPageId === p.id && <span className="shrink-0 text-xs text-brand-500">✓</span>}
-                  </button>
-                ))}
+              <div className="px-2 py-2">
+                <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="🔍 ページを検索..."
+                  className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-brand-400" />
               </div>
+              <nav className="flex-1 overflow-y-auto px-1 pb-2">
+                {searchMatches ? (
+                  searchMatches.length === 0 ? (
+                    <p className="px-2 py-4 text-center text-xs text-gray-400">該当ページなし</p>
+                  ) : searchMatches.map((p) => <div key={p.id}>{pageRow(p, () => pickPage(p.id))}</div>)
+                ) : (
+                  <>
+                    {favorites.length > 0 && (
+                      <div className="mb-1">
+                        <p className="px-2 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-yellow-500">★ お気に入り</p>
+                        {favorites.map((p) => <div key={`fav-${p.id}`}>{pageRow(p, () => pickPage(p.id))}</div>)}
+                      </div>
+                    )}
+                    <p className="px-2 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">ページ</p>
+                    {roots.filter((p) => !p.isFavorite).map((page) => {
+                      const children = pages.filter((c) => !c.type && c.parentId === page.id).sort((a, b) => a.order - b.order);
+                      const isExpanded = expandedIds.has(page.id);
+                      return (
+                        <div key={page.id}>
+                          <div className="flex items-center gap-0.5">
+                            <button
+                              className={`flex h-5 w-4 shrink-0 items-center justify-center rounded text-[9px] text-gray-400 hover:bg-gray-200 ${children.length === 0 ? 'invisible' : ''}`}
+                              style={{ transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}
+                              onClick={() => setExpandedIds((prev) => { const n = new Set(prev); if (n.has(page.id)) n.delete(page.id); else n.add(page.id); return n; })}
+                            >▶</button>
+                            {pageRow(page, () => pickPage(page.id), true)}
+                          </div>
+                          {isExpanded && children.length > 0 && (
+                            <div className="ml-4 border-l border-gray-200 pl-1">
+                              {children.map((child) => <div key={child.id}>{pageRow(child, () => pickPage(child.id))}</div>)}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+              </nav>
             </>
           )}
+
+          <div className="shrink-0 border-t border-gray-100 px-3 py-2">
+            <button onClick={onClose} className="w-full rounded-lg px-2 py-1.5 text-left text-xs text-gray-500 hover:bg-gray-100">✕ 閉じる</button>
+          </div>
         </div>
 
-        {/* 対象ノート（本物の編集画面） */}
-        <div className="flex min-h-0 flex-1 flex-col bg-white">
-          {targetChosen ? (
-            <DigestEditor
-              key={editorKey}
-              initialTitle=""
-              initialContent={editorContent}
-              onSave={async () => {}}
-              contentGetterRef={contentRef}
-              insertAtCursorRef={insertRef}
-              hideTitle
-              stickyToolbar
-            />
-          ) : (
-            <div className="flex flex-1 items-center justify-center px-6 text-center text-xs text-gray-400">
-              {mode === 'new' ? '新しいページのタイトルを入力してください' : '↑ 追記先のページを選ぶと、そのノートがここに開きます'}
+        {/* 右：エディタ */}
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex shrink-0 items-center justify-between border-b border-brand-100 bg-brand-50 px-4 py-2.5">
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-brand-700">📥 消化（正式なメモへ移行）</h3>
+              <p className="mt-0.5 truncate text-[11px] text-brand-500">
+                {mode === 'new'
+                  ? (newTitle.trim() ? `新規ページ「${newTitle.trim()}」に入れます` : '← 新しいページのタイトルを入力')
+                  : (selectedPage ? `${buildPagePath(selectedPage.id, pages)} を開いています` : '← 追記先のページを選んでください')}
+              </p>
             </div>
-          )}
-        </div>
+            <button onClick={onClose} className="shrink-0 rounded p-1 text-brand-400 hover:bg-brand-100 hover:text-brand-600">✕</button>
+          </div>
 
-        {/* フッター */}
-        <div className="flex shrink-0 items-center gap-2 border-t border-gray-100 px-5 py-3">
-          <button onClick={doInsert} disabled={!targetChosen}
-            className="rounded-lg bg-amber-500 px-3 py-2 text-xs font-medium text-white hover:bg-amber-600 disabled:opacity-40"
-            title="エディタ内のカーソル位置に特急メモを挿入します">
-            📥 カーソル位置にメモを挿入
-          </button>
-          {inserted && <span className="text-[11px] text-green-600">✓ 挿入しました</span>}
-          {!inserted && targetChosen && <span className="text-[11px] text-gray-400">（押さずに確定すると末尾に追記します）</span>}
-          <div className="ml-auto flex items-center gap-2">
-            <button onClick={onClose} className="rounded-lg px-3 py-2 text-xs text-gray-400 hover:bg-gray-100">キャンセル</button>
-            <button onClick={handleConfirm} disabled={!targetChosen || saving}
-              className="rounded-lg bg-brand-500 px-4 py-2 text-xs font-medium text-white hover:bg-brand-600 disabled:opacity-40">
-              {saving ? '消化中...' : '確定して復習に登録'}
+          <div className="flex min-h-0 flex-1 flex-col bg-white">
+            {targetChosen ? (
+              <DigestEditor
+                key={editorKey}
+                initialTitle=""
+                initialContent={editorContent}
+                onSave={async () => {}}
+                contentGetterRef={contentRef}
+                insertAtCursorRef={insertRef}
+                hideTitle
+                stickyToolbar
+              />
+            ) : (
+              <div className="flex flex-1 items-center justify-center px-6 text-center text-xs text-gray-400">
+                {mode === 'new' ? '新しいページのタイトルを入力してください' : '← 追記先のページを選ぶと、そのノートがここに開きます'}
+              </div>
+            )}
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2 border-t border-gray-100 px-4 py-3">
+            <button onClick={doInsert} disabled={!targetChosen}
+              className="rounded-lg bg-amber-500 px-3 py-2 text-xs font-medium text-white hover:bg-amber-600 disabled:opacity-40"
+              title="エディタ内のカーソル位置に特急メモを挿入します">
+              📥 カーソル位置にメモを挿入
             </button>
+            {inserted && <span className="text-[11px] text-green-600">✓ 挿入しました</span>}
+            {!inserted && targetChosen && <span className="text-[11px] text-gray-400">（押さずに確定すると末尾に追記）</span>}
+            <div className="ml-auto flex items-center gap-2">
+              <button onClick={onClose} className="rounded-lg px-3 py-2 text-xs text-gray-400 hover:bg-gray-100">キャンセル</button>
+              <button onClick={handleConfirm} disabled={!targetChosen || saving}
+                className="rounded-lg bg-brand-500 px-4 py-2 text-xs font-medium text-white hover:bg-brand-600 disabled:opacity-40">
+                {saving ? '消化中...' : '確定して復習に登録'}
+              </button>
+            </div>
           </div>
         </div>
       </div>

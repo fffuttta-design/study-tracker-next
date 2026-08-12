@@ -9,7 +9,6 @@ import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { useAuthStore } from '@/stores/authStore';
 import { useLearningStore } from '@/stores/learningStore';
-import { useNotionPageStore } from '@/stores/notionPageStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import {
   localDateKey,
@@ -37,12 +36,10 @@ export default function LearningItemPage({ params }: { params: Promise<{ id: str
   const { user } = useAuthStore();
   const uid = user?.uid;
   const { items, loading, update } = useLearningStore();
-  const { pages } = useNotionPageStore();
   const reviewStageDays = useSettingsStore((s) => s.reviewStageDays);
 
   const item = useMemo(() => items.find((i) => i.id === id), [items, id]);
 
-  const linkedPage = item?.notionPageId ? pages.find((p) => p.id === item.notionPageId) : null;
   const nextReview = item?.reviews.find((r) => !r.completed);
   const fullyDone = item ? isFullyCompleted(item) : false;
 
