@@ -151,8 +151,9 @@ export default function LearningItemPage({ params }: { params: Promise<{ id: str
             📖 元ノートを開く
           </Link>
         )}
-        {/* 特急メモ（未消化＝ページ未ひも付け）だけ、標準機能と同じ消化モーダルへ */}
-        {!item.notionPageId && (
+        {/* 標準機能と同じ消化モーダルへ。ページ全体/章の復習カード以外はいつでも消化できる
+            （ページ紐付け済みでも、消化し直せば本文をページに入れ直せる）。 */}
+        {!item.isPageReview && (
           <Link
             href={`/learning?digest=${item.id}`}
             className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100"
