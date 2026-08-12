@@ -1920,18 +1920,18 @@ function DigestDialog({ item, uid, onClose }: {
             )}
           </div>
 
-          <div className="flex shrink-0 items-center gap-2 border-t border-gray-100 px-4 py-3">
+          <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-t border-gray-100 px-4 py-3">
             <button onClick={doInsert} disabled={!targetChosen}
-              className="rounded-lg bg-amber-500 px-3 py-2 text-xs font-medium text-white hover:bg-amber-600 disabled:opacity-40"
+              className="whitespace-nowrap rounded-lg bg-amber-500 px-3 py-2 text-xs font-medium text-white hover:bg-amber-600 disabled:opacity-40"
               title="エディタ内のカーソル位置に特急メモを挿入します">
-              📥 カーソル位置にメモを挿入
+              📥 カーソル位置に挿入
             </button>
-            {inserted && <span className="text-[11px] text-green-600">✓ 挿入しました</span>}
-            {!inserted && targetChosen && <span className="text-[11px] text-gray-400">（押さずに確定すると末尾に追記）</span>}
+            {inserted && <span className="whitespace-nowrap text-[11px] text-green-600">✓ 挿入しました</span>}
+            {!inserted && targetChosen && <span className="whitespace-nowrap text-[11px] text-gray-400">押さずに確定で末尾に追記</span>}
             <div className="ml-auto flex items-center gap-2">
-              <button onClick={onClose} className="rounded-lg px-3 py-2 text-xs text-gray-400 hover:bg-gray-100">キャンセル</button>
+              <button onClick={onClose} className="whitespace-nowrap rounded-lg px-3 py-2 text-xs text-gray-400 hover:bg-gray-100">キャンセル</button>
               <button onClick={handleConfirm} disabled={!targetChosen || saving}
-                className="rounded-lg bg-brand-500 px-4 py-2 text-xs font-medium text-white hover:bg-brand-600 disabled:opacity-40">
+                className="whitespace-nowrap rounded-lg bg-brand-500 px-4 py-2 text-xs font-medium text-white hover:bg-brand-600 disabled:opacity-40">
                 {saving ? '消化中...' : '確定して復習に登録'}
               </button>
             </div>
