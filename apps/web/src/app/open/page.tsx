@@ -21,16 +21,35 @@ function OpenInner() {
   useEffect(() => {
     const scheme = `studytracker://open?to=${encodeURIComponent(to)}`;
 
-    // アプリが前面に出た＝起動できた、をイベントで確実に記録する（1時点の hidden 判定は
-    // 起動ダイアログで一瞬隠れると誤作動して固まるため使わない）。
-    let launched = false;
-    const markLaunched = () => { launched = true; };
-    const onVis = () => { if (document.hidden) launched = true; };
-    window.addEventListener('blur', markLaunched);
-    window.addEventListener('pagehide', markLaunched);
+    // アプリが開けたかは「ページがどれだけ隠れていたか」で見分ける：
+    //  ・十分に隠れていた(>1.2秒) → アプリが前面に出た＝成功。Webへは飛ばさない。
+    //  ・一瞬だけ隠れて戻った / まったく隠れない → 起動できていない → Web版で開く。
+    // これで「起動ダイアログで固まる」も「未インストールでWebに落ちない」も両方防ぐ。
+    let settled = false;
+    let hiddenSince = 0;
+    const goWeb = () => {
+      if (!settled && !document.hidden) {
+        settled = true;
+        window.location.replace(to);
+      }
+    };
+    let t = setTimeout(goWeb, 2500);
+    const onVis = () => {
+      if (document.hidden) {
+        hiddenSince = Date.now();
+        clearTimeout(t);
+      } else {
+        clearTimeout(t);
+        if (hiddenSince && Date.now() - hiddenSince > 1200) {
+          settled = true; // 十分に隠れていた＝アプリが開いた（Webへは飛ばさない）
+        } else if (!settled) {
+          t = setTimeout(goWeb, 1500); // 一瞬だけ＝ダイアログ却下等 → Webへ
+        }
+      }
+    };
     document.addEventListener('visibilitychange', onVis);
 
-    // ① Windowsアプリを起動（未インストール/未許可なら前面に出ない）
+    // Windowsアプリを起動（未インストール/未許可なら前面に出ない）
     try {
       window.location.href = scheme;
     } catch {
@@ -38,16 +57,8 @@ function OpenInner() {
     }
     setTried(true);
 
-    // ② 2.5秒待って、一度も前面が奪われていない＝アプリが開けなかった → Web版で開く。
-    //    アプリが開けていれば launched=true になり、Webへは飛ばさない（二重に開かない）。
-    const t = setTimeout(() => {
-      if (!launched && !document.hidden) window.location.replace(to);
-    }, 2500);
-
     return () => {
       clearTimeout(t);
-      window.removeEventListener('blur', markLaunched);
-      window.removeEventListener('pagehide', markLaunched);
       document.removeEventListener('visibilitychange', onVis);
     };
   }, [to]);
