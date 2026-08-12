@@ -58,6 +58,10 @@ if (process.platform === 'win32') {
   app.setAppUserModelId('com.studytracker.app')
 }
 
+// studytracker:// プロトコルを登録（Discordの復習通知リンク→橋渡しページ→アプリ起動）。
+// 例: studytracker://open?to=%2Fnotion-plus%2F<id>
+app.setAsDefaultProtocolClient('studytracker')
+
 // ── バックアップ保存先 ────────────────────────────────────────────
 function getBackupDir() {
   return join(app.getPath('documents'), 'StudyTrackerBackups')
@@ -509,6 +513,39 @@ function showNotionPlus() {
   notionWin.focus()
 }
 
+// ── studytracker:// ディープリンク ────────────────────────────────
+// argv（Windowsは起動引数にURLが入る）や文字列から studytracker:// のURLを探し、
+// 開くべきアプリ内パス（/notion-plus/... 等）を取り出す。無ければ null。
+function parseStudyDeepLink(argvOrUrl) {
+  const arr = Array.isArray(argvOrUrl) ? argvOrUrl : [argvOrUrl]
+  const u = arr.find((a) => typeof a === 'string' && a.startsWith('studytracker://'))
+  if (!u) return null
+  try {
+    const parsed = new URL(u)
+    let to = parsed.searchParams.get('to') || '/learning'
+    if (!to.startsWith('/') || to.startsWith('//')) to = '/learning'
+    return to
+  } catch {
+    return null
+  }
+}
+
+// 取り出したパスを、適切なウィンドウで開く。/notion-plus は NotionPlus 専用窓、他はメイン窓。
+function openDeepLink(to) {
+  const url = `${APP_URL}${to}`
+  debugLog(`[deeplink] open to="${to}"`)
+  if (to.startsWith('/notion-plus')) {
+    if (!notionWin || notionWin.isDestroyed()) createNotionWindow()
+    notionWin.loadURL(url)
+    showNotionPlus()
+  } else {
+    if (!mainWin || mainWin.isDestroyed()) createWindow()
+    mainWin.loadURL(url)
+    mainWin.show()
+    mainWin.focus()
+  }
+}
+
 // ── NotionPlus ショートカットの自己修復（デスクトップ＋スタートメニュー）─────
 // インストーラ版でも開発機(robocopy)版でも、毎回起動時にショートカットを
 // 用意/更新する（更新でパスが変わっても追随する）。
@@ -559,8 +596,9 @@ function createWindow() {
 
   // ページ読み込み完了後に表示（チラつき防止）
   mainWin.once('ready-to-show', () => {
-    // 自動起動時（openAsHidden）／NotionPlus 専用アイコンからの起動時は非表示のまま
-    if (!app.getLoginItemSettings().wasOpenedAsHidden && !wantsNotionPlus(process.argv)) {
+    // 自動起動時（openAsHidden）／NotionPlus 専用アイコン／ディープリンク起動時は非表示のまま
+    const special = wantsNotionPlus(process.argv) || parseStudyDeepLink(process.argv)
+    if (!app.getLoginItemSettings().wasOpenedAsHidden && !special) {
       mainWin.show()
     }
   })
@@ -899,12 +937,25 @@ if (!gotLock) {
   app.quit()
 } else {
   app.on('second-instance', (_evt, argv) => {
+    // studytracker:// のディープリンク（Discordの復習通知）で起動されたら該当ページへ
+    const dl = parseStudyDeepLink(argv)
+    if (dl) {
+      openDeepLink(dl)
+      return
+    }
     // NotionPlus 専用アイコンから起動されたら NotionPlus 窓を出す
     if (wantsNotionPlus(argv)) {
       showNotionPlus()
     } else if (mainWin) {
       mainWin.show(); mainWin.focus()
     }
+  })
+
+  // macOS 用（Windowsは argv 経由なので不要だが保険）
+  app.on('open-url', (evt, url) => {
+    evt.preventDefault()
+    const dl = parseStudyDeepLink(url)
+    if (dl) openDeepLink(dl)
   })
 
   app.whenReady().then(async () => {
@@ -921,6 +972,9 @@ if (!gotLock) {
 
     // NotionPlus 専用アイコンから起動された場合は NotionPlus 窓を開く
     if (wantsNotionPlus(process.argv)) showNotionPlus()
+    // studytracker:// ディープリンクで起動された場合は該当ページを開く
+    const coldDeepLink = parseStudyDeepLink(process.argv)
+    if (coldDeepLink) openDeepLink(coldDeepLink)
 
     // 特急メモ クイック入力のグローバルホットキー（Alt+Shift+S・Chrome拡張と統一）
     const hotkeyOk = globalShortcut.register('Alt+Shift+S', () => { showQuickCapture() })
