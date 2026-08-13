@@ -180,9 +180,21 @@ try {
     }
   }
 
+  // 古い gradle/java デーモンを掃除（16GB機ではデーモンが居座るとメモリ枯渇で
+  // 「Gradle build daemon disappeared」＝OS が JVM を kill してビルドが落ちる）
+  try {
+    execSync('powershell -NoProfile -Command "Get-Process java -ErrorAction SilentlyContinue | Stop-Process -Force"', { stdio: 'ignore' })
+    console.log('[build-and-sync] 古い java デーモンを掃除')
+  } catch { /* いなければ無視 */ }
+
   // assembleDebug のみ（releaseはreanimated ninja loopで失敗するため、debugのみ使用）
   // proguard無効・debuggableVariants=[]でJSバンドル込み → 機能差なし
-  execSync(`"${gradlew}" assembleDebug`, {
+  //
+  // ⚠️ 全4ABI（armeabi-v7a/arm64-v8a/x86/x86_64）を並列で C++ コンパイルすると、
+  //    新アーキ(newArchEnabled)の clang/ninja が RAM を食い尽くし、この16GB機では
+  //    デーモンが OS に kill されてビルドが落ちる。arm64-v8a 単一 ABI ＋ワーカー2 に
+  //    絞って通す（現代のスマホは全て arm64 なので実用上の問題なし）。
+  execSync(`"${gradlew}" assembleDebug -PreactNativeArchitectures=arm64-v8a --max-workers=2`, {
     cwd: path.join(androidSrcDir, 'android'),
     stdio: 'inherit',
     shell: true,
