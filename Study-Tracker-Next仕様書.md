@@ -196,6 +196,7 @@ Firebase Firestore（users/{uid}/コレクション）
   - フッター「📥 カーソル位置にメモを挿入」/「キャンセル」/「**確定して復習に登録**」。
 - 「確定」で：①対象ノートエディタの現在内容を `contentGetterRef` で取得（＝挿入後の最終形）→ ②既存ページを更新 or 新規ページ作成して書き込み ③`learningItem` を1件作成（content＝元メモ本文・`notionPageId`＝追記先）→ 復習へ ④元の特急メモ削除。
 - ※ `/特急メモ` スラッシュ（NotionPlus ページでカーソル位置にメモ挿入＝`openMemoPicker`/`insertMemoAtCursor`）は機能として残置。旧「AI整理モーダル」と一時版（v1.0.254 末尾追記／v1.0.255 カーソル挿入のみ）は置換済み（`/api/ai-triage` は未使用で残置）。
+- **リサイズ（v1.0.275〜）**：右下コーナーのつまみで**モーダル全体の大きさ**、サイドバー／エディタ境目の縦バーで**サイドバー幅**をドラッグ変更でき、`{w,h,sidebar}` を localStorage `studytracker.digestDialogSize` に記憶（次回も同じ大きさで開く）。
 
 ---
 
@@ -920,6 +921,7 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-08-13 | v1.0.275+ | 改善：**消化モーダル（DigestDialog）をドラッグでリサイズできるように**（`learning/page.tsx`）。①右下コーナーのつまみでモーダル全体の幅・高さを変更（中央寄せのまま右下辺がカーソルに追従）、②サイドバーとエディタの境目の縦バーでサイドバー幅を変更。変更後の `{w,h,sidebar}` を **localStorage（`studytracker.digestDialogSize`）に保存し次回も記憶**。起動時にビューポート内へクランプ（w≥560/h≥400、サイドバー180〜w−320）。あわせてフッターがボタン内で折り返す崩れを修正（`whitespace-nowrap`＋窮屈なら行ごと折返し、文言短縮）。 |
 | 2026-08-12 | v1.0.274+ | 改善：**消化モーダル（DigestDialog）の追記先選択を「ふたメモ風の左サイドバー・ツリー」に刷新**（`learning/page.tsx`）。従来の横並びチップ＋平坦リストをやめ、左パネルに **お気に入り＋親子階層（▶で展開/折りたたみ）＋アイコン＋検索** を表示（AddItemDialog のツリーと同方式）、右パネルは従来のノートエディタ。追記先は素のページ（`!type`）のみ選択可。モーダルは `max-w-4xl` の左右2ペイン構成に変更。 |
 | 2026-08-12 | v1.0.274+ | 新機能：**学習カード専用ページ `/learning/[id]`**（`apps/web/src/app/(app)/learning/[id]/page.tsx`・新規）。特急メモを含む学習アイテム1枚を単独で開く入口。本文（ReactMarkdown・typography非依存で子要素直接スタイル）＋次の復習ステージ＋「✓この復習を完了」（既存 completeReview と同ロジック＝reviews[]更新・recalcNextReview）＋「📖 元ノートを開く」（notionPageId があれば `/notion-plus/{id}?hl=…` へ）。特急メモには「⚡特急メモ」バッジ＋**「🔀 消化する」ボタン**（`notionPageId` 未設定のカードのみ表示。`/learning?digest={id}` へ遷移し、学習ページ側が既存の消化モーダル DigestDialog を開く＝標準機能を流用）。**二村秘書の復習通知（FutaHisho §5(AV)）の各カードのリンク先を、従来のノート/リストからこの専用ページに一本化**（消化メモでも「ページが開くだけ」にならず、そのカード自体に着地）。Electronの `studytracker://` は `/learning/*` をメイン窓で開く。 |
 | 2026-08-12 | v1.0.274 | 新機能：**復習通知の「アプリに飛ぶリンク」＝橋渡しページ `/open` ＋ `studytracker://` プロトコル**。二村秘書Botが毎朝Discordへ送る「今日の復習待ち」通知（FutaHisho §5(AV)）の各カードのリンク先。<br>**Web**：`/open?to=<内部パス>`（`apps/web/src/app/open/page.tsx`・新規）。押すと `studytracker://open?to=<path>` でWindowsアプリを起動しようとし、未インストールなら1.8秒後にWeb版の該当ページへフォールバック（`document.hidden` で二重オープンを回避）。`to` は `/` 始まりの内部パスのみ許可（オープンリダイレクト防止）。<br>**Windows(Electron)**：`app.setAsDefaultProtocolClient('studytracker')` でプロトコル登録。`parseStudyDeepLink`（argv/URLから `to` を抽出）＋`openDeepLink`（`/notion-plus/...` は NotionPlus 専用窓、他はメイン窓で `loadURL`）。コールドスタート(`whenReady`)・多重起動(`second-instance`)・macOS(`open-url`)の3経路で受ける。ディープリンク起動時はメイン窓を自動表示しない。electron/main.js / apps/web/src/app/open/page.tsx（新規） |

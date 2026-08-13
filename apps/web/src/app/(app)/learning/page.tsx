@@ -1725,6 +1725,47 @@ function DigestDialog({ item, uid, onClose }: {
   const [saving, setSaving] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
+  // ── モーダル/サイドバーの大きさ（ドラッグで変更→localStorageに記憶）──────────
+  const SIZE_KEY = 'studytracker.digestDialogSize';
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [size, setSize] = useState({ w: 896, h: 720, sidebar: 256 });
+  const sizeRef = useRef(size);
+  useEffect(() => { sizeRef.current = size; }, [size]);
+  useEffect(() => {
+    const vw = window.innerWidth, vh = window.innerHeight;
+    let s = { w: Math.min(960, vw - 32), h: Math.round(vh * 0.88), sidebar: 256 };
+    try { const saved = JSON.parse(localStorage.getItem(SIZE_KEY) || ''); if (saved && typeof saved.w === 'number') s = { ...s, ...saved }; } catch { /* noop */ }
+    s.w = Math.max(560, Math.min(s.w, vw - 24));
+    s.h = Math.max(400, Math.min(s.h, vh - 24));
+    s.sidebar = Math.max(180, Math.min(s.sidebar, s.w - 320));
+    setSize(s);
+  }, []);
+  const persistSize = () => { try { localStorage.setItem(SIZE_KEY, JSON.stringify(sizeRef.current)); } catch { /* noop */ } };
+  // モーダル本体（右下コーナー）：中央寄せのまま右下辺がカーソルに追従する
+  const onModalResize = (e: React.MouseEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const move = (ev: MouseEvent) => {
+      const rect = containerRef.current?.getBoundingClientRect(); if (!rect) return;
+      const nw = Math.max(560, Math.min(ev.clientX - rect.left, vw - 24));
+      const nh = Math.max(400, Math.min(ev.clientY - rect.top, vh - 24));
+      setSize((s) => ({ ...s, w: nw, h: nh, sidebar: Math.min(s.sidebar, nw - 320) }));
+    };
+    const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); persistSize(); };
+    window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+  };
+  // サイドバー幅：サイドバーとエディタの境目の縦バーをドラッグ
+  const onSidebarResize = (e: React.MouseEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    const move = (ev: MouseEvent) => {
+      const rect = containerRef.current?.getBoundingClientRect(); if (!rect) return;
+      const nw = Math.max(180, Math.min(ev.clientX - rect.left, sizeRef.current.w - 320));
+      setSize((s) => ({ ...s, sidebar: nw }));
+    };
+    const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); persistSize(); };
+    window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+  };
+
   const selectedPage = useMemo(() => pages.find((p) => p.id === selectedPageId) ?? null, [pages, selectedPageId]);
 
   // 挿入する特急メモのブロック（見出し3＋本文）
@@ -1813,10 +1854,12 @@ function DigestDialog({ item, uid, onClose }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="flex h-[88vh] w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div ref={containerRef} style={{ width: size.w, height: size.h }}
+        className="relative flex max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)] overflow-hidden rounded-2xl bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}>
 
         {/* 左：追記先ツリー（ふたメモ風サイドバー） */}
-        <div className="flex w-64 shrink-0 flex-col border-r border-gray-100 bg-gray-50">
+        <div style={{ width: size.sidebar }} className="flex shrink-0 flex-col border-r border-gray-100 bg-gray-50">
           <div className="shrink-0 border-b border-gray-100 px-3 py-3">
             <span className="text-sm font-semibold text-gray-700">📥 消化先を選ぶ</span>
           </div>
@@ -1885,6 +1928,22 @@ function DigestDialog({ item, uid, onClose }: {
           <div className="shrink-0 border-t border-gray-100 px-3 py-2">
             <button onClick={onClose} className="w-full rounded-lg px-2 py-1.5 text-left text-xs text-gray-500 hover:bg-gray-100">✕ 閉じる</button>
           </div>
+        </div>
+
+        {/* サイドバーとエディタの境目：ドラッグでサイドバー幅を変更 */}
+        <div onMouseDown={onSidebarResize}
+          className="relative w-1.5 shrink-0 cursor-col-resize bg-gray-100 hover:bg-brand-300"
+          title="ドラッグでサイドバーの幅を変える">
+          <div className="absolute inset-y-0 -left-1.5 -right-1.5" />
+        </div>
+
+        {/* 右下コーナー：ドラッグでウィンドウ全体の大きさを変更 */}
+        <div onMouseDown={onModalResize}
+          className="absolute bottom-0 right-0 z-20 flex h-3.5 w-3.5 cursor-nwse-resize items-end justify-end text-gray-300 hover:text-brand-400"
+          title="ドラッグでウィンドウの大きさを変える">
+          <svg viewBox="0 0 10 10" className="h-2.5 w-2.5 fill-current">
+            <circle cx="8.5" cy="8.5" r="1"/><circle cx="8.5" cy="5.5" r="1"/><circle cx="5.5" cy="8.5" r="1"/>
+          </svg>
         </div>
 
         {/* 右：エディタ */}
