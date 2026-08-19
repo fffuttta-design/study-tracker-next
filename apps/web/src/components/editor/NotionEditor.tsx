@@ -984,7 +984,7 @@ function InlineDatabaseEmbed({ node, updateAttributes }: NodeViewProps) {
 
   return (
     <NodeViewWrapper contentEditable={false}>
-      <div className="group/db my-2 overflow-hidden rounded-xl border border-gray-200 text-xs shadow-sm" contentEditable={false}>
+      <div className="group/db my-2 w-fit max-w-full overflow-hidden rounded-xl border border-gray-200 text-xs shadow-sm" contentEditable={false}>
         {/* ヘッダーバー */}
         <div className="flex items-center justify-between border-b border-gray-100 bg-gradient-to-b from-gray-50 to-white px-3 py-2">
           <span className="flex items-center gap-1.5 text-[13px] font-semibold text-gray-700">
