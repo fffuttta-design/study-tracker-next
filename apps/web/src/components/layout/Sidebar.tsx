@@ -275,6 +275,7 @@ function PageTreeEntry({
     >
       <Link
         href={`/notion-plus/${page.id}`}
+        draggable={false} /* リンク既定のドラッグ(URL掴み)を無効化。これが有効だと親の並び替えドラッグを横取りしてD&Dが効かない */
         onContextMenu={(e) => { e.preventDefault(); onCtxMenu(e, page); }}
         onDoubleClick={(e) => { e.preventDefault(); openNoteInNewWindow(page.id); }}
         className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors ${
