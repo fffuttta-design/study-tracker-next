@@ -1997,9 +1997,22 @@ function PageDescTableView({ node, updateAttributes, editor: pdEditor }: NodeVie
                 {/* 左：ページリンク */}
                 <div className="flex shrink-0 items-start gap-1 border-r border-gray-100 px-2 py-2" style={{ width: lw }}>
                   <span draggable
-                    onDragStart={(e) => { dragSrc.current = i; e.dataTransfer.effectAllowed = 'move'; }}
-                    onDragEnd={() => { dragSrc.current = null; }}
-                    className="mt-0.5 cursor-grab select-none text-[11px] leading-none text-gray-300 opacity-0 transition group-hover/row:opacity-100 active:cursor-grabbing" title="ドラッグで並べ替え">⠿</span>
+                    onDragStart={(e) => {
+                      dragSrc.current = i;
+                      e.dataTransfer.effectAllowed = 'move';
+                      // 表の外（サイドバー等）へ出す用にページIDを載せる。stopPropagation で ProseMirror の
+                      // dragstart に dataTransfer を奪われないようにする（本文リンクと同じ対策）。
+                      const pid = ptIdFromHref(r.href);
+                      if (pid) { e.dataTransfer.setData('application/x-page-id', pid); e.dataTransfer.setData('text/plain', pid); }
+                      e.stopPropagation();
+                    }}
+                    onDragEnd={(e) => {
+                      // 表の外へドロップ成功（dropEffect=move）かつ、表内の並べ替え(dropRow)で消費されていない
+                      // ＝表の外へ出した、とみなして行を除去する。ドロップ失敗(none)なら何もしない＝誤削除防止。
+                      if (e.dataTransfer.dropEffect === 'move' && dragSrc.current !== null) removeRow(i);
+                      dragSrc.current = null;
+                    }}
+                    className="mt-0.5 cursor-grab select-none text-[11px] leading-none text-gray-300 opacity-0 transition group-hover/row:opacity-100 active:cursor-grabbing" title="ドラッグ：表内で並べ替え／表の外(サイドバー等)へ出すと取り出し">⠿</span>
                   <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden text-[13px] leading-none">{isImageSrc(rIcon)
                     // eslint-disable-next-line @next/next/no-img-element
                     ? <img src={rIcon} alt="" className="h-4 w-4 rounded object-cover" />
