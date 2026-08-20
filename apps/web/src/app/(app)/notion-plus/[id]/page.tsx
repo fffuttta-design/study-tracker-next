@@ -222,6 +222,7 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [idCopied, setIdCopied] = useState(false);
+  const [refreshed, setRefreshed] = useState(false);
   const [blockOffsetOpen, setBlockOffsetOpen] = useState(false);
   const [editorKey, setEditorKey] = useState(0);
   const iconPickerRef = useRef<HTMLDivElement>(null);
@@ -766,6 +767,18 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
             title="変更履歴"
           >
             🕐 履歴
+          </button>
+          {/* ページの更新：エディタを最新のストア内容で再マウントする。
+              別端末やClaude Codeから本文を書き換えたとき、開きっぱなしのエディタは
+              マウント時の内容を握ったままなので、このボタンで最新を取り込む。 */}
+          <button
+            onClick={() => { setEditorKey((k) => k + 1); setRefreshed(true); setTimeout(() => setRefreshed(false), 1400); }}
+            className={`rounded-lg border px-3 py-1 text-xs font-medium transition ${refreshed
+              ? 'border-green-300 bg-green-50 text-green-600'
+              : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+            title="最新の内容に更新（別端末やClaude Codeでの変更を取り込む）"
+          >
+            {refreshed ? '✓ 最新に更新' : '🔄 更新'}
           </button>
           <span className="text-xs text-gray-400">{saving ? '保存中...' : '自動保存'}</span>
           {/* 書式の位置調整ボタン */}
