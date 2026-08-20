@@ -10,6 +10,7 @@ import { deleteField } from 'firebase/firestore';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotionPageStore, WORKSPACE_ID, addPageLinkToContent, removePageLinkFromContent } from '@/stores/notionPageStore';
 import { useElectronVersion } from '@/hooks/useElectronVersion';
+import { copyNotionPlusPageId } from '@/lib/copyPageId';
 import appIcon from '@/app/icon.png';
 
 interface SidebarProps {
@@ -879,6 +880,13 @@ function NotionPageSidebar({ user }: { user: User }) {
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
               >
                 <span>📁</span><span>ページを移動</span>
+              </button>
+              {/* ページID（NotionPlus）をコピー＝Claude Code へ正確に渡す用 */}
+              <button
+                onClick={() => { copyNotionPlusPageId(ctxMenu.page.id, ctxMenu.page.title); setCtxMenu(null); }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+              >
+                <span>🆔</span><span>IDをコピー</span>
               </button>
               <div className="mx-2 my-1 border-t border-gray-100" />
               {/* 削除 */}

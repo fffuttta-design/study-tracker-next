@@ -45,6 +45,7 @@ import { useDbRowStore } from '@/stores/notionDatabaseRowStore';
 import { TextCell, NumberCell, SelectCell, MultiSelectCell, CheckboxCell, DateCell, UrlCell } from '@/components/database/cells';
 import { parseDbSchema, createBookChapter, serializeBookChapters, parseBookChapters, localDateKey, type NotionPage, type DbProperty, type DbRow, type LearningItem } from '@study-tracker/core';
 import { IconImagePreview } from '@/components/IconImagePreview';
+import { copyNotionPlusPageId } from '@/lib/copyPageId';
 import './editor.css';
 
 // ── ProseMirror → Markdown 変換 ──────────────────────────────────────
@@ -389,6 +390,15 @@ function PageLinkView({ node, updateAttributes, deleteNode, getPos, editor: tipt
               )}
               <div className="my-1 border-t border-gray-100" />
             </>
+          )}
+          {/* ページID（NotionPlus）をコピー＝Claude Code へ正確に渡す用 */}
+          {pageId && !isUnresolved && (
+            <button
+              onMouseDown={(e) => { e.preventDefault(); setContextMenu(null); copyNotionPlusPageId(pageId, title); }}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              🆔 IDをコピー
+            </button>
           )}
           <button
             onMouseDown={(e) => {

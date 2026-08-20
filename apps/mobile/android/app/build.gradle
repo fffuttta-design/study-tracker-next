@@ -45,8 +45,8 @@ android {
         applicationId "com.studytracker"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 303
-        versionName "1.0.283"
+        versionCode 304
+        versionName "1.0.284"
     }
     signingConfigs {
         debug {
