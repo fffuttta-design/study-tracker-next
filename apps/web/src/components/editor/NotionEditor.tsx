@@ -419,6 +419,9 @@ function PageLinkView({ node, updateAttributes, deleteNode, getPos, editor: tipt
           // サイドバーのページ項目にドロップ＝その親の下に入れる（Sidebar の PageTreeEntry.handleDrop が
           // application/x-page-id を読んで parentId を付け替える）。UUIDフォールバック用に text/plain も渡す。
           if (isUnresolved || !pageId) { e.preventDefault(); return; }
+          // ★stopPropagation 必須：これが無いとエディタ本体(ProseMirror)の dragstart が後から走って
+          // dataTransfer を自前のスライスで上書き（clearData）し、渡した application/x-page-id が消える＝ドロップ先で親付け替えできない。
+          e.stopPropagation();
           e.dataTransfer.effectAllowed = 'move';
           e.dataTransfer.setData('application/x-page-id', pageId);
           e.dataTransfer.setData('text/plain', pageId);

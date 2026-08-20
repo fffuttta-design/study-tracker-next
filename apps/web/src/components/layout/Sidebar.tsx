@@ -354,10 +354,12 @@ function RootPageList({
   }, []);
 
   const handleContainerDrop = useCallback(async (e: React.DragEvent) => {
+    const reorderPageId = e.dataTransfer.getData('application/x-reorder-page-id');
+    // 並び替え以外（本文リンクのドロップ＝ルート化）はここで止めず、親セクションのハンドラに委ねる。
+    if (!reorderPageId) return;
     e.preventDefault();
     e.stopPropagation();
-    const reorderPageId = e.dataTransfer.getData('application/x-reorder-page-id');
-    if (!reorderPageId || !uid || dropIndex === null) { setDropIndex(null); setDragId(null); return; }
+    if (!uid || dropIndex === null) { setDropIndex(null); setDragId(null); return; }
     const fromIndex = roots.findIndex((p) => p.id === reorderPageId);
     if (fromIndex === -1) { setDropIndex(null); setDragId(null); return; }
 
@@ -493,6 +495,60 @@ function NotionPageSidebar({ user }: { user: User }) {
   const addMenuRef = useRef<HTMLDivElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [moveModalPage, setMoveModalPage] = useState<NotionPage | null>(null);
+  // 本文リンク等をサイドバーへドロップしたときのハイライト（ルート化＝ページ一覧見出し／お気に入り項目）
+  const [rootDropOver, setRootDropOver] = useState(false);
+  const [favDropId, setFavDropId] = useState<string | null>(null);
+
+  // ドロップされたページID（本文リンク＝application/x-page-id）を取り出す。並び替えドラッグは対象外。
+  const extractDroppedId = (e: React.DragEvent): string | null => {
+    if (e.dataTransfer.types.includes('application/x-reorder-page-id') &&
+        !e.dataTransfer.types.includes('application/x-page-id')) return null;
+    const id = e.dataTransfer.getData('application/x-page-id') || e.dataTransfer.getData('text/plain');
+    return id && /^[0-9a-f-]{36}$/.test(id) ? id : null;
+  };
+  // ページの親を付け替える。newParentId=undefined でルート（最上位）へ昇格。
+  const reparentPage = useCallback(async (droppedPageId: string, newParentId: string | undefined) => {
+    const dropped = pages.find((p) => p.id === droppedPageId);
+    if (!dropped || droppedPageId === newParentId) return;
+    if (newParentId === undefined && !dropped.parentId) return; // 既にルートなら何もしない
+    // 循環防止：新しい親が自分自身/自分の子孫だと親子ループになる（ツリー描画が無限再帰する）ので中止。
+    if (newParentId) {
+      let cur: NotionPage | undefined = pages.find((p) => p.id === newParentId);
+      const seen = new Set<string>();
+      while (cur && !seen.has(cur.id)) {
+        if (cur.id === droppedPageId) return; // dropped が newParent の祖先＝循環
+        seen.add(cur.id);
+        cur = cur.parentId ? pages.find((p) => p.id === cur!.parentId) : undefined;
+      }
+    }
+    const oldParentId = dropped.parentId;
+    const data: Record<string, unknown> = {};
+    if (newParentId !== undefined) {
+      data.parentId = newParentId;
+    } else {
+      data.parentId = deleteField(); // ルートへ昇格
+      const maxRoot = pages.filter((p) => !p.parentId && p.id !== WORKSPACE_ID)
+        .reduce((m, p) => Math.max(m, p.order ?? 0), 0);
+      data.order = maxRoot + 1;
+    }
+    await update(user.uid, droppedPageId, data as Partial<NotionPage>);
+    // 旧親ページ本文のリンクを外す
+    if (oldParentId) {
+      const oldParent = pages.find((p) => p.id === oldParentId);
+      if (oldParent) {
+        const nc = removePageLinkFromContent(oldParent.content, droppedPageId);
+        if (nc !== oldParent.content) await update(user.uid, oldParentId, { content: nc });
+      }
+    }
+    // 新親ページ本文へリンクを足す（ルート化のときは親が無いのでスキップ）
+    if (newParentId) {
+      const np = pages.find((p) => p.id === newParentId);
+      if (np) {
+        const nc = addPageLinkToContent(np.content, droppedPageId, dropped.title, dropped.icon);
+        if (nc !== np.content) await update(user.uid, newParentId, { content: nc });
+      }
+    }
+  }, [pages, update, user.uid]);
 
   // W3: 検索結果（query があるときのみ非 null）
   const searchResults = useMemo(() => {
@@ -737,10 +793,26 @@ function NotionPageSidebar({ user }: { user: User }) {
                       href={`/notion-plus/${p.id}`}
                       onContextMenu={(e) => { e.preventDefault(); handleCtxMenu(e, p); }}
                       onDoubleClick={(e) => { e.preventDefault(); openNoteInNewWindow(p.id); }}
+                      onDragOver={(e) => {
+                        // 本文リンクを落とす＝この★ページの子にする
+                        if (!e.dataTransfer.types.includes('application/x-page-id')) return;
+                        e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setFavDropId(p.id);
+                      }}
+                      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setFavDropId((cur) => cur === p.id ? null : cur); }}
+                      onDrop={async (e) => {
+                        setFavDropId(null);
+                        const id = extractDroppedId(e);
+                        if (!id || id === p.id) return;
+                        e.preventDefault(); e.stopPropagation();
+                        await reparentPage(id, p.id);
+                        router.push(`/notion-plus/${id}`);
+                      }}
                       className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors ${
-                        p.id === currentId
-                          ? 'bg-white font-semibold text-gray-900 shadow-sm'
-                          : 'text-gray-600 hover:bg-white hover:text-gray-900'
+                        favDropId === p.id
+                          ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-300'
+                          : p.id === currentId
+                            ? 'bg-white font-semibold text-gray-900 shadow-sm'
+                            : 'text-gray-600 hover:bg-white hover:text-gray-900'
                       }`}
                     >
                       <PageIcon icon={p.type === 'database' && p.icon === '📄' ? '📊' : p.type === 'book' && p.icon === '📄' ? '📖' : p.icon} />
@@ -748,17 +820,30 @@ function NotionPageSidebar({ user }: { user: User }) {
                         <div className="truncate">{p.title || 'Untitled'}</div>
                         {path && <div className="truncate text-[9px] text-gray-400">{path}</div>}
                       </div>
-                      <span className="shrink-0 text-[10px] text-yellow-400">★</span>
+                      {favDropId === p.id ? <span className="shrink-0 text-[10px] text-brand-400">↳ 子に</span> : <span className="shrink-0 text-[10px] text-yellow-400">★</span>}
                     </Link>
                   );
                 })}
               </div>
             )}
 
-            {/* ページ一覧（全ルートページ・フラット表示・D&D並び替え可） */}
+            {/* ページ一覧（全ルートページ・フラット表示・D&D並び替え可）。
+                見出し/余白へ本文リンクをドロップ＝最上位(ルート)へ昇格。項目の上へ落とすと従来どおりその子になる。 */}
             {!loading && allRootPages.length > 0 && (
-              <div className="mt-4 border-t border-gray-200 pt-3">
-                <p className="mx-1 mb-1 rounded bg-gray-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-gray-500">📄 ページ一覧</p>
+              <div className="mt-4 border-t border-gray-200 pt-3"
+                onDragOver={(e) => {
+                  if (!e.dataTransfer.types.includes('application/x-page-id')) return;
+                  e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setRootDropOver(true);
+                }}
+                onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setRootDropOver(false); }}
+                onDrop={async (e) => {
+                  setRootDropOver(false);
+                  const id = extractDroppedId(e);
+                  if (!id) return;
+                  e.preventDefault(); e.stopPropagation();
+                  await reparentPage(id, undefined); // ルート（最上位）へ
+                }}>
+                <p className={`mx-1 mb-1 rounded px-2 py-1 text-[10px] font-bold uppercase tracking-wide transition-colors ${rootDropOver ? 'bg-brand-100 text-brand-700 ring-1 ring-brand-300' : 'bg-gray-100 text-gray-500'}`}>📄 ページ一覧{rootDropOver && <span className="ml-1 normal-case">← 最上位に入れる</span>}</p>
                 <RootPageList
                   roots={allRootPages}
                   pages={pages}
