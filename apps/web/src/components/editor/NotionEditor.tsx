@@ -1254,7 +1254,7 @@ function ptParseSections(raw: unknown): PtSection[] {
 
 const ptIdFromHref = (href: string) => href?.match(/\/notion-plus\/([^/?#]+)/)?.[1];
 
-function PageTableView({ node, updateAttributes, editor: ptEditor }: NodeViewProps) {
+function PageTableView({ node, updateAttributes, editor: ptEditor, deleteNode, getPos }: NodeViewProps) {
   const router = useRouter();
   const onPageNavigate = useContext(PageNavigationContext);
   const currentPageId = useContext(EditorPageIdContext);
@@ -1281,6 +1281,20 @@ function PageTableView({ node, updateAttributes, editor: ptEditor }: NodeViewPro
   const pickerRef = useRef<HTMLDivElement>(null);
   // 看板カードの右クリックメニュー（ブック⇄ノート変換）
   const [cardMenu, setCardMenu] = useState<{ pageId: string; type: string; x: number; y: number } | null>(null);
+  // カンバンビュー自体の右クリックメニュー（解除／削除）。カードや入力欄は各自の挙動を優先する。
+  const [blockMenu, setBlockMenu] = useState<{ x: number; y: number } | null>(null);
+
+  // 解除：カンバンを「ふつうのページリンク一覧」に戻す（列・大見出しの構造だけ外し、ページ自体は1件も失わない）。
+  const dissolveToLinks = useCallback(() => {
+    if (typeof getPos !== 'function') return;
+    const pos = getPos();
+    if (pos == null) return;
+    const links = sections.flatMap((s) => s.columns.flatMap((c) => c.links));
+    const content = links.length
+      ? links.map((lk) => ({ type: 'pageLink', attrs: { href: lk.href, title: lk.title, icon: lk.icon } }))
+      : [{ type: 'paragraph' }];
+    ptEditor.chain().focus().insertContentAt({ from: pos, to: pos + node.nodeSize }, content).run();
+  }, [getPos, sections, ptEditor, node]);
 
   // 看板カードのリンク先ページをブックに変換（本文ページリンクの右クリックと同じ挙動）
   const convertCardToBook = async (pageId: string) => {
@@ -1473,7 +1487,16 @@ function PageTableView({ node, updateAttributes, editor: ptEditor }: NodeViewPro
 
   return (
     <NodeViewWrapper data-type="page-table" contentEditable={false}>
-      <div className="page-table my-3" contentEditable={false}>
+      <div className="page-table my-3" contentEditable={false}
+        onContextMenu={(e) => {
+          // 入力欄はブラウザ標準メニュー（コピペ）を優先。カードは各自の onContextMenu が
+          // stopPropagation 済みなのでここには来ない。それ以外＝ビューの余白/見出し/列上で解除メニュー。
+          const tgt = e.target as HTMLElement;
+          if (tgt.closest('input, textarea')) return;
+          e.preventDefault();
+          e.stopPropagation();
+          setBlockMenu({ x: e.clientX, y: e.clientY });
+        }}>
         {sections.map((sec, si) => {
           const framed = sec.framed !== false; // 既定で枠あり（明示 false のみ枠なし）
           const panel = framed || !!sec.bg;    // 枠 or 背景があれば角丸＋余白のパネルに
@@ -1654,6 +1677,26 @@ function PageTableView({ node, updateAttributes, editor: ptEditor }: NodeViewPro
           document.body,
         );
       })()}
+      {/* カンバンビュー自体の右クリックメニュー（解除／削除） */}
+      {blockMenu && typeof document !== 'undefined' && createPortal(
+        <>
+          <div className="fixed inset-0 z-[999]" onMouseDown={() => setBlockMenu(null)} />
+          <div style={{ position: 'fixed', top: blockMenu.y, left: blockMenu.x }}
+            className="z-[1000] w-60 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-2xl">
+            <button
+              onMouseDown={(e) => { e.preventDefault(); dissolveToLinks(); setBlockMenu(null); }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
+              📄 カンバンを解除（リンク一覧に戻す）
+            </button>
+            <button
+              onMouseDown={(e) => { e.preventDefault(); setBlockMenu(null); if (window.confirm('このカンバンビューを削除しますか？\n（カードの中のページ自体は消えません）')) deleteNode(); }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-500 hover:bg-red-50">
+              🗑️ カンバンごと削除
+            </button>
+          </div>
+        </>,
+        document.body,
+      )}
       {/* 看板カードの右クリックメニュー（ブック⇄ノート変換） */}
       {cardMenu && typeof document !== 'undefined' && createPortal(
         <>
