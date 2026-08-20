@@ -1,5 +1,8 @@
 import {
   getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   collection,
   doc,
   getDocs,
@@ -15,8 +18,25 @@ import {
 } from 'firebase/firestore';
 import { getFirebaseApp } from './config';
 
+// 永続ローカルキャッシュ（IndexedDB）を有効化した Firestore を一度だけ生成して使い回す。
+// これにより、アプリ再起動・再読込のたびに全ドキュメントをサーバーから読み直すのをやめ、
+// 2回目以降はキャッシュから即返し＋変更分だけ同期する＝Firestore 読み取り回数を大幅に削減する
+// （無料枠の読み取り上限に到達しにくくする）。デスクトップは別ウィンドウを複数開くため
+// persistentMultipleTabManager で複数タブ間のキャッシュ競合を防ぐ。
+let _db: Firestore | null = null;
+
 export function getDb(): Firestore {
-  return getFirestore(getFirebaseApp());
+  if (_db) return _db;
+  const app = getFirebaseApp();
+  try {
+    _db = initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    });
+  } catch {
+    // 既に初期化済み／IndexedDB 不可（プライベートモード等）のときは従来どおりにフォールバック。
+    _db = getFirestore(app);
+  }
+  return _db;
 }
 
 // 旧Flutter版と同じパス: users/{uid}/...
