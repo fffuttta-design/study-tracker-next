@@ -219,12 +219,14 @@ function PageTreeEntry({
   const [isDragOver, setIsDragOver] = useState(false);
 
   const handleDrop = async (e: React.DragEvent) => {
+    // 並び替えドラッグ（application/x-reorder-page-id のみ）はここで止めず、親コンテナの
+    // handleContainerDrop に委ねる。★stopPropagation より前で return しないと、項目の上に
+    // ドロップした瞬間に伝播が止まり、順番保存処理がコンテナに届かない（＝掴めるが位置が変わらない）。
+    if (e.dataTransfer.types.includes('application/x-reorder-page-id') &&
+        !e.dataTransfer.types.includes('application/x-page-id')) return;
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(false);
-    // 並び替えドラッグは無視（application/x-reorder-page-id のみ持つ）
-    if (e.dataTransfer.types.includes('application/x-reorder-page-id') &&
-        !e.dataTransfer.types.includes('application/x-page-id')) return;
     // application/x-page-id が取れない場合は text/plain にフォールバック
     const droppedPageId =
       e.dataTransfer.getData('application/x-page-id') ||
