@@ -413,7 +413,18 @@ function PageLinkView({ node, updateAttributes, deleteNode, getPos, editor: tipt
           </button>
         </div>
       )}
-      <div className="flex w-full items-center gap-1 py-px" onContextMenu={handleContextMenu}>
+      <div className="flex w-full items-center gap-1 py-px"
+        draggable={!isUnresolved && !!pageId}
+        onDragStart={(e) => {
+          // サイドバーのページ項目にドロップ＝その親の下に入れる（Sidebar の PageTreeEntry.handleDrop が
+          // application/x-page-id を読んで parentId を付け替える）。UUIDフォールバック用に text/plain も渡す。
+          if (isUnresolved || !pageId) { e.preventDefault(); return; }
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('application/x-page-id', pageId);
+          e.dataTransfer.setData('text/plain', pageId);
+        }}
+        onContextMenu={handleContextMenu}
+        style={!isUnresolved && pageId ? { cursor: 'grab' } : undefined}>
         <div className="relative" ref={pickerRef}>
           <button
             onClick={(e) => { e.stopPropagation(); setPickerOpen((v) => !v); }}
