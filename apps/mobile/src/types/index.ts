@@ -74,6 +74,43 @@ export function isTipTapContent(content: string): boolean {
   try { const j = JSON.parse(content); return j?.type === 'doc'; } catch { return false; }
 }
 
+// ─── ブック（複数章）形式 ─────────────────────────────────
+// Web版のブックは content が {"chapters":[{id,title,content(=doc文字列)}]} 形式。
+// Android はこれを未対応で、プレビューに生JSONをそのまま出していた不具合があった。
+export interface BookChapter { id: string; title: string; content: string }
+
+/** {chapters:[...]} 形式ならパースして返す。違えば null。 */
+export function parseBook(content: string): { chapters: BookChapter[] } | null {
+  if (!content || !content.startsWith('{')) return null;
+  try {
+    const j = JSON.parse(content);
+    if (Array.isArray(j?.chapters)) return j as { chapters: BookChapter[] };
+  } catch {}
+  return null;
+}
+
+export function isBookContent(content: string): boolean {
+  return !!parseBook(content);
+}
+
+/** ブックの全章を1つの表示用 TipTap doc（文字列）に結合する。
+ *  章が複数あるときは各章タイトルを H1 として挟む。1章のときはその章の doc そのまま。 */
+export function mergeBookToDoc(content: string): string {
+  const book = parseBook(content);
+  if (!book) return content;
+  const multi = book.chapters.length > 1;
+  const nodes: any[] = [];
+  for (const ch of book.chapters) {
+    if (multi && ch.title) {
+      nodes.push({ type: 'heading', attrs: { level: 1, textAlign: null }, content: [{ type: 'text', text: ch.title }] });
+    }
+    let doc: any = null;
+    try { doc = typeof ch.content === 'string' ? JSON.parse(ch.content) : ch.content; } catch {}
+    if (doc?.content && Array.isArray(doc.content)) nodes.push(...doc.content);
+  }
+  return JSON.stringify({ type: 'doc', content: nodes });
+}
+
 // ─── ユーティリティ ───────────────────────────────────────
 export function localDateKey(d: Date = new Date()): string {
   const y = d.getFullYear();

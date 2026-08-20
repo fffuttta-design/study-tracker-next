@@ -9,7 +9,7 @@ import React from 'react';
 import { Text } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { TipTapRenderer } from './TipTapRenderer';
-import { isTipTapContent } from '../types';
+import { isTipTapContent, isBookContent, mergeBookToDoc } from '../types';
 
 // rgb(r,g,b) → 6桁 hex に変換
 function rgbToHex(r: number, g: number, b: number): string {
@@ -80,10 +80,12 @@ export function ContentRenderer({
 }: Props) {
   if (!content) return null;
 
-  if (isTipTapContent(content)) {
+  // ブック（複数章）は全章を1つのdocへ結合してから描画（生JSON表示を防ぐ）
+  const tiptap = isTipTapContent(content) ? content : (isBookContent(content) ? mergeBookToDoc(content) : null);
+  if (tiptap) {
     return (
       <TipTapRenderer
-        content={content}
+        content={tiptap}
         baseTextColor={baseTextColor}
         onToggleTask={onToggleTask}
       />

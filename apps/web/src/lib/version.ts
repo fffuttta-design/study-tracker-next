@@ -1,1 +1,1 @@
-export const APP_VERSION = 'v1.0.287';
+export const APP_VERSION = 'v1.0.288';

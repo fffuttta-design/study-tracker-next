@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   TextInput,
@@ -8,11 +8,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Alert,
 } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { useAuthStore } from '../../store/authStore';
 import { useNotionStore } from '../../store/notionStore';
-import { isTipTapContent, extractTextFromTipTap } from '../../types';
+import { isTipTapContent, extractTextFromTipTap, parseBook, mergeBookToDoc } from '../../types';
 import { TipTapWebEditor } from '../../components/TipTapWebEditor';
 
 export default function NotionPageScreen({ route, navigation }: any) {
@@ -31,6 +32,15 @@ export default function NotionPageScreen({ route, navigation }: any) {
   const [title, setTitle] = useState(page?.title ?? '');
   const [editing, setEditing] = useState(false);
   const [dirty, setDirty] = useState(false);
+
+  // ブック（複数章）判定と、表示用に1つのdocへ結合したもの
+  const book = useMemo(() => parseBook(content), [content]);
+  const isBook = !!book;
+  const singleChapterBook = isBook && book!.chapters.length === 1;
+  const displayContent = useMemo(() => (isBook ? mergeBookToDoc(content) : content), [isBook, content]);
+  const useTipTap = isTipTapContent(content) || isBook;
+  // 1章の本は編集可（保存時に章へ戻す）。複数章の本はモバイルでは閲覧のみ（PC版で編集）。
+  const webReadOnly = isBook ? (!editing || !singleChapterBook) : !editing;
 
   useEffect(() => {
     if (page) {
@@ -82,7 +92,13 @@ export default function NotionPageScreen({ route, navigation }: any) {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.toolBtn, editing && styles.toolBtnActive]}
-          onPress={() => setEditing(true)}>
+          onPress={() => {
+            if (isBook && !singleChapterBook) {
+              Alert.alert('複数章の本', 'この本は複数の章があるため、編集はPC版で行ってください。（モバイルは閲覧のみ）');
+              return;
+            }
+            setEditing(true);
+          }}>
           <Text style={[styles.toolBtnText, editing && styles.toolBtnTextActive]}>編集</Text>
         </TouchableOpacity>
         {dirty && (
@@ -92,15 +108,20 @@ export default function NotionPageScreen({ route, navigation }: any) {
         )}
       </View>
 
-      {isTipTapContent(content) ? (
+      {useTipTap ? (
         // TipTapコンテンツ: 単一WebViewで編集/プレビュー両対応（再マウントしない）
+        // ブックは全章を結合した表示用docを渡す。1章の本は編集内容を章へ戻して保存。
         <TipTapWebEditor
-          content={content}
+          content={displayContent}
           title={title}
-          readOnly={!editing}
+          readOnly={webReadOnly}
           pagesMap={pagesMap}
           onSave={(newContent, newTitle) => {
-            setContent(newContent);
+            if (isBook && singleChapterBook) {
+              setContent(JSON.stringify({ chapters: [{ ...book!.chapters[0], content: newContent }] }));
+            } else if (!isBook) {
+              setContent(newContent);
+            }
             if (newTitle) setTitle(newTitle);
             setDirty(true);
           }}
