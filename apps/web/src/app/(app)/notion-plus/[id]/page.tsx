@@ -221,6 +221,7 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
   const [iconUrlDraft, setIconUrlDraft] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [idCopied, setIdCopied] = useState(false);
   const [blockOffsetOpen, setBlockOffsetOpen] = useState(false);
   const [editorKey, setEditorKey] = useState(0);
   const iconPickerRef = useRef<HTMLDivElement>(null);
@@ -709,6 +710,32 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
               title={page.isFavorite ? 'お気に入り解除' : 'お気に入りに追加'}
             >
               ★
+            </button>
+          )}
+          {/* ページIDをコピー（Claude Code へ正確に渡す用）。NotionPlus のものと分かるよう「NP:」タグ付き。 */}
+          {id !== WORKSPACE_ID && (
+            <button
+              onClick={() => {
+                // 例: NP:ページ「事業」 01719740-...-...  （先頭の NP: で NotionPlus のページIDと判別できる）
+                const text = `NP:ページ「${page.title || 'Untitled'}」 ${page.id}`;
+                const done = () => { setIdCopied(true); setTimeout(() => setIdCopied(false), 1600); };
+                if (navigator.clipboard?.writeText) {
+                  navigator.clipboard.writeText(text).then(done).catch(() => {
+                    // フォールバック（クリップボード権限なし等）
+                    const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta);
+                    ta.select(); try { document.execCommand('copy'); } catch { /* noop */ } ta.remove(); done();
+                  });
+                } else {
+                  const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta);
+                  ta.select(); try { document.execCommand('copy'); } catch { /* noop */ } ta.remove(); done();
+                }
+              }}
+              className={`flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium transition ${idCopied
+                ? 'border-green-300 bg-green-50 text-green-600'
+                : 'border-gray-200 text-gray-400 hover:bg-gray-50 hover:text-gray-600'}`}
+              title="このページのID（NotionPlus）をコピー。Claude Code に正確に渡せます"
+            >
+              {idCopied ? '✓ コピー（NP:…）' : '🆔 IDをコピー'}
             </button>
           )}
         </div>
