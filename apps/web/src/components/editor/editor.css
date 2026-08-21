@@ -281,11 +281,11 @@ details[open] .toggle-heading-arrow { transform: rotate(90deg); }
   font-size: 0.875rem;
 }
 .toc-block-title {
-  font-size: 0.7rem;
+  font-size: 1.05rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  color: #9ca3af;
-  margin-bottom: 0.4rem;
+  letter-spacing: 0.02em;
+  color: #374151;
+  margin-bottom: 0.5rem;
   padding-left: 0.35rem;
 }
 /* Notion風：見出しレベルでインデント、ホバーで背景＋色、クリックでジャンプ */

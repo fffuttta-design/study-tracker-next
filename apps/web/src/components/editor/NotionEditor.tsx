@@ -3410,6 +3410,14 @@ export function NotionEditor({
               <button onClick={handleCtxToc} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
                 <span className="text-base">≡</span>目次を挿入
               </button>
+              {notionPageId && (
+                <button
+                  onClick={() => { setCtxMenu(null); copyNotionPlusPageId(notionPageId, titleValue.current || initialTitle); }}
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <span className="text-base">🆔</span>このページのIDをコピー（NP:…）
+                </button>
+              )}
               <button
                 onClick={() => { setCtxMenu(null); editor?.commands.focus(); setTimeout(() => document.execCommand('paste'), 10); }}
                 className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
