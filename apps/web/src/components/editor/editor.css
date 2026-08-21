@@ -273,27 +273,38 @@ details[open] .toggle-heading-arrow { transform: rotate(90deg); }
 
 /* 目次 */
 .toc-block {
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  background: #f9fafb;
-  padding: 0.75rem 1rem;
+  border-left: 3px solid #e5e7eb;
+  border-radius: 0 0.4rem 0.4rem 0;
+  background: #fafafa;
+  padding: 0.6rem 0.5rem 0.6rem 0.9rem;
   margin: 0.75rem 0;
   font-size: 0.875rem;
 }
 .toc-block-title {
   font-size: 0.7rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   color: #9ca3af;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.4rem;
+  padding-left: 0.35rem;
 }
-.toc-item { display: block; color: #374151; text-decoration: none; padding: 0.125rem 0; }
-.toc-item:hover { color: #6366f1; text-decoration: underline; }
-.toc-item-h1 { padding-left: 0; font-weight: 500; }
-.toc-item-h2 { padding-left: 1rem; }
-.toc-item-h3 { padding-left: 2rem; font-size: 0.8rem; color: #6b7280; }
-.toc-item-h4 { padding-left: 2.75rem; font-size: 0.8rem; color: #9ca3af; }
+/* Notion風：見出しレベルでインデント、ホバーで背景＋色、クリックでジャンプ */
+.toc-item {
+  display: block;
+  width: 100%;
+  color: #4b5563;
+  text-decoration: none;
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.3rem;
+  line-height: 1.5;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.toc-item:hover { color: #6d3bef; background: #f0ecff; text-decoration: none; }
+.toc-item-h1 { padding-left: 0.4rem; font-weight: 600; color: #374151; }
+.toc-item-h2 { padding-left: 1.3rem; }
+.toc-item-h3 { padding-left: 2.2rem; font-size: 0.8rem; color: #6b7280; }
+.toc-item-h4 { padding-left: 3.1rem; font-size: 0.8rem; color: #9ca3af; }
 
 
 /* ── ドラッグハンドル ──────────────────────────────────────────────── */
