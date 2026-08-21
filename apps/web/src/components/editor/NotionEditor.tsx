@@ -3123,6 +3123,20 @@ export function NotionEditor({
     editor?.chain().focus().insertContent({ type: 'callout', attrs: { background: '#FEF9CD' }, content: [{ type: 'paragraph' }] }).run();
   }, [editor]);
 
+  // 右クリック→目次を挿入（スラッシュ /目次 と同じ挙動：既存の目次を消してページ最上部に1つ置く）
+  const handleCtxToc = useCallback(() => {
+    setCtxMenu(null);
+    if (!editor) return;
+    const { state, view } = editor;
+    let tr = state.tr;
+    const tocPos: { pos: number; size: number }[] = [];
+    state.doc.descendants((node, pos) => { if (node.type.name === 'toc') tocPos.unshift({ pos, size: node.nodeSize }); });
+    for (const { pos, size } of tocPos) tr = tr.delete(pos, pos + size);
+    tr = tr.insert(0, state.schema.nodes.toc.create());
+    view.dispatch(tr);
+    editor.commands.focus();
+  }, [editor]);
+
   const handleOpenAnnotationDialog = useCallback((pos: { x: number; y: number }) => {
     if (!editor) return;
     const { from, to } = editor.state.selection;
@@ -3392,6 +3406,9 @@ export function NotionEditor({
               </button>
               <button onClick={handleCtxCallout} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
                 <span className="text-base">💡</span>コールアウトを挿入
+              </button>
+              <button onClick={handleCtxToc} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
+                <span className="text-base">≡</span>目次を挿入
               </button>
               <button
                 onClick={() => { setCtxMenu(null); editor?.commands.focus(); setTimeout(() => document.execCommand('paste'), 10); }}
