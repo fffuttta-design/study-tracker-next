@@ -2632,6 +2632,38 @@ export function NotionEditor({
         }
         return false;
       },
+      // テーブルや本文リンクを本文へドラッグ＆ドロップしたとき、ProseMirror既定だと
+      // text/plain（＝ページID）がそのまま「生の文字列」として挿入されてしまう（バグ）。
+      // ページIDのドロップを横取りして、本物の pageLink ブロックとして最上位に挿入する。
+      handleDrop(view, event) {
+        const dt = event.dataTransfer;
+        if (!dt) return false;
+        let pageId = dt.getData('application/x-page-id');
+        if (!pageId) {
+          const t = (dt.getData('text/plain') || '').trim();
+          if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(t)) pageId = t;
+        }
+        if (!pageId) return false; // ページID以外のドロップは既定処理に任せる
+        event.preventDefault();
+        const p = useNotionPageStore.getState().pages.find((x) => x.id === pageId);
+        const dropPos = view.posAtCoords({ left: event.clientX, top: event.clientY });
+        let insertAt = dropPos ? dropPos.pos : view.state.selection.from;
+        try {
+          const $pos = view.state.doc.resolve(insertAt);
+          if ($pos.depth > 0) insertAt = $pos.after(1); // 最上位ブロックの直後に置く（段落内への割り込みを防ぐ）
+        } catch { /* fallback: insertAt のまま */ }
+        const node = view.state.schema.nodes.pageLink.create({
+          href: `/notion-plus/${pageId}`,
+          title: p?.title || 'Untitled',
+          icon: p?.icon || '📄',
+        });
+        try {
+          view.dispatch(view.state.tr.insert(insertAt, node));
+        } catch {
+          view.dispatch(view.state.tr.replaceSelectionWith(node));
+        }
+        return true;
+      },
     },
     onCreate: ({ editor }) => {
       if (typeof window === 'undefined') return;
