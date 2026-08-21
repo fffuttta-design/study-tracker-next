@@ -921,6 +921,8 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-08-21 | v1.0.292 | 改善：**本文右クリックメニュー（ctxMenu）に「🆔 このページのIDをコピー（NP:…）」を追加**（`NotionEditor.tsx`・`notionPageId` prop＋`titleValue.current`で `copyNotionPlusPageId`）。既存のID copy導線（ページ上部ボタン・pageLink右クリック・サイドバー右クリック）に本文右クリックを追加。 |
+| 2026-08-21 | v1.0.291 | 改善：**目次ブロックの見出し「目次」を拡大**（`editor.css` .toc-block-title 0.7rem→1.05rem・色 #9ca3af→#374151）。 |
 | 2026-08-21 | v1.0.290 | 改善：**本文の右クリックメニューに「≡ 目次を挿入」を追加**（`NotionEditor.tsx` ctxMenu アクション欄）。`handleCtxToc`＝スラッシュ `/目次` と同一挙動（既存 `toc` ノードを全削除→position 0 に1つ挿入）。目次ブロック自体（`TocView`/`TocNode`）は既存で、見出しを自動収集・クリックでスクロール・`editor.on('update')` で自動更新。挿入導線が slash のみだったのを右クリックからも可能にした。 |
 | 2026-08-21 | v1.0.289 | 改善：**アプリアイコン刷新**（白ベースで白背景に溶けていた問題）。`apps/web/src/app/icon.png` を紫角丸ベース＋白ノート＋青しおり＋金チェック＋金の復習リングに差し替え、`scripts/update-icons.mjs` で build/icon.png・icon.ico・Android mipmap（通常＋adaptive、背景色#6638e6）・apple-icon へ展開。角丸ベースをx=24まで広げ、Android背景色サンプリング(5%位置)が透明(黒)を拾う不具合も回避。／**目次ブロックのCSSをNotion風に**（`editor.css` .toc-block/.toc-item：カード→左アクセント枠、レベル別インデント、ホバーで紫背景＋ジャンプ）。 |
 | 2026-08-21 | v1.0.288 | 修正：**Android版がブック（複数章 `{chapters:[...]}`）ノートを描画できず生JSONを表示していた不具合**。`isTipTapContent` が `type==='doc'` のみ真を返すため、ブックはMarkdown分岐へ落ちて生JSON文字列がそのまま出ていた。`types/index.ts` に `parseBook` / `isBookContent` / `mergeBookToDoc`（全章を1つの表示用docへ結合・複数章時は章タイトルをH1で挟む）を追加。`NotionPageScreen.tsx`＝`useTipTap = isTipTapContent||isBook` で判定し、ブックは `mergeBookToDoc` した `displayContent` を `TipTapWebEditor` に渡す。**1章の本は編集可**（保存時 `{chapters:[{...ch0,content:newDoc}]}` へ書き戻し）、**複数章はモバイル閲覧のみ**（編集タップでAlert→PC版へ誘導）。`ContentRenderer.tsx`（学習/インボックスの一覧描画）も同様にブック対応。mobile: types/index.ts / screens/NotionPlus/NotionPageScreen.tsx / components/ContentRenderer.tsx |
