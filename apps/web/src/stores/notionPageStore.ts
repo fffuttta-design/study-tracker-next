@@ -1,7 +1,58 @@
 ﻿
 import { create } from 'zustand';
 import { type NotionPage, type BookChapter, createNotionPage } from '@study-tracker/core';
-import { subscribeCol, upsertDoc, deleteDocById, fetchWhere, batchUpsert, batchDelete } from '@study-tracker/firebase';
+import {
+  subscribeCol, upsertDoc, fetchWhere, batchUpsert, batchDelete,
+  subscribeDoc, fetchAll, deleteMapKeys,
+} from '@study-tracker/firebase';
+
+// ── ページ一覧の索引（Firestore読み取り削減の要） ─────────────────────────
+// Firestoreの課金は「読んだ**件数**」。以前は起動のたびに notionPages を全件購読しており、
+// 536ページなら1回の起動で536読み取りを使っていた（無料枠5万/日＝1日80回で枯れる）。
+// 一覧（サイドバー・パンくず・リンク解決）に必要なのは本文ではなく見出し情報だけなので、
+// それを**1件のドキュメントにまとめて**持つ。これで一覧の読み取りはページ数に関係なく1回。
+// 本文は、そのページを開いたときに1件だけ読む。
+//
+// ⚠ 索引はキャッシュであって正本ではない。正本は notionPages の各ドキュメント。
+//   ズレたら `rebuildIndex` で作り直せる（壊れても復旧できる形にしておく）。
+const INDEX_COL = 'meta';
+const INDEX_ID  = 'pageIndex';
+
+/** 索引に載せる項目（本文は載せない）。undefinedはFirestoreが受け付けないのでnullに寄せる。 */
+type IndexEntry = {
+  title: string; icon: string; parentId: string | null; order: number;
+  isFavorite: boolean; type: string | null; notionId: string | null; updatedAt: string;
+};
+type PageIndexDoc = { items?: Record<string, IndexEntry> };
+
+const toIndexEntry = (p: NotionPage): IndexEntry => ({
+  title:      p.title ?? '',
+  icon:       p.icon ?? '',
+  parentId:   p.parentId ?? null,
+  order:      p.order ?? 0,
+  isFavorite: p.isFavorite ?? false,
+  type:       (p as { type?: string }).type ?? null,
+  notionId:   (p as { notionId?: string }).notionId ?? null,
+  updatedAt:  p.updatedAt ?? '',
+});
+
+/** 索引の1件を、本文が空のページとして復元する（本文は開いたときに読む）。 */
+const fromIndexEntry = (id: string, e: IndexEntry): NotionPage => ({
+  id,
+  title:      e.title,
+  icon:       e.icon,
+  content:    '',
+  order:      e.order,
+  isFavorite: e.isFavorite,
+  updatedAt:  e.updatedAt,
+  ...(e.parentId ? { parentId: e.parentId } : {}),
+  ...(e.type     ? { type: e.type }         : {}),
+  ...(e.notionId ? { notionId: e.notionId } : {}),
+} as NotionPage);
+
+/** 索引へ1件だけ書く（マージ書き込みなので他の端末が足した項目を消さない）。 */
+const putIndexEntry = (uid: string, page: NotionPage) =>
+  upsertDoc(uid, INDEX_COL, INDEX_ID, { items: { [page.id]: toIndexEntry(page) } });
 
 // ── TipTap content 内の PageLinkNode を操作するユーティリティ ─────────────
 
@@ -190,7 +241,17 @@ export interface PageHistorySnapshot {
 interface NotionPageState {
   pages: NotionPage[];
   loading: boolean;
+  /** 本文まで読み込み済みのページID。索引だけの状態では content が空文字なので、これで見分ける。 */
+  loadedIds: string[];
+  /** 全ページの本文を読み込み済みか（バックアップ・一括処理・削除時のリンク掃除で必要） */
+  allLoaded: boolean;
   subscribe: (uid: string) => () => void;
+  /** 1ページぶんの本文を読み込む（開いたときに呼ぶ）。戻り値は購読解除。 */
+  loadPage: (uid: string, id: string) => () => void;
+  /** 全ページの本文をそろえる。重い（ページ数ぶんの読み取り）ので、必要な処理の直前だけで呼ぶ。 */
+  ensureAllContent: (uid: string) => Promise<void>;
+  /** 索引を本体（notionPages）から作り直す。ズレたときの復旧用。 */
+  rebuildIndex: (uid: string) => Promise<number>;
   add: (uid: string, params?: { parentId?: string; order?: number; type?: 'page' | 'database' | 'book'; notionId?: string; title?: string; icon?: string }) => Promise<NotionPage>;
   update: (uid: string, id: string, data: Partial<NotionPage>) => Promise<void>;
   batchUpdate: (uid: string, updates: Array<{ id: string; content: string }>) => Promise<void>;
@@ -200,25 +261,100 @@ interface NotionPageState {
   loadPageHistory: (uid: string, pageId: string) => Promise<PageHistorySnapshot[]>;
 }
 
-export const useNotionPageStore = create<NotionPageState>((set) => ({
+export const useNotionPageStore = create<NotionPageState>((set, get) => ({
   pages: [],
   loading: true,
+  loadedIds: [],
+  allLoaded: false,
 
   subscribe: (uid) => {
-    return subscribeCol<NotionPage>(uid, 'notionPages', (pages) => {
-      set({ pages, loading: false });
+    let unsubFallback: (() => void) | null = null;
+
+    const unsubIndex = subscribeDoc<PageIndexDoc & { id: string }>(
+      uid, INDEX_COL, INDEX_ID,
+      (docData) => {
+        const items = docData?.items;
+        if (!items || Object.keys(items).length === 0) {
+          // 索引がまだ無い（初回・作り直し前）。壊れて見えないよう、従来どおり全件購読に落として
+          // 表示は必ず出す。同時に索引を作るので、次の起動からは1回の読み取りで済む。
+          if (!unsubFallback) {
+            unsubFallback = subscribeCol<NotionPage>(uid, 'notionPages', (pages) => {
+              set({ pages, loading: false, allLoaded: true, loadedIds: pages.map((p) => p.id) });
+            });
+            void get().rebuildIndex(uid);
+          }
+          return;
+        }
+        // 索引が来たらフォールバックは畳む（全件購読を続ける意味がない）
+        if (unsubFallback) { unsubFallback(); unsubFallback = null; }
+
+        // 既に本文を読んであるページは、その本文を保ったまま見出しだけ差し替える
+        const prev = new Map(get().pages.map((p) => [p.id, p]));
+        const pages = Object.entries(items).map(([id, e]) => {
+          const base = fromIndexEntry(id, e);
+          const old  = prev.get(id);
+          return old?.content ? { ...base, content: old.content } : base;
+        });
+        set({ pages, loading: false });
+      },
+    );
+
+    return () => { unsubIndex(); if (unsubFallback) unsubFallback(); };
+  },
+
+  loadPage: (uid, id) => {
+    // そのページ1件だけを購読する（他端末での編集も反映される）。読み取りは1件ぶん。
+    return subscribeDoc<NotionPage>(uid, 'notionPages', id, (page) => {
+      if (!page) return;
+      set((s) => ({
+        pages: s.pages.some((p) => p.id === id)
+          ? s.pages.map((p) => (p.id === id ? { ...p, ...page } : p))
+          : [...s.pages, page],
+        loadedIds: s.loadedIds.includes(id) ? s.loadedIds : [...s.loadedIds, id],
+      }));
     });
+  },
+
+  ensureAllContent: async (uid) => {
+    if (get().allLoaded) return;
+    const all = await fetchAll<NotionPage>(uid, 'notionPages');
+    const byId = new Map(all.map((p) => [p.id, p]));
+    set((s) => ({
+      // 索引に載っている並びを保ちつつ本文を埋め、索引から漏れているページも拾う
+      pages: [
+        ...s.pages.map((p) => ({ ...p, ...(byId.get(p.id) ?? {}) })),
+        ...all.filter((p) => !s.pages.some((q) => q.id === p.id)),
+      ],
+      loadedIds: all.map((p) => p.id),
+      allLoaded: true,
+    }));
+  },
+
+  rebuildIndex: async (uid) => {
+    const all = await fetchAll<NotionPage>(uid, 'notionPages');
+    const items: Record<string, IndexEntry> = {};
+    for (const p of all) items[p.id] = toIndexEntry(p);
+    await upsertDoc(uid, INDEX_COL, INDEX_ID, { items, rebuiltAt: new Date().toISOString() });
+    return all.length;
   },
 
   add: async (uid, params) => {
     const page = createNotionPage(params as Parameters<typeof createNotionPage>[0]);
     await upsertDoc(uid, 'notionPages', page.id, page as unknown as Record<string, unknown>);
+    await putIndexEntry(uid, page);
     return page;
   },
 
   update: async (uid, id, data) => {
     const updated = { ...data, updatedAt: new Date().toISOString() };
     await upsertDoc(uid, 'notionPages', id, updated as Record<string, unknown>);
+    // 見出しに関わる項目が変わったときだけ索引も直す（本文だけの保存では書かない＝書き込みを増やさない）
+    const touchesIndex = ['title', 'icon', 'parentId', 'order', 'isFavorite', 'type', 'notionId']
+      .some((k) => k in data);
+    if (touchesIndex) {
+      const cur = get().pages.find((p) => p.id === id);
+      if (cur) await putIndexEntry(uid, { ...cur, ...updated } as NotionPage);
+    }
   },
 
   batchUpdate: async (uid, updates) => {
@@ -226,13 +362,17 @@ export const useNotionPageStore = create<NotionPageState>((set) => ({
     const now = new Date().toISOString();
     const items = updates.map(({ id, content }) => ({ id, content, updatedAt: now }));
     await batchUpsert(uid, 'notionPages', items);
+    // 本文だけの更新なので索引の中身は変わらない（updatedAtのズレは実害が無いので書かない）
   },
 
   ensureWorkspace: async (uid) => {
-    const { pages } = useNotionPageStore.getState();
-    if (pages.find((p) => p.id === WORKSPACE_ID)) return;
+    if (useNotionPageStore.getState().pages.find((p) => p.id === WORKSPACE_ID)) return;
 
-    // 旧 ID(__workspace__) のデータがあればコンテンツを引き継ぐ
+    // 旧 ID(__workspace__) からの引き継ぎは本文が要るので、そのときだけ本文をそろえる
+    if (useNotionPageStore.getState().pages.some((p) => p.id === LEGACY_WORKSPACE_ID)) {
+      await useNotionPageStore.getState().ensureAllContent(uid);
+    }
+    const { pages } = useNotionPageStore.getState();
     const legacy = pages.find((p) => p.id === LEGACY_WORKSPACE_ID);
     const workspace: NotionPage = legacy
       ? { ...legacy, id: WORKSPACE_ID, updatedAt: new Date().toISOString() }
@@ -246,6 +386,7 @@ export const useNotionPageStore = create<NotionPageState>((set) => ({
           isFavorite: false,
         };
     await upsertDoc(uid, 'notionPages', WORKSPACE_ID, workspace as unknown as Record<string, unknown>);
+    await putIndexEntry(uid, workspace);
 
     // 旧ワークスペースの子ページの parentId を新 ID に更新
     if (legacy) {
@@ -259,11 +400,18 @@ export const useNotionPageStore = create<NotionPageState>((set) => ({
           'notionPages',
           children.map((c) => ({ id: c.id, parentId: WORKSPACE_ID, updatedAt: now })),
         );
+        // 親が変わった＝一覧の形が変わるので索引も直す
+        for (const c of children) {
+          await putIndexEntry(uid, { ...c, parentId: WORKSPACE_ID, updatedAt: now } as NotionPage);
+        }
       }
     }
   },
 
   remove: async (uid, id) => {
+    // ⚠ 消すページへのリンクを他ページの本文から抜くので、**全ページの本文が要る**。
+    //   索引だけの状態（本文が空）で走らせると、リンクを消し損ねて "Untitled" が残る。
+    await useNotionPageStore.getState().ensureAllContent(uid);
     // 子孫ページをすべて収集して一括削除（孤児ページ防止）
     const { pages } = useNotionPageStore.getState();
     const collectDescendants = (parentId: string): string[] => {
@@ -289,6 +437,8 @@ export const useNotionPageStore = create<NotionPageState>((set) => ({
     if (contentUpdates.length > 0) await batchUpsert(uid, 'notionPages', contentUpdates);
 
     await batchDelete(uid, 'notionPages', allIds);
+    // 索引からも消す（キー単位で消すので、他端末が同時に足したページを巻き込まない）
+    await deleteMapKeys(uid, INDEX_COL, INDEX_ID, 'items', allIds);
   },
 
   saveHistory: async (uid, pageId, title, content) => {

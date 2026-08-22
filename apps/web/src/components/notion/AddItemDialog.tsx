@@ -286,7 +286,7 @@ export function AddItemDialog({ uid, onClose, onAfterRecord }: {
   onAfterRecord?: () => void;
 }) {
   const { add: addItem } = useLearningStore();
-  const { pages, add: addPage, update } = useNotionPageStore();
+  const { pages, add: addPage, update, ensureAllContent } = useNotionPageStore();
   const { user } = useAuthStore();
   const [recordedText, setRecordedText] = useState('');
   const [confirming, setConfirming] = useState(false);
@@ -327,6 +327,13 @@ export function AddItemDialog({ uid, onClose, onAfterRecord }: {
     document.addEventListener('click', handler);
     return () => document.removeEventListener('click', handler);
   }, [contextMenu]);
+
+  // 本文検索は全ページの本文が要る。ふだんは索引だけで動かしているので、
+  // **検索したときに1度だけ**まとめて読み込む（読み込み済みなら何もしない）。
+  useEffect(() => {
+    if (!uid || !searchQuery.trim()) return;
+    void ensureAllContent(uid);
+  }, [uid, searchQuery, ensureAllContent]);
 
   const searchResults = useMemo(() => {
     const q = searchQuery.trim();

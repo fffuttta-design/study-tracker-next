@@ -590,9 +590,22 @@ interface ImprovementTask {
 | `memos` | UUID | title, content, order |
 | `dailyMemos` | YYYY-MM-DD | content, updatedAt |
 | `improvementTasks` | UUID | name, detail, completed, order |
+| `meta` | `pageIndex` 固定 | items{ pageId: {title, icon, parentId, order, isFavorite, type, notionId, updatedAt} } |
 
 **特記事項**：
 - ワークスペースページ ID = `"workspace"`（旧: `"__workspace__"`、移行済み）
+- 🔥 **`meta/pageIndex` はページ一覧の索引**（2026-08-22〜）。Firestoreの課金は「読んだ**件数**」なので、
+  起動のたびに `notionPages` を全件購読すると 536ページ＝536読み取りになり、無料枠5万/日を**1日80回の起動**で
+  使い切っていた（実際に2026-08-20と08-21に枯れてアプリが開けなくなった）。一覧に必要な見出し情報だけを
+  1件にまとめ、**一覧の読み取りをページ数に関係なく1回**にした。本文はページを開いたときに1件だけ読む。
+  - 索引は**キャッシュであって正本ではない**。正本は `notionPages` の各ドキュメント。
+  - 索引が空/無いときは**従来どおり全件購読に落ちて表示は必ず出る**＋その場で索引を作る（自己修復）。
+  - 本文が要る処理（**バックアップ／本文検索／ページ削除時のリンク掃除／旧ワークスペース移行**）は
+    直前に `ensureAllContent()` を呼んで本文をそろえる。⚠ これを忘れると
+    **本文が空のバックアップ**・**本文検索が0件**・**リンク切れ"Untitled"の残留**になる。
+  - 母艦のスクリプトからページを作る/改名する/動かすときは `C:\dev\Skills\studytracker-seiri\core
+p-index.mjs`
+    の `putIndexEntry()` を呼ぶか、最後に `node np-index.mjs --rebuild` を流す。**忘れるとサイドバーに出ない。**
 - `batchUpsert` / `batchDelete` は 500件 単位でチャンク処理
 - 子孫ページの削除は `notionPageStore.remove()` が再帰的に収集してバッチ削除
 
@@ -921,6 +934,8 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-08-22 | （未配信・要検証） | 改善：**起動時にページを全件読むのをやめ、一覧を1件の索引（`meta/pageIndex`）から読むようにした**。Firestoreの課金は「読んだ**件数**」で、`notionPages` の全件購読は536ページ＝1起動536読み取り。無料枠5万/日を**1日80回の起動**で使い切り、2026-08-20と08-21に実際に枯れてアプリが開けなくなった（08-21は24時間で84,000読み取り／うち22時台の1時間だけで45,000＝約72回ぶんの再読み込みが走った）。索引化で**一覧の読み取りはページ数に関係なく1回**、本文はページを開いたときに1件だけ。1起動あたり約630件→約90件。`packages/firebase`＝`fetchDoc`/`subscribeDoc`/`deleteMapKeys` を追加。`notionPageStore`＝`subscribe` を索引購読に変更（索引が無ければ従来の全件購読に落ちて表示は必ず出す＋その場で `rebuildIndex`＝自己修復）、`loadPage`/`ensureAllContent`/`rebuildIndex` を追加、`add`/`update`(見出し項目のみ)/`remove`/`ensureWorkspace` が索引を保守。本文が要る処理は `ensureAllContent` を挟んだ：**Electronバックアップ**(`(app)/layout.tsx`)・**本文検索**(`AddItemDialog.tsx`)・**削除時のリンク掃除**(`remove`)・旧ワークスペース移行。`notion-plus/[id]/page.tsx` は開いたページの本文を `loadPage` で取得。母艦側の保守は `C:\dev\Skills\studytracker-seiri\core
+p-index.mjs`（`--rebuild` でズレ確認・作り直し）。⚠ **Firestoreが枠切れ中のため未検証・未配信。**枠が戻る16時以降に動作確認してから配信する。 |
 | 2026-08-21 | v1.0.293 | 修正：**テーブル(pageDescTable)や本文リンクを本文へD&Dで取り出すと、生のページID(text/plain)が文字として挿入される不具合**。`NotionEditor.tsx` の `editorProps.handleDrop` を追加し、`application/x-page-id`（無ければUUID形式のtext/plain）を検知したら既定処理を止め、`useNotionPageStore.getState()` で title/icon を解決した `pageLink` ノードを最上位ブロック（`$pos.after(1)`）として挿入。表の行削除は従来の onDragEnd(dropEffect==='move') 側で行われるので結果はクリーンな取り出しに。 |
 | 2026-08-21 | v1.0.292 | 改善：**本文右クリックメニュー（ctxMenu）に「🆔 このページのIDをコピー（NP:…）」を追加**（`NotionEditor.tsx`・`notionPageId` prop＋`titleValue.current`で `copyNotionPlusPageId`）。既存のID copy導線（ページ上部ボタン・pageLink右クリック・サイドバー右クリック）に本文右クリックを追加。 |
 | 2026-08-21 | v1.0.291 | 改善：**目次ブロックの見出し「目次」を拡大**（`editor.css` .toc-block-title 0.7rem→1.05rem・色 #9ca3af→#374151）。 |

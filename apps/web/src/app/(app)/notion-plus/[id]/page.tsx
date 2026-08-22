@@ -198,7 +198,7 @@ const ICON_PRESETS = [
 export default function NotionPageDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { user } = useAuthStore();
-  const { pages, loading, update, add, remove, saveHistory, loadPageHistory } = useNotionPageStore();
+  const { pages, loading, update, add, remove, saveHistory, loadPageHistory, loadPage } = useNotionPageStore();
   const learningItems = useLearningStore((s) => s.items);
   const addLearning = useLearningStore((s) => s.add);
   const router = useRouter();
@@ -242,6 +242,12 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
 
   const page = pages.find((p) => p.id === id);
   const breadcrumbs = buildBreadcrumbs(pages, id);
+
+  // 開いたページの本文だけを読み込む（一覧は索引1件で足りるので、本文はここで初めて取りに行く）
+  useEffect(() => {
+    if (!user?.uid || !id) return;
+    return loadPage(user.uid, id);
+  }, [user?.uid, id, loadPage]);
 
   useEffect(() => {
     if (!loading && !page) router.replace('/notion-plus');

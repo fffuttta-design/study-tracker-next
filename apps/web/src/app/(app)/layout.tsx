@@ -111,6 +111,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       try {
         const uid = useAuthStore.getState().user?.uid ?? null;
 
+        // ⚠ ふだんは一覧の索引だけを読んでいて、本文はページを開いたときにしか読まない。
+        //   バックアップは本文が要るので、ここで**全ページの本文をそろえてから**書き出す。
+        //   これを飛ばすと、本文が空のバックアップができてしまう。
+        if (uid) await useNotionPageStore.getState().ensureAllContent(uid);
+
         // notionDatabaseRows は subscribeWhere（DB単位）なので Firestore から全件取得
         const notionDatabaseRows = uid
           ? await fetchAll(uid, 'notionDatabaseRows')

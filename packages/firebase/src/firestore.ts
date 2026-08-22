@@ -5,9 +5,11 @@ import {
   persistentMultipleTabManager,
   collection,
   doc,
+  getDoc,
   getDocs,
   setDoc,
   deleteDoc,
+  deleteField,
   onSnapshot,
   writeBatch,
   query,
@@ -83,6 +85,51 @@ export async function deleteDocById(
   id: string
 ): Promise<void> {
   await deleteDoc(doc(getDb(), 'users', uid, colName, id));
+}
+
+// ── 単一ドキュメント（Firestoreの課金は「読んだ件数」なので、ここが読み取り削減の要） ──
+// コレクション全体を購読すると件数ぶんの読み取りが発生する。一覧に必要な情報を1件に
+// まとめておけば、何ページあっても読み取りは1回で済む。
+
+/** 1件だけ取得する。無ければ null。 */
+export async function fetchDoc<T>(
+  uid: string,
+  colName: string,
+  id: string,
+): Promise<T | null> {
+  const snap = await getDoc(doc(getDb(), 'users', uid, colName, id));
+  return snap.exists() ? ({ id: snap.id, ...snap.data() } as T) : null;
+}
+
+/** 1件だけ購読する。存在しないときは null を返す。 */
+export function subscribeDoc<T>(
+  uid: string,
+  colName: string,
+  id: string,
+  onData: (item: T | null) => void,
+) {
+  return onSnapshot(doc(getDb(), 'users', uid, colName, id), (snap) => {
+    onData(snap.exists() ? ({ id: snap.id, ...snap.data() } as T) : null);
+  });
+}
+
+/**
+ * 1件の中に持っているマップ（例 `items` の中のページID）から、指定のキーだけを消す。
+ * ⚠ マップ全体を書き直すと、別の端末が同時に足したページを消してしまう。
+ *   キー単位で消すことで、他の端末の変更を巻き込まない。
+ */
+export async function deleteMapKeys(
+  uid: string,
+  colName: string,
+  id: string,
+  mapField: string,
+  keys: string[],
+): Promise<void> {
+  if (keys.length === 0) return;
+  const ref = doc(getDb(), 'users', uid, colName, id);
+  const patch: Record<string, unknown> = {};
+  for (const k of keys) patch[k] = deleteField();
+  await setDoc(ref, { [mapField]: patch }, { merge: true });
 }
 
 export async function fetchWhere<T>(
