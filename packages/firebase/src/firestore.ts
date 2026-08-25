@@ -12,6 +12,10 @@ import {
   writeBatch,
   query,
   where,
+  getDocsFromCache,
+  getCountFromServer,
+  orderBy,
+  limit,
   type Firestore,
   type QuerySnapshot,
   type DocumentData,
@@ -52,6 +56,42 @@ export async function fetchAll<T>(
 ): Promise<T[]> {
   const snap = await getDocs(subCol(uid, colName));
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as T);
+}
+
+// 🔥 全件バックアップ用。素の fetchAll は毎回サーバーから全件読む＝行3,340件のコレクションでは
+// 1回で無料枠(5万/日)の約7%が飛ぶ。毎晩3時のバックアップがこれをやっていた。
+// ∴ まず永続ローカルキャッシュ（IndexedDB）から読み、「サーバーと同じ中身か」を2読取だけで
+//    確かめてから使う。確認は2点：
+//   ① 件数（getCountFromServer=1読取）… 追加・削除を検知する
+//   ② いちばん新しい updatedAt（orderBy+limit(1)=1読取）… どこかの1件が書き換わったのを検知する
+// どちらかがズレていたら諦めてサーバーから全件読む（＝バックアップの中身は必ず最新になる）。
+export async function fetchAllVerified<T>(
+  uid: string,
+  colName: string,
+  updatedField = 'updatedAt'
+): Promise<T[]> {
+  const col = subCol(uid, colName);
+  const toItems = (snap: QuerySnapshot<DocumentData>) =>
+    snap.docs.map((d) => ({ id: d.id, ...d.data() }) as T);
+  try {
+    const cached = await getDocsFromCache(col);
+    if (!cached.empty) {
+      const serverCount = (await getCountFromServer(col)).data().count;
+      if (serverCount === cached.size) {
+        const newest = await getDocs(query(col, orderBy(updatedField, 'desc'), limit(1)));
+        const serverNewest = newest.docs[0]?.get(updatedField) ?? null;
+        let cacheNewest: unknown = null;
+        cached.docs.forEach((d) => {
+          const v = d.get(updatedField);
+          if (v != null && (cacheNewest == null || v > cacheNewest)) cacheNewest = v;
+        });
+        if (serverNewest != null && serverNewest === cacheNewest) return toItems(cached);
+      }
+    }
+  } catch {
+    // キャッシュ不可（プライベートモード等）や索引が無いときは黙ってサーバー読みへ落とす。
+  }
+  return toItems(await getDocs(col));
 }
 
 export function subscribeCol<T>(

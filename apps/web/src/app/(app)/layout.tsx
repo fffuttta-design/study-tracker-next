@@ -12,7 +12,7 @@ import { useMemoStore } from '@/stores/memoStore';
 import { useDailyMemoStore } from '@/stores/dailyMemoStore';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { hasDueReview } from '@study-tracker/core';
-import { fetchAll } from '@study-tracker/firebase';
+import { fetchAllVerified } from '@study-tracker/firebase';
 import { useSettingsStore } from '@/stores/settingsStore';
 
 declare global {
@@ -111,9 +111,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       try {
         const uid = useAuthStore.getState().user?.uid ?? null;
 
-        // notionDatabaseRows は subscribeWhere（DB単位）なので Firestore から全件取得
+        // notionDatabaseRows は subscribeWhere（DB単位）なので Firestore から全件取得。
+        // 🔥 毎晩の丸読み（3,340件＝無料枠の約7%）をやめ、ローカルキャッシュが
+        //    サーバーと同じ中身か2読取で確かめてから使う（fetchAllVerified）。
         const notionDatabaseRows = uid
-          ? await fetchAll(uid, 'notionDatabaseRows')
+          ? await fetchAllVerified(uid, 'notionDatabaseRows')
           : [];
 
         // settingsStore は localStorage 永続化なので getState() で取得

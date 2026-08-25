@@ -45,7 +45,7 @@
     reg 経由は機能しない（`[BLOCKED]`）うえ、**クラウドより優先されるため正しい設定を「競合」で無効化する**
     ＝全拡張が消える状態に戻る。**探すな・復元するな。** → `C:\dev\_ext-tools\引継書-force-install-3拡張.md`
   - **再パッケージ手順（コード改修後）**：manifest の `version` を上げてから
-    `py C:\dev\_ext-tools\ext-pack.py C:\dev\CoreBusinessTools\Study-Tracker-Next\clipper-extension`
+    `py C:\dev\_ext-tools\ext-pack.py C:\dev\CompanyOps\Application\Study-Tracker-Next\clipper-extension`
     を再実行（鍵は既存を再利用＝IDは不変／crx・updates.xml・配達所が更新される。**管理コンソールの再設定は不要**）。
     ⚠ force-install下では**自己リロード（↻不要の仕掛け）は効かない**。この手順以外で更新は反映されない。
   - `C:\dev\_ext-tools\keys\clipper-extension.pem`（拡張IDの素）は**絶対に無くさない・gitに載せない**（`.gitignore` に `*.pem`/`*.crx` 登録済み）。

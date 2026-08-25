@@ -10,7 +10,7 @@
 **このプロジェクトでの会話を始める際は、必ず最初に以下を読むこと：**
 
 ```
-C:\dev\CoreBusinessTools\Study-Tracker-Next\Study-Tracker-Next仕様書.md
+C:\dev\CompanyOps\Application\Study-Tracker-Next\Study-Tracker-Next仕様書.md
 ```
 
 仕様書には全画面・全データモデル・全コレクション・設定項目・配信フローが記載されている。
