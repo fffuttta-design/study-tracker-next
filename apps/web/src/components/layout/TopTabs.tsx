@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useElectronVersion } from '@/hooks/useElectronVersion';
 import appIcon from '@/app/icon.png';
@@ -37,29 +37,36 @@ function sectionOf(pathname: string): string | null {
   return hit ? hit.href : null;
 }
 
+function readStore(): Record<string, string> {
+  try { return JSON.parse(localStorage.getItem(LAST_KEY) || '{}'); } catch { return {}; }
+}
+
 export function TopTabs() {
   const pathname = usePathname();
   const version = useElectronVersion();
   const [lastPath, setLastPath] = useState<Record<string, string>>({});
 
   // 起動時に前回の居場所を復元
-  useEffect(() => {
-    try { setLastPath(JSON.parse(localStorage.getItem(LAST_KEY) || '{}')); } catch { /* noop */ }
+  useEffect(() => { setLastPath(readStore()); }, []);
+
+  // 今いる場所をそのセクションの居場所として記録する。
+  // 🔥 タブを離れる瞬間（onClick）にも呼ぶこと。学習ページのタブ切替は
+  //    history.replaceState で ?tab= を書くだけなので pathname が変わらず、
+  //    ページ遷移の監視だけでは「どのタブを見ていたか」を取りこぼす。
+  const remember = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const here = window.location.pathname;
+    const section = sectionOf(here);
+    const path = rememberable(here);
+    if (!section || !path) return;
+    const cur = readStore();
+    if (cur[section] === path) return;
+    const next = { ...cur, [section]: path };
+    try { localStorage.setItem(LAST_KEY, JSON.stringify(next)); } catch { /* noop */ }
+    setLastPath(next);
   }, []);
 
-  // 今いる場所をそのセクションの居場所として記録
-  useEffect(() => {
-    const section = sectionOf(pathname);
-    if (!section) return;
-    const path = rememberable(pathname);
-    if (!path) return;
-    setLastPath((prev) => {
-      if (prev[section] === path) return prev;
-      const next = { ...prev, [section]: path };
-      try { localStorage.setItem(LAST_KEY, JSON.stringify(next)); } catch { /* noop */ }
-      return next;
-    });
-  }, [pathname]);
+  useEffect(() => { remember(); }, [pathname, remember]);
 
   return (
     <div className="flex shrink-0 items-end gap-1 border-b border-gray-200 bg-gray-50 px-3 pt-1.5">
@@ -76,6 +83,7 @@ export function TopTabs() {
           <Link
             key={href}
             href={active ? href : (lastPath[href] ?? href)}
+            onClick={remember}
             className={`-mb-px flex items-center gap-1.5 rounded-t-lg border px-4 py-1.5 text-sm transition-colors ${
               active
                 ? 'border-gray-200 border-b-white bg-white font-medium text-gray-900'

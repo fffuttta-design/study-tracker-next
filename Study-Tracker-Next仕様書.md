@@ -930,6 +930,7 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-08-29 | v1.0.299 | バグ修正：**学習リストの「見ていたタブ」が記憶されない**（v1.0.297/298の積み残し）。学習ページのタブ切替は `history.replaceState` で `?tab=` を書くだけ＝`pathname` が変わらないため、`TopTabs` のページ遷移監視だけでは取りこぼしていた。**タブを離れる瞬間（`onClick`）にも現在地を記録**するようにして解消（`TopTabs.tsx`）。 |
 | 2026-08-29 | v1.0.298 | 改善：**学習ページの開いているタブをURL（`?tab=N`）に映すようにした**（`learning/page.tsx`・`history.replaceState` なので再描画なし）。従来はタブがReactの内部状態だけで、NotionPlusへ寄り道して戻るとダッシュボードに戻っていた。v1.0.297 の居場所の記憶（`TopTabs`）が学習リストでも効くようになった。 |
 | 2026-08-29 | v1.0.297 | 改善：**上部の大タブを行き来しても、さっき見ていた所に戻るようにした**（`TopTabs.tsx`）。従来は NotionPlus タブが常に `/notion-plus`（入口）固定で、読んでいたページを見失っていた。セクションごとの最後のパスを localStorage `studytracker.lastPathBySection` に保持し、タブのリンク先に使う（学習リストは `?tab=` も保持）。その場限りのクエリ（`from`/`hl`/`digest`）と `/learning/[id]` は記憶対象外。アクティブなタブを押したときは入口へ。 |
 | 2026-08-29 | v1.0.296 | 改善：**画面上部の大タブ（`TopTabs`）でセクションを切り替える形に変更し、左のナビ用サイドバーを廃止**（`components/layout/TopTabs.tsx` 新規・`app/(app)/layout.tsx`・`Sidebar.tsx`）。学習リスト／NotionPlus／絶対覚えるを上のタブに移し、本文が約224px 横に広がる。`Sidebar` は `/notion-plus` 配下の `NotionPageSidebar`（ページツリー）だけを返し、他ルートでは `null`。ページツリー内の「🏠 ホームに戻る」は大タブと重複するため撤去。 |
