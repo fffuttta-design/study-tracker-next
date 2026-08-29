@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useElectronVersion } from '@/hooks/useElectronVersion';
 import appIcon from '@/app/icon.png';
@@ -14,9 +15,51 @@ const NAV = [
   { href: '/goals', label: '絶対覚える', icon: '🎯' },
 ];
 
+// 🔥 タブを行き来しても「さっき見ていた所」に戻れるよう、セクションごとに最後の居場所を覚える。
+// （覚えないと NotionPlus は毎回ページ一覧の入口に戻ってしまう）
+const LAST_KEY = 'studytracker.lastPathBySection';
+
+// 覚えてよいものだけを残す。学習リストは開いていたタブ（?tab=）だけ、
+// NotionPlus はページのパスだけ（?from= や ?hl= はその場限りなので捨てる）。
+function rememberable(pathname: string): string | null {
+  if (pathname.startsWith('/learning/')) return null; // 学習カード単独ページは覚えない
+  if (pathname === '/learning') {
+    const tab = new URLSearchParams(window.location.search).get('tab');
+    return tab ? `/learning?tab=${tab}` : '/learning';
+  }
+  if (pathname.startsWith('/notion-plus')) return pathname;
+  if (pathname.startsWith('/goals')) return pathname;
+  return null;
+}
+
+function sectionOf(pathname: string): string | null {
+  const hit = NAV.find(({ href }) => pathname.startsWith(href));
+  return hit ? hit.href : null;
+}
+
 export function TopTabs() {
   const pathname = usePathname();
   const version = useElectronVersion();
+  const [lastPath, setLastPath] = useState<Record<string, string>>({});
+
+  // 起動時に前回の居場所を復元
+  useEffect(() => {
+    try { setLastPath(JSON.parse(localStorage.getItem(LAST_KEY) || '{}')); } catch { /* noop */ }
+  }, []);
+
+  // 今いる場所をそのセクションの居場所として記録
+  useEffect(() => {
+    const section = sectionOf(pathname);
+    if (!section) return;
+    const path = rememberable(pathname);
+    if (!path) return;
+    setLastPath((prev) => {
+      if (prev[section] === path) return prev;
+      const next = { ...prev, [section]: path };
+      try { localStorage.setItem(LAST_KEY, JSON.stringify(next)); } catch { /* noop */ }
+      return next;
+    });
+  }, [pathname]);
 
   return (
     <div className="flex shrink-0 items-end gap-1 border-b border-gray-200 bg-gray-50 px-3 pt-1.5">
@@ -32,7 +75,7 @@ export function TopTabs() {
         return (
           <Link
             key={href}
-            href={href}
+            href={active ? href : (lastPath[href] ?? href)}
             className={`-mb-px flex items-center gap-1.5 rounded-t-lg border px-4 py-1.5 text-sm transition-colors ${
               active
                 ? 'border-gray-200 border-b-white bg-white font-medium text-gray-900'
