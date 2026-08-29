@@ -197,6 +197,7 @@ Firebase Firestore（users/{uid}/コレクション）
 - 「確定」で：①対象ノートエディタの現在内容を `contentGetterRef` で取得（＝挿入後の最終形）→ ②既存ページを更新 or 新規ページ作成して書き込み ③`learningItem` を1件作成（content＝元メモ本文・`notionPageId`＝追記先）→ 復習へ ④元の特急メモ削除。
 - ※ `/特急メモ` スラッシュ（NotionPlus ページでカーソル位置にメモ挿入＝`openMemoPicker`/`insertMemoAtCursor`）は機能として残置。旧「AI整理モーダル」と一時版（v1.0.254 末尾追記／v1.0.255 カーソル挿入のみ）は置換済み（`/api/ai-triage` は未使用で残置）。
 - **リサイズ（v1.0.275〜）**：右下コーナーのつまみで**モーダル全体の大きさ**、サイドバー／エディタ境目の縦バーで**サイドバー幅**をドラッグ変更でき、`{w,h,sidebar}` を localStorage `studytracker.digestDialogSize` に記憶（次回も同じ大きさで開く）。
+- **モーダル内ページ移動（v1.0.295〜）**：開いているノートの**本文中のページリンクを踏んでも、アプリ全体は遷移しない**（`NotionEditor` の `onPageNavigate` を `DigestDialog` から渡し、`PageNavigationContext` 経由で `router.push` を横取り）。踏んだページが**そのまま新しい消化先になり**、ヘッダーに「← 戻る」（＋マウス第4ボタン）が出て履歴を1つずつ戻れる。素のページ以外（ブック／データベース）は消化先にできないので移動せず、ヘッダーに理由を4秒表示する。挿入済み（未保存）の状態で移動しようとしたときは確認ダイアログを出す。
 
 ---
 
@@ -921,6 +922,7 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-08-29 | v1.0.295 | バグ修正：**消化モーダルの中で本文のページリンクを踏むと、モーダルごと消えてしまう**不具合。原因＝`DigestDialog` が `NotionEditor` に `onPageNavigate` を渡しておらず、リンククリックが既定の `router.push` に落ちて学習ページごと遷移していた（`AddItemDialog` は対策済みだった）。対策＝`learning/page.tsx` の `DigestDialog` に `navigateTo`/`handleBack`/`pageHistory` を実装して `onPageNavigate` を渡し、モーダル内でページを切り替える方式に。踏んだページがそのまま消化先になり、ヘッダーの「← 戻る」とマウス第4ボタンで戻れる。ブック／データベースは消化先にできないため移動せず理由を表示、挿入済み未保存のときは確認してから移動。 |
 | 2026-08-25 | v1.0.294 | 改善：**Firestore無料枠（読取5万/日）の空回りを止めた**。①**DBを開くたびに全行を読み直していた**（`notionDatabaseRowStore.subscribeRows` が毎回 `subscribeWhere` を張り直す）。行3,340件のDBでは1回開く＝約3,340読取で、2026-08-21には1時間で約45,000読取（丸読み13回ぶん）まで膨らみ枠が切れてアプリが夕方まで開けなくなった。→ `databaseId` ごとにリスナーを1本だけ持ち、参照カウント＋**30分の猶予**で使い回す（画面を行き来しても読み直さない）。あわせて `rowsByDb` を持たせ、複数DB（ページ内インラインDB等）を同時購読したとき `rows` を取り合っていた不具合も解消。②**毎晩3時のバックアップが `fetchAll` で毎回3,340件を丸読み**していた（＝枠の約7%を毎晩固定消費）。→ `fetchAllVerified`（`packages/firebase/src/firestore.ts` 新規）に差し替え。永続ローカルキャッシュから読み、**件数（`getCountFromServer`）と最新 `updatedAt`（`orderBy`+`limit(1)`）の2読取だけでサーバーと同じ中身かを確認**してから使う。ズレていれば従来どおり全件読むので、バックアップの中身は必ず最新になる。通常の晩は3,340読取→2読取。`notionDatabaseRowStore.ts` / `layout.tsx` / `packages/firebase/src/firestore.ts` |
 | 2026-08-21 | v1.0.293 | 修正：**テーブル(pageDescTable)や本文リンクを本文へD&Dで取り出すと、生のページID(text/plain)が文字として挿入される不具合**。`NotionEditor.tsx` の `editorProps.handleDrop` を追加し、`application/x-page-id`（無ければUUID形式のtext/plain）を検知したら既定処理を止め、`useNotionPageStore.getState()` で title/icon を解決した `pageLink` ノードを最上位ブロック（`$pos.after(1)`）として挿入。表の行削除は従来の onDragEnd(dropEffect==='move') 側で行われるので結果はクリーンな取り出しに。 |
 | 2026-08-21 | v1.0.292 | 改善：**本文右クリックメニュー（ctxMenu）に「🆔 このページのIDをコピー（NP:…）」を追加**（`NotionEditor.tsx`・`notionPageId` prop＋`titleValue.current`で `copyNotionPlusPageId`）。既存のID copy導線（ページ上部ボタン・pageLink右クリック・サイドバー右クリック）に本文右クリックを追加。 |

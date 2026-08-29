@@ -1692,6 +1692,14 @@ function DigestDialog({ item, uid, onClose }: {
   const [inserted, setInserted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  // ダイアログ内でたどったページの履歴（← 戻る用）と、移動できなかった理由の一言
+  const [pageHistory, setPageHistory] = useState<string[]>([]);
+  const [navNote, setNavNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (!navNote) return;
+    const t = setTimeout(() => setNavNote(null), 4000);
+    return () => clearTimeout(t);
+  }, [navNote]);
 
   // ── モーダル/サイドバーの大きさ（ドラッグで変更→localStorageに記憶）──────────
   const SIZE_KEY = 'studytracker.digestDialogSize';
@@ -1766,8 +1774,49 @@ function DigestDialog({ item, uid, onClose }: {
   const editorContent = mode === 'new' ? '' : (selectedPage?.content || '');
   const editorKey = mode === 'new' ? 'new' : (selectedPageId || 'none');
 
-  const pickPage = (pageId: string) => { setSelectedPageId(pageId); setInserted(false); };
-  const switchMode = (m: 'existing' | 'new') => { setMode(m); setInserted(false); };
+  // 挿入済みの内容は未保存なので、別ページへ移る前に一度だけ確認する
+  const confirmDiscard = () => !inserted || window.confirm('挿入したメモはまだ保存されていません。別のページを開くと消えますが、よろしいですか？');
+
+  const pickPage = (pageId: string) => {
+    if (!confirmDiscard()) return;
+    setSelectedPageId(pageId); setInserted(false); setNavNote(null); setPageHistory([]);
+  };
+  const switchMode = (m: 'existing' | 'new') => { setMode(m); setInserted(false); setNavNote(null); setPageHistory([]); };
+
+  // 🔥 本文中のページリンクを踏んだときは、アプリ全体を遷移させずダイアログの中でページを切り替える。
+  // （既定の router.push だと学習ページごと画面が変わり、消化ダイアログが消えてしまう）
+  const navigateTo = (href: string) => {
+    const id = href.match(/\/notion-plus\/([^/?#]+)/)?.[1];
+    if (!id || id === selectedPageId) return;
+    const target = pages.find((p) => p.id === id);
+    if (!target) { setNavNote('そのページが見つかりませんでした'); return; }
+    if (target.type) {
+      setNavNote(`「${target.title || '（無題）'}」は${target.type === 'book' ? 'ブック' : 'データベース'}なので消化先にできません`);
+      return;
+    }
+    if (!confirmDiscard()) return;
+    setNavNote(null);
+    setPageHistory((h) => (selectedPageId ? [...h, selectedPageId] : h));
+    setMode('existing');
+    setSelectedPageId(id);
+    setInserted(false);
+  };
+
+  const handleBack = useCallback(() => {
+    setPageHistory((h) => {
+      const prev = h[h.length - 1];
+      if (prev === undefined) return h;
+      setSelectedPageId(prev); setInserted(false); setNavNote(null);
+      return h.slice(0, -1);
+    });
+  }, []);
+
+  // マウスの「戻る」ボタン（第4ボタン）でもダイアログ内を1つ戻る
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (e.button === 3) { e.preventDefault(); handleBack(); } };
+    document.addEventListener('mouseup', handler);
+    return () => document.removeEventListener('mouseup', handler);
+  }, [handleBack]);
   const doInsert = () => { insertRef.current?.(memoNodes); setInserted(true); };
 
   const handleConfirm = async () => {
@@ -1918,11 +1967,18 @@ function DigestDialog({ item, uid, onClose }: {
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex shrink-0 items-center justify-between border-b border-brand-100 bg-brand-50 px-4 py-2.5">
             <div className="min-w-0">
-              <h3 className="text-sm font-semibold text-brand-700">📥 消化（正式なメモへ移行）</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="shrink-0 text-sm font-semibold text-brand-700">📥 消化（正式なメモへ移行）</h3>
+                {pageHistory.length > 0 && (
+                  <button onClick={handleBack}
+                    className="shrink-0 rounded px-1.5 py-0.5 text-[11px] text-brand-600 hover:bg-brand-100"
+                    title="1つ前に開いていたページに戻る">← 戻る</button>
+                )}
+              </div>
               <p className="mt-0.5 truncate text-[11px] text-brand-500">
-                {mode === 'new'
+                {navNote ? <span className="text-amber-600">{navNote}</span> : (mode === 'new'
                   ? (newTitle.trim() ? `新規ページ「${newTitle.trim()}」に入れます` : '← 新しいページのタイトルを入力')
-                  : (selectedPage ? `${buildPagePath(selectedPage.id, pages)} を開いています` : '← 追記先のページを選んでください')}
+                  : (selectedPage ? `${buildPagePath(selectedPage.id, pages)} を開いています` : '← 追記先のページを選んでください'))}
               </p>
             </div>
             <button onClick={onClose} className="shrink-0 rounded p-1 text-brand-400 hover:bg-brand-100 hover:text-brand-600">✕</button>
@@ -1937,6 +1993,7 @@ function DigestDialog({ item, uid, onClose }: {
                 onSave={async () => {}}
                 contentGetterRef={contentRef}
                 insertAtCursorRef={insertRef}
+                onPageNavigate={navigateTo}
                 hideTitle
                 stickyToolbar
               />
