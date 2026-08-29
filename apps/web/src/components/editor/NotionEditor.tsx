@@ -2203,6 +2203,25 @@ const MarkdownCodeBlockShortcut = Extension.create({
   },
 });
 
+// ── 見出しの下線（グループの区切り線）────────────────────────────────
+// 見出しごとに ON/OFF できる装飾。`data-underline="1"` を付けて CSS で下罫線を引く。
+// 文字だけに引く下線（Underline マーク）とは別物で、こちらは見出しの幅いっぱいに引く。
+const HeadingUnderline = Extension.create({
+  name: 'headingUnderline',
+  addGlobalAttributes() {
+    return [{
+      types: ['heading'],
+      attributes: {
+        underline: {
+          default: false,
+          parseHTML: (el) => el.getAttribute('data-underline') === '1',
+          renderHTML: (attrs) => (attrs.underline ? { 'data-underline': '1' } : {}),
+        },
+      },
+    }];
+  },
+});
+
 // ── Ctrl+B 行全体 bold トグル ──────────────────────────────────────────
 // テキスト未選択時のみ発動。選択中は StarterKit の toggleBold に委譲。
 // ・行のすべてが bold → 全解除
@@ -2562,6 +2581,7 @@ export function NotionEditor({
       TaskItem.configure({ nested: true }),
       Highlight.configure({ multicolor: true }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      HeadingUnderline,
       Link.configure({ openOnClick: true, autolink: true }),
       ResizableImage.configure({ allowBase64: true, inline: false }),
       TextStyle,
@@ -3353,6 +3373,13 @@ export function NotionEditor({
                     H{level}
                   </button>
                 ))}
+                {editor?.isActive('heading') && (
+                  <button title="見出しの下に区切り線を引く"
+                    onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().updateAttributes('heading', { underline: !editor.getAttributes('heading').underline }).run(); setCtxMenu(null); }}
+                    className={`rounded px-2 py-1 text-xs font-bold transition ${editor?.getAttributes('heading').underline ? 'bg-brand-100 text-brand-700' : 'text-gray-500 hover:bg-gray-100'}`}>
+                    <span className="border-b-2 border-current pb-px leading-none">H</span>
+                  </button>
+                )}
                 <span className="mx-0.5 self-stretch border-r border-gray-100" />
                 {/* リスト */}
                 {[
@@ -3820,6 +3847,12 @@ export function Toolbar({ editor, className }: { editor: NonNullable<ReturnType<
       <button onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} className={btn(editor.isActive('heading', { level: 2 }))}>H2</button>
       <button onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} className={btn(editor.isActive('heading', { level: 3 }))}>H3</button>
       <button onClick={() => editor.chain().focus().toggleHeading({ level: 4 }).run()} className={btn(editor.isActive('heading', { level: 4 }))}>H4</button>
+      <button
+        onClick={() => editor.chain().focus().updateAttributes('heading', { underline: !editor.getAttributes('heading').underline }).run()}
+        disabled={!editor.isActive('heading')}
+        title="見出しの下に区切り線を引く"
+        className={`${btn(!!editor.getAttributes('heading').underline)} disabled:opacity-30`}
+      ><span className="border-b-2 border-current pb-px leading-none">H</span></button>
       <Sep />
       <button onClick={() => editor.chain().focus().toggleBulletList().run()} className={btn(editor.isActive('bulletList'))}>• リスト</button>
       <button onClick={() => editor.chain().focus().toggleOrderedList().run()} className={btn(editor.isActive('orderedList'))}>1. リスト</button>

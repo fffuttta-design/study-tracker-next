@@ -930,6 +930,7 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-08-29 | v1.0.301 | 新機能：**見出しごとに下線（幅いっぱいの区切り線）を引けるように**（`NotionEditor.tsx` `HeadingUnderline` 拡張＝`addGlobalAttributes` で heading に `underline` 属性を追加し `data-underline="1"` で出力／`editor.css` に `h1〜h4[data-underline="1"]` の `border-bottom`）。ツールバーのH4の右と、本文右クリックメニューの見出し欄に下線ボタンを追加（見出しにカーソルがあるときだけ有効）。文字だけに引く下線（Underlineマーク）とは別物で、こちらは見出しの幅いっぱい＝グループの区切りに使える。 |
 | 2026-08-29 | v1.0.300 | バグ修正：**短時間に何版も配信すると自動更新が二重に走り、インストール先が空になってアプリがWindowsから消える**（同日、30分で4版出して実際に消滅）。`electron/main.js` に多重進行ガードを追加＝`updateDownloading`／`updateInstalling` の2フラグを持ち、**DL中・インストール開始後はチェックを走らせない**（`canCheckUpdate()`）、**`quitAndInstall()` は一度だけ**呼ぶ（`startUpdateInstall()`）。定期チェック・トレイ・設定画面の手動チェックすべてに適用。地雷の正本＝`C:\dev\Electron共通ビルドガイド.md` §4。 |
 | 2026-08-29 | v1.0.299 | バグ修正：**学習リストの「見ていたタブ」が記憶されない**（v1.0.297/298の積み残し）。学習ページのタブ切替は `history.replaceState` で `?tab=` を書くだけ＝`pathname` が変わらないため、`TopTabs` のページ遷移監視だけでは取りこぼしていた。**タブを離れる瞬間（`onClick`）にも現在地を記録**するようにして解消（`TopTabs.tsx`）。 |
 | 2026-08-29 | v1.0.298 | 改善：**学習ページの開いているタブをURL（`?tab=N`）に映すようにした**（`learning/page.tsx`・`history.replaceState` なので再描画なし）。従来はタブがReactの内部状態だけで、NotionPlusへ寄り道して戻るとダッシュボードに戻っていた。v1.0.297 の居場所の記憶（`TopTabs`）が学習リストでも効くようになった。 |

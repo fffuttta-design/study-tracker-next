@@ -42,6 +42,15 @@
 .notion-editor h1 { font-size: 1.875rem; font-weight: 700; margin: calc(1.25rem + var(--offset-h1, 0px)) 0 0.5rem; }
 .notion-editor h2 { font-size: 1.5rem; font-weight: 700; margin: calc(1rem + var(--offset-h2, 0px)) 0 0.375rem; }
 .notion-editor h3 { font-size: 1.25rem; font-weight: 600; margin: calc(0.75rem + var(--offset-h3, 0px)) 0 0.25rem; }
+
+/* 見出しの下線（HeadingUnderline 拡張・data-underline="1" のときだけ幅いっぱいの区切り線） */
+.notion-editor h1[data-underline="1"],
+.notion-editor h2[data-underline="1"],
+.notion-editor h3[data-underline="1"],
+.notion-editor h4[data-underline="1"] {
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 0.25rem;
+}
 .notion-editor h4 { font-size: 1.1rem; font-weight: 600; margin: calc(0.5rem + var(--offset-h4, 0px)) 0 0.25rem; }
 
 /* ── ブック本文の自動見出し番号（CSSカウンタ・本文非破壊 / Phase 2）────── */
