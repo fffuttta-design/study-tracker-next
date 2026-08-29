@@ -41,6 +41,19 @@ let backupTimerId        = null
 let backupHour           = 3    // 毎日03:00
 let backupMinute         = 0
 let updateDialogOpen     = false // アップデート確認ダイアログを表示中か（多重表示防止）
+// 🔥 更新の多重進行ガード。短時間に何度も配信すると、ダウンロード中／インストール中に
+//    次のチェックが走って NSIS が二重に動き、アプリのフォルダが空になって消える
+//    （2026-08-29 に実際に発生。30分で4版出したところ本体が消滅した）。
+let updateDownloading    = false // 新版をダウンロード中
+let updateInstalling     = false // インストール（quitAndInstall）を開始済み
+// チェックしてよいか。ダウンロード中・インストール中は次のチェックを走らせない。
+function canCheckUpdate() { return !updateDownloading && !updateInstalling }
+// インストールは一度だけ実行する
+function startUpdateInstall() {
+  if (updateInstalling) { debugLog('[update] すでにインストール開始済みのため無視'); return }
+  updateInstalling = true
+  autoUpdater.quitAndInstall()
+}
 let lastBackupInfo       = null // { time: ISO文字列, path: string, success: boolean }
 let driveBackupPath      = null // Google Drive バックアップ先フォルダ
 
@@ -220,7 +233,7 @@ function createTray() {
     { type: 'separator' },
     {
       label: '最新版を確認',
-      click: () => autoUpdater.checkForUpdates().catch(() => {}),
+      click: () => { if (canCheckUpdate()) autoUpdater.checkForUpdates().catch(() => {}) },
     },
     { type: 'separator' },
     {
@@ -709,11 +722,13 @@ if (!isDev) {
 
   autoUpdater.on('update-available', (info) => {
     debugLog(`[update] 新バージョン検知: v${info.version}`)
+    updateDownloading = true // autoDownload でこの直後からDLが始まる
     mainWin?.webContents.send('update-available', { version: info.version })
   })
 
   autoUpdater.on('update-not-available', () => {
     debugLog('[update] 最新版です')
+    updateDownloading = false
   })
 
   autoUpdater.on('download-progress', (progress) => {
@@ -722,6 +737,7 @@ if (!isDev) {
 
   autoUpdater.on('update-downloaded', (info) => {
     debugLog(`[update] ダウンロード完了: v${info.version}`)
+    updateDownloading = false
     mainWin?.webContents.send('update-downloaded', { version: info.version })
 
     // すでにダイアログを表示中なら多重表示しない（閉じた後に新しい版が来たら再表示する）
@@ -740,12 +756,13 @@ if (!isDev) {
       cancelId: 1,
     }).then(({ response }) => {
       updateDialogOpen = false
-      if (response === 0) autoUpdater.quitAndInstall()
+      if (response === 0) startUpdateInstall()
     }).catch(() => { updateDialogOpen = false })
   })
 
   autoUpdater.on('error', (err) => {
     debugLog(`[update] エラー: ${err.message}`)
+    updateDownloading = false
   })
 }
 
@@ -895,6 +912,7 @@ ipcMain.handle('get-build-info', async () => {
 // 手動アップデートチェック（設定画面から）
 ipcMain.handle('check-for-update', async () => {
   if (isDev) return { hasUpdate: false, reason: 'dev' }
+  if (!canCheckUpdate()) return { hasUpdate: false, reason: '更新の準備中です' }
   try {
     const result = await autoUpdater.checkForUpdates()
     const remoteVersion = result?.updateInfo?.version ?? null
@@ -906,7 +924,7 @@ ipcMain.handle('check-for-update', async () => {
 
 // アップデート適用（設定画面の「再起動してインストール」ボタンから）
 ipcMain.on('apply-update', () => {
-  autoUpdater.quitAndInstall()
+  startUpdateInstall()
 })
 
 // Google Drive バックアップパス取得
@@ -983,8 +1001,8 @@ if (!gotLock) {
     mainWin.once('ready-to-show', () => {
       // 起動3秒後に確認 → バックグラウンド自動DL → DL完了でダイアログ
       if (!isDev) {
-        setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 3000)
-        setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 3 * 60 * 1000)
+        setTimeout(() => { if (canCheckUpdate()) autoUpdater.checkForUpdates().catch(() => {}) }, 3000)
+        setInterval(() => { if (canCheckUpdate()) autoUpdater.checkForUpdates().catch(() => {}) }, 3 * 60 * 1000)
       }
     })
     // 復習通知スケジュール（毎朝08:00）
