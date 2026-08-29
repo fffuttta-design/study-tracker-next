@@ -120,6 +120,16 @@ function LearningPageContent() {
     router.replace('/learning?tab=6', { scroll: false }); // 閉じても再オープンしないよう param を消す
   }, [digestParam, items, router]);
 
+  // 開いているタブをURLに映す（?tab=N）。上部の大タブでNotionPlusへ寄り道しても、
+  // 戻ってきたときに同じタブが開くようにするため（居場所の記憶は TopTabs 側が持つ）。
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const url = tab === 0 ? '/learning' : `/learning?tab=${tab}`;
+    if (window.location.pathname + window.location.search !== url) {
+      window.history.replaceState(null, '', url);
+    }
+  }, [tab]);
+
   const todayItems = useMemo(
     () => items.filter((i) => i.dateKey === dateKey).sort((a, b) => a.sortOrder - b.sortOrder),
     [items, dateKey]

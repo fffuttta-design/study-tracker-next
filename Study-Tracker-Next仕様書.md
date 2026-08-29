@@ -930,6 +930,7 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-08-29 | v1.0.298 | 改善：**学習ページの開いているタブをURL（`?tab=N`）に映すようにした**（`learning/page.tsx`・`history.replaceState` なので再描画なし）。従来はタブがReactの内部状態だけで、NotionPlusへ寄り道して戻るとダッシュボードに戻っていた。v1.0.297 の居場所の記憶（`TopTabs`）が学習リストでも効くようになった。 |
 | 2026-08-29 | v1.0.297 | 改善：**上部の大タブを行き来しても、さっき見ていた所に戻るようにした**（`TopTabs.tsx`）。従来は NotionPlus タブが常に `/notion-plus`（入口）固定で、読んでいたページを見失っていた。セクションごとの最後のパスを localStorage `studytracker.lastPathBySection` に保持し、タブのリンク先に使う（学習リストは `?tab=` も保持）。その場限りのクエリ（`from`/`hl`/`digest`）と `/learning/[id]` は記憶対象外。アクティブなタブを押したときは入口へ。 |
 | 2026-08-29 | v1.0.296 | 改善：**画面上部の大タブ（`TopTabs`）でセクションを切り替える形に変更し、左のナビ用サイドバーを廃止**（`components/layout/TopTabs.tsx` 新規・`app/(app)/layout.tsx`・`Sidebar.tsx`）。学習リスト／NotionPlus／絶対覚えるを上のタブに移し、本文が約224px 横に広がる。`Sidebar` は `/notion-plus` 配下の `NotionPageSidebar`（ページツリー）だけを返し、他ルートでは `null`。ページツリー内の「🏠 ホームに戻る」は大タブと重複するため撤去。 |
 | 2026-08-29 | v1.0.295 | バグ修正：**消化モーダルの中で本文のページリンクを踏むと、モーダルごと消えてしまう**不具合。原因＝`DigestDialog` が `NotionEditor` に `onPageNavigate` を渡しておらず、リンククリックが既定の `router.push` に落ちて学習ページごと遷移していた（`AddItemDialog` は対策済みだった）。対策＝`learning/page.tsx` の `DigestDialog` に `navigateTo`/`handleBack`/`pageHistory` を実装して `onPageNavigate` を渡し、モーダル内でページを切り替える方式に。踏んだページがそのまま消化先になり、ヘッダーの「← 戻る」とマウス第4ボタンで戻れる。ブック／データベースは消化先にできないため移動せず理由を表示、挿入済み未保存のときは確認してから移動。 |
