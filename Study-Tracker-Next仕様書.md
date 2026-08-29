@@ -121,6 +121,13 @@ Firebase Firestore（users/{uid}/コレクション）
 
 ## 4. 画面・機能仕様
 
+### 4.0 全体の骨組み（上部の大タブ・v1.0.296〜）
+
+- 画面のいちばん上に **大タブ**（`TopTabs`・`components/layout/TopTabs.tsx`）を置き、**学習リスト／NotionPlus／絶対覚える**をここで切り替える。左端にアプリ名とバージョン。
+- **左のナビ用サイドバーは廃止**（`Sidebar` は `/notion-plus` 配下でのみ `NotionPageSidebar`＝ページツリーを出し、それ以外では何も描かない）。本文がその分（約224px）横に広がる。
+- レイアウトは `app/(app)/layout.tsx`：縦に「大タブ → （ページツリー＋本文）」。
+- NotionPlus のページツリー内にあった「🏠 ホームに戻る」は大タブと重複するため撤去。
+
 ### 4.1 学習ページ（`/learning`）
 
 **日付ナビゲーション**（常時表示）
@@ -922,6 +929,7 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-08-29 | v1.0.296 | 改善：**画面上部の大タブ（`TopTabs`）でセクションを切り替える形に変更し、左のナビ用サイドバーを廃止**（`components/layout/TopTabs.tsx` 新規・`app/(app)/layout.tsx`・`Sidebar.tsx`）。学習リスト／NotionPlus／絶対覚えるを上のタブに移し、本文が約224px 横に広がる。`Sidebar` は `/notion-plus` 配下の `NotionPageSidebar`（ページツリー）だけを返し、他ルートでは `null`。ページツリー内の「🏠 ホームに戻る」は大タブと重複するため撤去。 |
 | 2026-08-29 | v1.0.295 | バグ修正：**消化モーダルの中で本文のページリンクを踏むと、モーダルごと消えてしまう**不具合。原因＝`DigestDialog` が `NotionEditor` に `onPageNavigate` を渡しておらず、リンククリックが既定の `router.push` に落ちて学習ページごと遷移していた（`AddItemDialog` は対策済みだった）。対策＝`learning/page.tsx` の `DigestDialog` に `navigateTo`/`handleBack`/`pageHistory` を実装して `onPageNavigate` を渡し、モーダル内でページを切り替える方式に。踏んだページがそのまま消化先になり、ヘッダーの「← 戻る」とマウス第4ボタンで戻れる。ブック／データベースは消化先にできないため移動せず理由を表示、挿入済み未保存のときは確認してから移動。 |
 | 2026-08-25 | v1.0.294 | 改善：**Firestore無料枠（読取5万/日）の空回りを止めた**。①**DBを開くたびに全行を読み直していた**（`notionDatabaseRowStore.subscribeRows` が毎回 `subscribeWhere` を張り直す）。行3,340件のDBでは1回開く＝約3,340読取で、2026-08-21には1時間で約45,000読取（丸読み13回ぶん）まで膨らみ枠が切れてアプリが夕方まで開けなくなった。→ `databaseId` ごとにリスナーを1本だけ持ち、参照カウント＋**30分の猶予**で使い回す（画面を行き来しても読み直さない）。あわせて `rowsByDb` を持たせ、複数DB（ページ内インラインDB等）を同時購読したとき `rows` を取り合っていた不具合も解消。②**毎晩3時のバックアップが `fetchAll` で毎回3,340件を丸読み**していた（＝枠の約7%を毎晩固定消費）。→ `fetchAllVerified`（`packages/firebase/src/firestore.ts` 新規）に差し替え。永続ローカルキャッシュから読み、**件数（`getCountFromServer`）と最新 `updatedAt`（`orderBy`+`limit(1)`）の2読取だけでサーバーと同じ中身かを確認**してから使う。ズレていれば従来どおり全件読むので、バックアップの中身は必ず最新になる。通常の晩は3,340読取→2読取。`notionDatabaseRowStore.ts` / `layout.tsx` / `packages/firebase/src/firestore.ts` |
 | 2026-08-21 | v1.0.293 | 修正：**テーブル(pageDescTable)や本文リンクを本文へD&Dで取り出すと、生のページID(text/plain)が文字として挿入される不具合**。`NotionEditor.tsx` の `editorProps.handleDrop` を追加し、`application/x-page-id`（無ければUUID形式のtext/plain）を検知したら既定処理を止め、`useNotionPageStore.getState()` で title/icon を解決した `pageLink` ノードを最上位ブロック（`$pos.after(1)`）として挿入。表の行削除は従来の onDragEnd(dropEffect==='move') 側で行われるので結果はクリーンな取り出しに。 |

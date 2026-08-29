@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { Suspense, useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type User } from 'firebase/auth';
@@ -9,9 +8,7 @@ import { type NotionPage, serializeBookChapters, createBookChapter } from '@stud
 import { deleteField } from 'firebase/firestore';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotionPageStore, WORKSPACE_ID, addPageLinkToContent, removePageLinkFromContent } from '@/stores/notionPageStore';
-import { useElectronVersion } from '@/hooks/useElectronVersion';
 import { copyNotionPlusPageId } from '@/lib/copyPageId';
-import appIcon from '@/app/icon.png';
 
 interface SidebarProps {
   user: User;
@@ -23,12 +20,6 @@ function openNoteInNewWindow(pageId: string) {
   if (typeof window === 'undefined') return;
   window.open(`/notion-plus/${pageId}`, '_blank');
 }
-
-const NAV = [
-  { href: '/learning', label: '学習リスト', icon: '📚' },
-  { href: '/notion-plus', label: 'NotionPlus', icon: '📝' },
-  { href: '/goals', label: '絶対覚える', icon: '🎯' },
-];
 
 function PageIcon({ icon }: { icon: string }) {
   if (icon.startsWith('http://') || icon.startsWith('https://') || icon.startsWith('data:')) {
@@ -657,20 +648,11 @@ function NotionPageSidebar({ user }: { user: User }) {
       />
       {/* ヘッダー */}
       <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
-        {/* 左：縦2行（NotionPlus / ホームに戻る） */}
-        <div className="flex flex-col gap-0.5">
-          <Link href="/notion-plus" className="flex items-center gap-1.5 rounded px-1 hover:bg-gray-100">
-            <span className="text-base leading-none">📝</span>
-            <span className="text-sm font-semibold text-gray-800">NotionPlus</span>
-          </Link>
-          <Link
-            href="/learning"
-            className="flex items-center gap-1 rounded px-1 text-[11px] text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-          >
-            <span className="text-[11px] leading-none">🏠</span>
-            <span>ホームに戻る</span>
-          </Link>
-        </div>
+        {/* 左：見出し（学習リストへは画面上部の大タブから戻る）*/}
+        <Link href="/notion-plus" className="flex items-center gap-1.5 rounded px-1 hover:bg-gray-100">
+          <span className="text-base leading-none">📝</span>
+          <span className="text-sm font-semibold text-gray-800">NotionPlus</span>
+        </Link>
         {/* 右：設定 + 新規作成 + 閉じる */}
         <div className="flex items-center gap-0.5">
           <Link
@@ -924,80 +906,9 @@ function NotionPageSidebar({ user }: { user: User }) {
 
 export function Sidebar({ user }: SidebarProps) {
   const pathname = usePathname();
-  const signOut = useAuthStore((s) => s.signOut);
-  const version = useElectronVersion();
 
-  // ── サイドバー幅のドラッグリサイズ ──────────────────────────────
-  const [sidebarWidth, setSidebarWidth] = useState(224); // デフォルト w-56
-  const isDragging = useRef(false);
-
-  const handleDragStart = (e: React.MouseEvent) => {
-    e.preventDefault();
-    isDragging.current = true;
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-
-    const onMove = (ev: MouseEvent) => {
-      if (!isDragging.current) return;
-      const newWidth = Math.min(400, Math.max(160, ev.clientX));
-      setSidebarWidth(newWidth);
-    };
-    const onUp = () => {
-      isDragging.current = false;
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  };
-
-  // NotionPlus エリアではページサイドバーに切り替え
-  if (pathname.startsWith('/notion-plus')) {
-    return <NotionPageSidebar user={user} />;
-  }
-
-  return (
-    <aside
-      className="relative flex h-full flex-col border-r border-gray-100 bg-gray-50 shrink-0"
-      style={{ width: sidebarWidth }}
-    >
-      {/* ドラッグハンドル */}
-      <div
-        onMouseDown={handleDragStart}
-        className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-brand-300 transition-colors z-10"
-      />
-      {/* アプリ名 */}
-      <div className="flex items-center gap-2 px-4 py-5">
-        <Image src={appIcon} alt="" className="h-7 w-7 rounded-lg" />
-        <div>
-          <p className="text-sm font-semibold text-gray-800">Study Tracker</p>
-          <p className="text-xs text-gray-400">{version}</p>
-        </div>
-      </div>
-
-      {/* ナビゲーション */}
-      <nav className="flex-1 space-y-0.5 px-2">
-        {NAV.map(({ href, label, icon }) => {
-          const active = pathname.startsWith(href);
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors ${
-                active
-                  ? 'bg-white font-medium text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:bg-white hover:text-gray-900'
-              }`}
-            >
-              <span>{icon}</span>
-              <span>{label}</span>
-            </Link>
-          );
-        })}
-      </nav>
-
-    </aside>
-  );
+  // NotionPlus のページツリーだけサイドバーとして残す。
+  // 学習リスト等のナビは v1.0.296〜 画面上部の大タブ（TopTabs）へ移したので、ここでは何も出さない。
+  if (!pathname.startsWith('/notion-plus')) return null;
+  return <NotionPageSidebar user={user} />;
 }
