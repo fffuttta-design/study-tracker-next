@@ -127,6 +127,7 @@ Firebase Firestore（users/{uid}/コレクション）
 - **左のナビ用サイドバーは廃止**（`Sidebar` は `/notion-plus` 配下でのみ `NotionPageSidebar`＝ページツリーを出し、それ以外では何も描かない）。本文がその分（約224px）横に広がる。
 - レイアウトは `app/(app)/layout.tsx`：縦に「大タブ → （ページツリー＋本文）」。
 - NotionPlus のページツリー内にあった「🏠 ホームに戻る」は大タブと重複するため撤去。
+- **キーボードでタブ切替（v1.0.302〜）**：**Ctrl+Tab** で「学習リスト → NotionPlus → 絶対覚える」を順送り、**Ctrl+Shift+Tab** で逆送り（端まで行ったら反対の端へ回る）。クリックと同じ扱いで、離れる瞬間に居場所を記録し、戻り先も前回の続き。設定画面などタブの外にいるときは先頭（学習リスト）へ。⚠ **デスクトップ（Electron）版だけ**で効く＝ブラウザでは Ctrl+Tab がブラウザ自身のタブ切替に予約されていて `preventDefault` が効かず、アプリ側も動くと二重に切り替わるため `window.electronAPI` があるときだけ購読する。キー処理は `capture` フェーズで拾い、TipTap などページ側より先に取る。
 - **居場所の記憶（v1.0.297〜）**：タブを行き来しても**さっき見ていた所に戻る**。セクションごとに最後のパスを localStorage（`studytracker.lastPathBySection`）に持ち、NotionPlus は最後に開いていたページ、学習リストは開いていたタブ（`?tab=`）へ戻す。`?from=`／`?hl=`／`?digest=` などその場限りのクエリと学習カード単独ページ（`/learning/[id]`）は覚えない。**今いるタブをもう一度押したときはそのセクションの入口**（`/notion-plus` 等）へ行く。
 
 ### 4.1 学習ページ（`/learning`）
@@ -930,6 +931,7 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-08-31 | v1.0.302 | 新機能：**Ctrl+Tab で大タブ（学習リスト→NotionPlus→絶対覚える）を切り替えられるように**（`TopTabs.tsx`・Ctrl+Shift+Tab は逆送り・端で折り返し）。クリックと同じく居場所の記憶を通すので、戻り先は前回の続き。デスクトップ（Electron）版のみ＝ブラウザでは Ctrl+Tab がブラウザ予約で二重に切り替わるため。<br>改善：**表の右に余った余白（外枠だけの空白）が出ないように**（`editor.css`）。従来は外枠 `.tableWrapper` が本文幅いっぱいに広がり、列幅を縮めた表の右側に枠だけの空白が残っていた。`:has(> table[style*="width:"]:not([style*="min-width"]))` に `width: fit-content; max-width: 100%` を当てて、**全列の幅が確定している表だけ**外枠を実寸まで縮める（TipTap は全列に幅が付いた表にだけ inline `width:〇px` を出し、未確定の列があるときは `min-width:〇px` を出す＝これで見分ける）。⚠ 幅が未確定の表（日次メモの No／内容／✓ など）は従来どおり本文幅いっぱい＝縮めると中身の無い列が最小幅までつぶれるため。はみ出す幅の表は従来どおり枠の中で横スクロールする。 |
 | 2026-08-29 | v1.0.301 | 新機能：**見出しごとに下線（幅いっぱいの区切り線）を引けるように**（`NotionEditor.tsx` `HeadingUnderline` 拡張＝`addGlobalAttributes` で heading に `underline` 属性を追加し `data-underline="1"` で出力／`editor.css` に `h1〜h4[data-underline="1"]` の `border-bottom`）。ツールバーのH4の右と、本文右クリックメニューの見出し欄に下線ボタンを追加（見出しにカーソルがあるときだけ有効）。文字だけに引く下線（Underlineマーク）とは別物で、こちらは見出しの幅いっぱい＝グループの区切りに使える。 |
 | 2026-08-29 | v1.0.300 | バグ修正：**短時間に何版も配信すると自動更新が二重に走り、インストール先が空になってアプリがWindowsから消える**（同日、30分で4版出して実際に消滅）。`electron/main.js` に多重進行ガードを追加＝`updateDownloading`／`updateInstalling` の2フラグを持ち、**DL中・インストール開始後はチェックを走らせない**（`canCheckUpdate()`）、**`quitAndInstall()` は一度だけ**呼ぶ（`startUpdateInstall()`）。定期チェック・トレイ・設定画面の手動チェックすべてに適用。地雷の正本＝`C:\dev\Electron共通ビルドガイド.md` §4。 |
 | 2026-08-29 | v1.0.299 | バグ修正：**学習リストの「見ていたタブ」が記憶されない**（v1.0.297/298の積み残し）。学習ページのタブ切替は `history.replaceState` で `?tab=` を書くだけ＝`pathname` が変わらないため、`TopTabs` のページ遷移監視だけでは取りこぼしていた。**タブを離れる瞬間（`onClick`）にも現在地を記録**するようにして解消（`TopTabs.tsx`）。 |

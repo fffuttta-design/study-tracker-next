@@ -253,6 +253,16 @@
 }
 .tableWrapper { overflow: auto; border: 1px solid #e5e7eb; border-radius: 0.5rem; margin: 0.75rem 0; }
 
+/* 🔥 列幅を決めた表は、外枠も「表の実寸」まで縮める＝表の右に枠だけの余白を作らない。
+   TipTap は全列に幅が付いた表にだけ inline style で `width:〇px` を出す（未確定の列があるときは
+   `min-width:〇px`）。∴ width があって min-width が無い表＝実寸が確定している表だけを対象にする。
+   ⚠ 列幅が未確定の表（日次メモの No/内容/✓ など）は従来どおり本文幅いっぱいに広げる。
+      ここまで縮めると中身の無い列が最小幅までつぶれて使えなくなるため。 */
+.tableWrapper:has(> table[style*="width:"]:not([style*="min-width"])) {
+  width: fit-content;
+  max-width: 100%;
+}
+
 /* トグル見出し */
 .toggle-heading { margin: 0.5rem 0; }
 .toggle-heading-summary {

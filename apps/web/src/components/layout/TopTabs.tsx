@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useCallback, useEffect, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useElectronVersion } from '@/hooks/useElectronVersion';
 import appIcon from '@/app/icon.png';
 
@@ -43,6 +43,7 @@ function readStore(): Record<string, string> {
 
 export function TopTabs() {
   const pathname = usePathname();
+  const router = useRouter();
   const version = useElectronVersion();
   const [lastPath, setLastPath] = useState<Record<string, string>>({});
 
@@ -67,6 +68,37 @@ export function TopTabs() {
   }, []);
 
   useEffect(() => { remember(); }, [pathname, remember]);
+
+  // 🔥 Ctrl+Tab で「学習リスト → NotionPlus → 絶対覚える」を順送り（Ctrl+Shift+Tab で逆送り）。
+  // クリックと同じ扱いにする＝離れる前に居場所を覚え、戻り先も前回の続きにする。
+  // ⚠ デスクトップ（Electron）だけで効かせる。ブラウザでは Ctrl+Tab はブラウザ自身の
+  //    タブ切替に予約されていて preventDefault が効かず、アプリ側も動くと二重に切り替わるため。
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.electronAPI) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab' || !e.ctrlKey || e.altKey || e.metaKey) return;
+      if (e.repeat || e.isComposing) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      remember(); // 離れる瞬間の居場所を記録（クリック時の onClick と同じ）
+
+      const here = window.location.pathname;
+      const idx = NAV.findIndex(({ href }) => here.startsWith(href));
+      const next =
+        idx < 0
+          ? NAV[0] // 設定画面などタブの外にいるときは先頭へ
+          : NAV[(idx + (e.shiftKey ? -1 : 1) + NAV.length) % NAV.length];
+
+      // remember() の直後なので localStorage から読み直す（state はまだ古い）
+      router.push(readStore()[next.href] ?? next.href);
+    };
+
+    // capture で拾う＝TipTap などページ側のキー処理より先に取る
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [remember, router]);
 
   return (
     <div className="flex shrink-0 items-end gap-1 border-b border-gray-200 bg-gray-50 px-3 pt-1.5">
