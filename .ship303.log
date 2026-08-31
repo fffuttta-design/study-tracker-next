@@ -779,3 +779,12 @@ For more on this, please refer to https://docs.gradle.org/8.13/userguide/command
 BUILD SUCCESSFUL in 1m 22s
 515 actionable tasks: 31 executed, 484 up-to-date
 [build-and-sync] Android Debug ビルド完了 ✓
+[build-and-sync] APK アップロード & Release 公開完了 ✓ (v1.0.303)
+[build-and-sync] downloadUrl: https://github.com/fffuttta-design/study-tracker-next/releases/download/v1.0.303/study-tracker.apk
+[build-and-sync] GitHub へプッシュ中...
+[build-and-sync] GitHub プッシュ完了 ✓ (build 323)
+
+[build-and-sync] GitHub 反映確認中...
+
+[build-and-sync] ✅ build 323 (v1.0.303) GitHub 反映確認済み
+[build-and-sync] 📱 今すぐアップデートをテストできます！

@@ -90,11 +90,16 @@ npm run dist:win:sync
 3. Android の `updateService.ts` のビルド番号を更新
 4. 起動中の `学習トラッカー.exe` を終了（DLLロック解除）
 5. Electron で Windows デスクトップアプリをビルド（`dist-electron/win-unpacked`）
-6. `robocopy` で `%LOCALAPPDATA%\StudyTracker` に直コピー → 開発機の起動はここから
-7. `dist-electron/study-tracker-win.zip` を作成（GitHub Release 配布用）
-8. Android APK をビルド（assembleDebug のみ・release は reanimated ninja ループで失敗するため）
-9. GitHub Release `build-XXX` タグに APK と Windows ZIP を両方アップロード
-10. `git add -A && git commit && git push origin master` → Vercel が自動デプロイ → Web 配信完了
+6. `dist-electron/study-tracker-win.zip` を作成（GitHub Release 配布用）
+7. Android APK をビルド（assembleDebug のみ・release は reanimated ninja ループで失敗するため）
+8. GitHub Release `build-XXX` タグに APK と Windows ZIP を両方アップロード
+9. `git add -A && git commit && git push origin master` → Vercel が自動デプロイ → Web 配信完了
+
+> 🔥 **アプリの実体は `%LOCALAPPDATA%\Programs\study-tracker\学習トラッカー.exe` の1つだけ**（NSISインストーラの入れ先＝`electron-updater` が自己置換するのもここ）。
+> ⚠️ **`%LOCALAPPDATA%\StudyTracker\` は2026-06で役目を終えた置き去りのコピー。** 昔は配信スクリプトが
+> `robocopy` でここへ直コピーしていたが**その処理はもう無い**ので中身は6月のまま（v1.0.199・旧アイコン）。
+> ここを起動すると**古いアイコンの窓がもう1つ増えて「アイコンがちぐはぐ」に見える**（2026-08-31に実際に発生）。
+> 検証でアプリを起動するときも**必ず `Programs\study-tracker` の方**を使うこと。
 
 ### 前提条件
 
