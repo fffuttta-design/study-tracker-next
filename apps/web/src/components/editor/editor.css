@@ -151,6 +151,11 @@
 .notion-editor img.ProseMirror-selectednode {
   outline: 2px solid #8b5cf6;
 }
+/* 画像・動画を選んだときの枠は「素材そのもの」の1本だけにする。
+   ノードビュー（画像・埋め込み）は中の img / iframe 側に選択リングを出しているので、
+   外側のブロックにも ProseMirror 既定の枠が出ると二重に見える。外側だけ消す。 */
+.notion-editor .ProseMirror-selectednode:has(img),
+.notion-editor .ProseMirror-selectednode:has(iframe) { outline: none; }
 
 /* リンク */
 .notion-editor a {
