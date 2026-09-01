@@ -325,6 +325,24 @@ function parseClip(rawText) {
   return { title, body }
 }
 
+// ── 再読み込みのキーを効かせる ──────────────────────────────────
+// 既定メニューを Menu.setApplicationMenu(null) で外しているため、
+// メニュー由来の Ctrl+R / F5 のアクセラレータも一緒に消えている。
+// その結果、別端末や Claude Code がサーバー側を書き換えても手元の窓を更新できず、
+// 古い表示のまま編集して上書きしてしまう事故が起きる。窓ごとに自前で拾う。
+function enableReloadKeys(win) {
+  win.webContents.on('before-input-event', (e, input) => {
+    if (input.type !== 'keyDown') return
+    const isF5 = input.key === 'F5'
+    const isCtrlR = (input.control || input.meta) && (input.key === 'r' || input.key === 'R')
+    if (!isF5 && !isCtrlR) return
+    e.preventDefault()
+    // Shift 併用はキャッシュを無視して読み直す（Ctrl+Shift+R / Shift+F5）
+    if (input.shift) win.webContents.reloadIgnoringCache()
+    else win.webContents.reload()
+  })
+}
+
 // ── 特急メモ ポップアップ窓を生成（隠したまま事前生成＝プリウォーム）─────
 // 毎回「窓を作ってネットから読み込む」のをやめ、1個を使い回す（起動を高速化）。
 // 閉じても破棄せず hide する（次回は show するだけ）。
@@ -488,6 +506,7 @@ function createNotionWindow() {
     webPreferences: { nodeIntegration: false, contextIsolation: true, preload: preloadPath },
   })
 
+  enableReloadKeys(notionWin)
   notionWin.loadURL(`${APP_URL}/notion-plus`)
 
   // Windows のタスクバーで「学習トラッカー」と別グループ・別アイコンにする
@@ -605,6 +624,7 @@ function createWindow() {
     },
   })
 
+  enableReloadKeys(mainWin)
   mainWin.loadURL(APP_URL)
 
   // ページ読み込み完了後に表示（チラつき防止）

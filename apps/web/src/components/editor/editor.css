@@ -43,10 +43,12 @@
 .notion-editor h2 { font-size: 1.5rem; font-weight: 700; margin: calc(2.25rem + var(--offset-h2, 0px)) 0 0.6rem; }
 .notion-editor h3 { font-size: 1.25rem; font-weight: 600; margin: calc(1.5rem + var(--offset-h3, 0px)) 0 0.35rem; }
 
-/* 見出しの直後にさらに下位の見出しが来るときは、上の余白を詰める（二重に空くのを防ぐ） */
-.notion-editor h1 + h2 { margin-top: calc(0.75rem + var(--offset-h2, 0px)); }
-.notion-editor h2 + h3 { margin-top: calc(0.6rem + var(--offset-h3, 0px)); }
-.notion-editor h3 + h4 { margin-top: calc(0.5rem + var(--offset-h4, 0px)); }
+/* 見出しの直後にまた見出しが来るときは、上の余白を詰める（本文が無いのに大きく空くのを防ぐ）。
+   同じレベルが続く場合（H2→H2 など）も対象。 */
+.notion-editor :is(h1,h2,h3,h4) + h1 { margin-top: calc(0.9rem + var(--offset-h1, 0px)); }
+.notion-editor :is(h1,h2,h3,h4) + h2 { margin-top: calc(0.75rem + var(--offset-h2, 0px)); }
+.notion-editor :is(h1,h2,h3,h4) + h3 { margin-top: calc(0.6rem + var(--offset-h3, 0px)); }
+.notion-editor :is(h1,h2,h3,h4) + h4 { margin-top: calc(0.5rem + var(--offset-h4, 0px)); }
 
 /* 見出しの下線（HeadingUnderline 拡張・data-underline="1" のときだけ幅いっぱいの区切り線） */
 .notion-editor h1[data-underline="1"],
