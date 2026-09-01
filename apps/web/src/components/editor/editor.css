@@ -39,9 +39,14 @@
    これを含めてしまうと「空（カーソルだけ）の箇条書き行」まで soft-lh になり、
    マーカー（para-lh 基準）とカーソルの高さがズレる（入力すると br が消えて直る現象の原因）。 */
 .notion-editor p:has(br:not(.ProseMirror-trailingBreak)) { line-height: var(--soft-lh, 1.15); }
-.notion-editor h1 { font-size: 1.875rem; font-weight: 700; margin: calc(1.25rem + var(--offset-h1, 0px)) 0 0.5rem; }
-.notion-editor h2 { font-size: 1.5rem; font-weight: 700; margin: calc(1rem + var(--offset-h2, 0px)) 0 0.375rem; }
-.notion-editor h3 { font-size: 1.25rem; font-weight: 600; margin: calc(0.75rem + var(--offset-h3, 0px)) 0 0.25rem; }
+.notion-editor h1 { font-size: 1.875rem; font-weight: 700; margin: calc(2.75rem + var(--offset-h1, 0px)) 0 0.75rem; }
+.notion-editor h2 { font-size: 1.5rem; font-weight: 700; margin: calc(2.25rem + var(--offset-h2, 0px)) 0 0.6rem; }
+.notion-editor h3 { font-size: 1.25rem; font-weight: 600; margin: calc(1.5rem + var(--offset-h3, 0px)) 0 0.35rem; }
+
+/* 見出しの直後にさらに下位の見出しが来るときは、上の余白を詰める（二重に空くのを防ぐ） */
+.notion-editor h1 + h2 { margin-top: calc(0.75rem + var(--offset-h2, 0px)); }
+.notion-editor h2 + h3 { margin-top: calc(0.6rem + var(--offset-h3, 0px)); }
+.notion-editor h3 + h4 { margin-top: calc(0.5rem + var(--offset-h4, 0px)); }
 
 /* 見出しの下線（HeadingUnderline 拡張・data-underline="1" のときだけ幅いっぱいの区切り線） */
 .notion-editor h1[data-underline="1"],
@@ -51,7 +56,7 @@
   border-bottom: 1px solid #e5e7eb;
   padding-bottom: 0.25rem;
 }
-.notion-editor h4 { font-size: 1.1rem; font-weight: 600; margin: calc(0.5rem + var(--offset-h4, 0px)) 0 0.25rem; }
+.notion-editor h4 { font-size: 1.1rem; font-weight: 600; margin: calc(1rem + var(--offset-h4, 0px)) 0 0.25rem; }
 
 /* ── ブック本文の自動見出し番号（CSSカウンタ・本文非破壊 / Phase 2）────── */
 /* 表示だけ。contenteditable のテキストは変わらないので保存内容に影響しない。 */
