@@ -452,6 +452,8 @@ function NotionPageSidebar({ user }: { user: User }) {
     import('@/components/editor/NotionEditor').catch(() => {});
   }, []);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; page: NotionPage } | null>(null);
+  // サイドバーの余白を右クリック＝最上位に新規作成するメニュー
+  const [rootCtxMenu, setRootCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const [open, setOpen] = useState(true);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     if (typeof window === 'undefined') return SIDEBAR_DEFAULT;
@@ -617,7 +619,17 @@ function NotionPageSidebar({ user }: { user: User }) {
   }, [ctxMenu, update, user.uid, router]);
 
   const handleCtxMenu = (e: React.MouseEvent, page: NotionPage) => {
+    // 🔥 止めないと親<nav>の「最上位に新規作成」メニューまで開く（ページ用メニューが優先）
+    e.stopPropagation();
+    setRootCtxMenu(null);
     setCtxMenu({ x: e.clientX, y: e.clientY, page });
+  };
+
+  // サイドバーの余白を右クリック → 最上位（ルート）に新規作成
+  const addAtRoot = async (type?: 'database') => {
+    setRootCtxMenu(null);
+    const page = await add(user.uid, type ? { type } : undefined);
+    router.push(`/notion-plus/${page.id}`);
   };
 
   /* 閉じている間はナロー帯（w-8）のみ表示 */
@@ -719,7 +731,15 @@ function NotionPageSidebar({ user }: { user: User }) {
       </div>
 
       {/* ページリスト（お気に入りのみ） or 検索結果 */}
-      <nav className="flex-1 overflow-y-auto px-1 py-1">
+      <nav
+        className="flex-1 overflow-y-auto px-1 py-1"
+        onContextMenu={(e) => {
+          // ページ項目の上では handleCtxMenu が stopPropagation するので、ここは「余白」だけ
+          e.preventDefault();
+          setCtxMenu(null);
+          setRootCtxMenu({ x: e.clientX, y: e.clientY });
+        }}
+      >
         {loading && <p className="px-3 py-2 text-xs text-gray-400">読込中...</p>}
 
         {/* 検索結果 */}
@@ -883,6 +903,31 @@ function NotionPageSidebar({ user }: { user: User }) {
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-500 hover:bg-red-50"
               >
                 <span>🗑️</span><span>削除</span>
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* 余白の右クリック＝最上位（ルート）に新規作成 */}
+        {rootCtxMenu && (
+          <>
+            <div className="fixed inset-0 z-[80]" onClick={() => setRootCtxMenu(null)} onContextMenu={(e) => { e.preventDefault(); setRootCtxMenu(null); }} />
+            <div
+              className="fixed z-[90] w-56 rounded-xl border border-gray-100 bg-white py-1 shadow-2xl"
+              style={{ top: rootCtxMenu.y, left: rootCtxMenu.x }}
+            >
+              <p className="px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">最上位に作成</p>
+              <button
+                onClick={() => addAtRoot()}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+              >
+                <span>📄</span><span>ページを作成</span>
+              </button>
+              <button
+                onClick={() => addAtRoot('database')}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+              >
+                <span>📊</span><span>データベースを作成</span>
               </button>
             </div>
           </>
