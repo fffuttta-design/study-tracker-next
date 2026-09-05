@@ -116,6 +116,48 @@ GitHub push だけで Vercel が自動デプロイする。
 
 ---
 
+## ルール3：UIの改修は「デスクトップ実機」で動作確認してから報告する
+
+Webのプレビュー（`npm run dev` + ブラウザ）は**ログインが要るのでサイドバーや本文まで到達できない**。
+確認はデスクトップ版（ログイン済み）にCDPで繋いで行う。
+
+```powershell
+Get-Process -Name '学習トラッカー' | Stop-Process -Force
+Start-Process "$env:LOCALAPPDATA\Programs\study-tracker\学習トラッカー.exe" -ArgumentList '--remote-debugging-port=9222'
+# 検証が終わったら必ず通常モードで起動し直す（デバッグポートを開けっぱなしにしない）
+```
+
+接続は Node 組込 WebSocket（`new WebSocket(t.webSocketDebuggerUrl)`・`ws` パッケージは入っていない）。
+雛形＝`C:\dev\Skills\studytracker-seiri\core\cdp-verify-rootmenu3.mjs` / `_shot-page.mjs`（スクショ）。
+
+### 🔥 ここで3回誤診した（2026-09-05）
+
+1. **配信直後は、デスクトップ版がまだ古いJSを読んでいる。**
+   アプリはVercelに載ったWebを読む。`npm run dist:win:sync` が終わっても**Vercelのデプロイはその後**なので、
+   直後に触ると新機能が無い。しかも **`APP_VERSION` の表示だけは新しくなっていることがある**ので、
+   バージョン表示を根拠にしてはいけない。確実な判定はこれ：
+   ```js
+   // ページ内で実行：読み込み済みJSに新機能の文字列が入っているか
+   const srcs=[...document.querySelectorAll('script[src]')].map(s=>s.src);
+   for(const u of srcs){ if((await (await fetch(u)).text()).includes('最上位に作成')) hit++; }
+   ```
+2. **前のテストで開いたメニューが、次のクリックを食う。**
+   コンテキストメニューは `.fixed.inset-0` のオーバーレイを敷くので、閉じずに次の座標をクリックすると
+   そのオーバーレイに当たる。**各テストの前に必ず閉じる**：
+   ```js
+   document.querySelectorAll('.fixed.inset-0').forEach(o=>o.dispatchEvent(new MouseEvent('click',{bubbles:true})));
+   ```
+3. **メニューの有無を `document.body.innerText` の語で判定しない。**
+   ツールバーに「IDをコピー」等が常時表示されているため、何をしても `true` になる。
+   判定は**そのメニューにしか無い語**（例：「最上位に作成」）で行う。
+
+### 座標の取り方
+右クリックは `Input.dispatchMouseEvent`（`button:'right'`, `buttons:2` を press/release の2回）が確実。
+「サイドバーの余白」は、**nav内の全要素の `bottom` の最大値 + 40px** で求める
+（最後の `<a>` の下＝まだ項目の上、ということがある）。
+
+---
+
 ## 開発環境
 
 ```bash
