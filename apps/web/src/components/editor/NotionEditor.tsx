@@ -572,7 +572,7 @@ const UrlMentionNode = TiptapNode.create({
 // ── コールアウト ──────────────────────────────────────────────────────
 
 const CALLOUT_BG_COLORS = [
-  { label: '黄', value: '#FEF9CD' },
+  { label: '黄', value: '#FDE047' },
   { label: '青', value: '#D8EEF9' },
   { label: '緑', value: '#D8F3DC' },
   { label: '赤', value: '#FEE2E2' },
@@ -582,7 +582,7 @@ const CALLOUT_BG_COLORS = [
 
 // ページテーブル（看板）のセクション背景色：見やすい淡色を多めに用意
 const PT_SECTION_BG_COLORS = [
-  { label: '黄', value: '#FEF9CD' },
+  { label: '黄', value: '#FDE047' },
   { label: 'オレンジ', value: '#FFEDD5' },
   { label: 'ベージュ', value: '#F5ECDD' },
   { label: '赤', value: '#FEE2E2' },
@@ -636,7 +636,7 @@ const CalloutNode = TiptapNode.create({
   group: 'block',
   content: 'block+',
   defining: true,
-  addAttributes() { return { background: { default: '#FEF9CD' } }; },
+  addAttributes() { return { background: { default: '#FDE047' } }; },
   parseHTML() { return [{ tag: 'div[data-type="callout"]' }]; },
   renderHTML({ HTMLAttributes }) { return ['div', { ...HTMLAttributes, 'data-type': 'callout' }, 0]; },
   addNodeView() { return ReactNodeViewRenderer(CalloutView); },
@@ -2117,7 +2117,7 @@ const PageDescTableNode = TiptapNode.create({
 const TABLE_CELL_COLORS = [
   { label: 'なし', value: '' },
   { label: 'グレー', value: '#F1F1EF' },
-  { label: '黄', value: '#FEF9CD' },
+  { label: '黄', value: '#FDE047' },
   { label: '緑', value: '#D8F3DC' },
   { label: '青', value: '#D8EEF9' },
   { label: '赤', value: '#FEE2E2' },
@@ -2327,7 +2327,7 @@ const SLASH_COMMANDS: SlashCommand[] = [
     tr = tr.insert(0, state.schema.nodes.toc.create());
     view.dispatch(tr);
   } },
-  { label: 'コールアウト',       description: '目立つ注釈ブロック',   icon: '💡',  action: (e) => e?.chain().focus().insertContent({ type: 'callout', attrs: { background: '#FEF9CD' }, content: [{ type: 'paragraph' }] }).run() },
+  { label: 'コールアウト',       description: '目立つ注釈ブロック',   icon: '💡',  action: (e) => e?.chain().focus().insertContent({ type: 'callout', attrs: { background: '#FDE047' }, content: [{ type: 'paragraph' }] }).run() },
   { label: '引用',               description: 'ブロック引用',         icon: '❝',  action: (e) => e?.chain().focus().toggleBlockquote().run() },
   { label: 'コード',             description: 'コードブロック',       icon: '</>', action: (e) => e?.chain().focus().toggleCodeBlock().run() },
   { label: '区切り線',           description: '水平線',               icon: '—',  action: (e) => e?.chain().focus().setHorizontalRule().run() },
@@ -2356,7 +2356,7 @@ const BG_COLORS = [
   { label: 'グレー',     value: '#F1F1EF' },
   { label: 'ブラウン',   value: '#F3E8DC' },
   { label: 'オレンジ',   value: '#FDEBD0' },
-  { label: '黄',         value: '#FEF9CD' },
+  { label: '黄',         value: '#FDE047' },
   { label: '緑',         value: '#D8F3DC' },
   { label: '青',         value: '#D8EEF9' },
   { label: '紫',         value: '#EDE9FE' },
@@ -2935,7 +2935,7 @@ export function NotionEditor({
       const capturedTo = to;
 
       // フォーカス・選択なしでハイライトマークを適用
-      const highlightMark = editor.state.schema.marks.highlight?.create({ color: '#FDE68A' });
+      const highlightMark = editor.state.schema.marks.highlight?.create({ color: '#FDE047' });
       if (!highlightMark) return;
       highlightingRef.current = true;
       editor.view.dispatch(editor.state.tr.addMark(capturedFrom, capturedTo, highlightMark));
@@ -3172,7 +3172,7 @@ export function NotionEditor({
 
   const handleCtxCallout = useCallback(() => {
     setCtxMenu(null);
-    editor?.chain().focus().insertContent({ type: 'callout', attrs: { background: '#FEF9CD' }, content: [{ type: 'paragraph' }] }).run();
+    editor?.chain().focus().insertContent({ type: 'callout', attrs: { background: '#FDE047' }, content: [{ type: 'paragraph' }] }).run();
   }, [editor]);
 
   // 右クリック→目次を挿入（スラッシュ /目次 と同じ挙動：既存の目次を消してページ最上部に1つ置く）
@@ -3430,7 +3430,7 @@ export function NotionEditor({
               </div>
               <p className="mb-1 mt-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">背景色</p>
               <div className="flex flex-wrap gap-1">
-                {/* ツールバー・コールアウト・セクションと同じ正規パレット(BG_COLORS)。黄=#FEF9CD で統一 */}
+                {/* ツールバー・コールアウト・セクションと同じ正規パレット(BG_COLORS)。黄=#FDE047 で統一 */}
                 {BG_COLORS.map((c) => (
                   <button
                     key={c.label}

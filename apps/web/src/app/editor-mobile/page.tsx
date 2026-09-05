@@ -27,7 +27,7 @@ function makeStubNode(name: string, isInline = false) {
         favicon:{ default: '' },
         level:  { default: 1 },
         isOpen: { default: true },
-        background: { default: '#FEF9CD' },
+        background: { default: '#FDE047' },
       };
     },
     parseHTML() { return [{ tag: `[data-type="${name}"]` }]; },
@@ -82,7 +82,7 @@ const PageLinkStub = TiptapNode.create({
 const UrlMentionStub = makeStubNode('urlMention', true);
 const CalloutStub    = TiptapNode.create({
   name: 'callout', group: 'block', content: 'block+', defining: true,
-  addAttributes() { return { background: { default: '#FEF9CD' } }; },
+  addAttributes() { return { background: { default: '#FDE047' } }; },
   parseHTML() { return [{ tag: 'div[data-type="callout"]' }]; },
   renderHTML({ HTMLAttributes }) { return ['div', { ...HTMLAttributes, 'data-type': 'callout', style: 'border-left:4px solid #f59e0b;padding:8px 12px;background:#fffbeb;border-radius:4px;margin:4px 0;' }, 0]; },
 });
