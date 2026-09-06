@@ -172,6 +172,34 @@ for (const u of srcs) if ((await (await fetch(u)).text()).includes('<新コー�
 
 ---
 
+## 🔥 エディタは「ふたメモ」と共有している（2026-09-06〜）
+
+NotionPLUS のエディタ部品は、このリポジトリの中だけの物ではない。
+**ふたメモ（FutaMemo）と同じ実体を使っている。**
+
+```
+C:\dev\CompanyOps\Application\Utility\FutaEditor   ← 部品の実体（パッケージ名 @futa/editor）
+```
+
+- `NotionEditor.tsx` の冒頭で `@futa/editor` から取り込んでいる物は**すべて共有**＝
+  ここで直すのではなく、**FutaEditor 側を直す**。直すと ふたメモ にも同時に効く。
+- 逆に、`NotionEditor.tsx` の中に直接書いてある物（ページリンク／インラインDB／
+  ページテーブル／テーブルビュー／特急メモ／検索置換）は**NotionPLUS専用**。
+  学習データやページ一覧のストアに繋がっているので共有できない。
+- 🔥 **FutaEditor を直したら、必ずふたメモ側もビルドして確かめる**（片方だけの確認は禁止）。
+  ルールと地雷の正本＝`C:\dev\CompanyOps\Application\Utility\FutaEditor\CLAUDE.md`。
+
+### 配線（触るときの注意）
+共有パッケージは**このリポジトリの外**にあるので、素の設定では依存を見つけられない。
+次の3箇所で橋を架けてある。**依存を足したときはここも見直す。**
+
+| ファイル | 何を書いてあるか |
+|---|---|
+| `apps/web/package.json` | `"@futa/editor": "file:../../../Utility/FutaEditor"` |
+| `apps/web/next.config.ts` | `transpilePackages` に追加＋`resolve.modules` に自分と直下の node_modules を先頭追加 |
+| `apps/web/tsconfig.json` | `preserveSymlinks: true` ＋ `paths` で apps/web 側にしか無い TipTap を指す |
+| `apps/web/tailwind.config.ts` | `content` に FutaEditor の src を追加（入れないとクラスが出ない） |
+
 ## 開発環境
 
 ```bash

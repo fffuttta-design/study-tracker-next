@@ -19,10 +19,20 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@tiptap/react": [
+        "./node_modules/@tiptap/react"
+      ],
+      "@tiptap/extension-image": [
+        "./node_modules/@tiptap/extension-image"
+      ],
+      "@tiptap/extension-youtube": [
+        "./node_modules/@tiptap/extension-youtube"
       ]
     },
     "allowJs": true,
-    "noEmit": true
+    "noEmit": true,
+    "preserveSymlinks": true
   },
   "include": [
     "next-env.d.ts",

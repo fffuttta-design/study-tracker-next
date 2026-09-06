@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.1",
+    "@futa/editor": "file:../../../Utility/FutaEditor",
     "@study-tracker/core": "*",
     "@study-tracker/firebase": "*",
     "@study-tracker/ui": "*",

@@ -5,6 +5,7 @@ const config: Config = {
   content: [
     path.resolve(__dirname, "./src/**/*.{js,ts,jsx,tsx,mdx}"),
     path.resolve(__dirname, "../../packages/ui/src/**/*.{js,ts,jsx,tsx}"),
+    path.resolve(__dirname, "../../../Utility/FutaEditor/src/**/*.{js,ts,jsx,tsx}"),
   ],
   theme: {
     extend: {
