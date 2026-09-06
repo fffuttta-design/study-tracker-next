@@ -183,9 +183,11 @@ C:\dev\CompanyOps\Application\Utility\FutaEditor   ← 部品の実体（パッ�
 
 - `NotionEditor.tsx` の冒頭で `@futa/editor` から取り込んでいる物は**すべて共有**＝
   ここで直すのではなく、**FutaEditor 側を直す**。直すと ふたメモ にも同時に効く。
-- 逆に、`NotionEditor.tsx` の中に直接書いてある物（ページリンク／インラインDB／
-  ページテーブル／テーブルビュー／特急メモ／検索置換）は**NotionPLUS専用**。
-  学習データやページ一覧のストアに繋がっているので共有できない。
+- ページリンク／ページテーブル／テーブルビューも**共有**になった（2026-09-06）。
+  ページ一覧との接点は `NotionEditor.tsx` の中で作る**差し込み口**（`editorHost`）だけ。
+  ノート⇄ブック変換もここから渡している（ふたメモには無い機能なので、向こうではボタンが出ない）。
+- 一方、`NotionEditor.tsx` に直接書いてある物（インラインDB／特急メモ／検索置換／学習記録）は
+  **NotionPLUS専用**。学習データやDBの行に繋がっているので共有できない。
 - 🔥 **FutaEditor を直したら、必ずふたメモ側もビルドして確かめる**（片方だけの確認は禁止）。
   ルールと地雷の正本＝`C:\dev\CompanyOps\Application\Utility\FutaEditor\CLAUDE.md`。
 

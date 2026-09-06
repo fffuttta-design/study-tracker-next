@@ -37,14 +37,15 @@ import { TableRow } from '@tiptap/extension-table';
 // 🔥 ここから来ている物を直すときは C:\dev\CompanyOps\Application\Utility\FutaEditor を直す。
 //    直すとふたメモ側にも同時に効く（＝2つのアプリで同じエディタを使っている）。
 import {
-  pmToMarkdown, isYouTubeUrl, isImageSrc, sanitizePastedHTML, type PmNode,
-  TEXT_COLORS, BG_COLORS, CALLOUT_BG_COLORS, PT_SECTION_BG_COLORS,
-  EMOJI_PRESETS,
+  pmToMarkdown, isYouTubeUrl, sanitizePastedHTML, type PmNode,
+  TEXT_COLORS, BG_COLORS,
   CalloutNode, ToggleHeadingNode, TocNode, UrlMentionNode,
   ResizableImage, ResizableYoutube,
   CustomTable, CustomTableCell, CustomTableHeader,
   MarkdownBulletShortcut, MarkdownCodeBlockShortcut, HeadingUnderline, LineBoldShortcut,
   DragHandleExtension, setDragHandleVertOffset, AnnotationMark,
+  PageLinkNode, PageTableNode, PageDescTableNode, ptDefaultSections,
+  EditorHostContext, type EditorHost, PageLinkPicker,
   Toolbar,
 } from '@futa/editor';
 
@@ -55,292 +56,11 @@ import { useNotionPageStore } from '@/stores/notionPageStore';
 import { useDbRowStore } from '@/stores/notionDatabaseRowStore';
 import { TextCell, NumberCell, SelectCell, MultiSelectCell, CheckboxCell, DateCell, UrlCell } from '@/components/database/cells';
 import { parseDbSchema, createBookChapter, serializeBookChapters, parseBookChapters, localDateKey, type NotionPage, type DbProperty, type DbRow, type LearningItem } from '@study-tracker/core';
-import { IconImagePreview } from '@/components/IconImagePreview';
 import { copyNotionPlusPageId } from '@/lib/copyPageId';
 import '@futa/editor/editor.css';
 
 // ツールバーは従来どおりこのファイル経由でも取り出せる（呼び出し側を変えないため）
 export { Toolbar };
-
-
-
-// ── PageLink ノード ──────────────────────────────────────────────────
-
-function PageLinkView({ node, updateAttributes, deleteNode, getPos, editor: tiptapEditor }: NodeViewProps) {
-  const router = useRouter();
-  const onPageNavigate = useContext(PageNavigationContext);
-  const { href, title: storedTitle, icon: storedIcon } = node.attrs as { href: string; title: string; icon: string };
-  const pages = useNotionPageStore((s) => s.pages);
-  const update = useNotionPageStore((s) => s.update);
-  const { user } = useAuthStore();
-  const pageId = href?.match(/\/notion-plus\/([^/?#]+)/)?.[1];
-  const livePage = pageId ? pages.find((p) => p.id === pageId) : null;
-  const title = livePage?.title || storedTitle || 'Untitled';
-  const icon = livePage?.icon || storedIcon || '📄';
-  // notion-child:// = インポート時に未解決のまま残ったリンク（ツリー外のページ等）
-  const isUnresolved = !href || href.startsWith('notion-child://');
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [iconUrlDraft, setIconUrlDraft] = useState('');
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
-  const pickerRef = useRef<HTMLDivElement>(null);
-  const contextMenuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!pickerOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPickerOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [pickerOpen]);
-
-  useEffect(() => {
-    if (!contextMenu) return;
-    const handler = (e: MouseEvent) => {
-      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
-        setContextMenu(null);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [contextMenu]);
-
-  const handleContextMenu = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setContextMenu({ x: e.clientX, y: e.clientY });
-  };
-
-  const handleIconChange = async (newIcon: string) => {
-    if (pageId && user && livePage) {
-      await update(user.uid, pageId, { icon: newIcon });
-    } else {
-      updateAttributes({ icon: newIcon });
-    }
-    setPickerOpen(false);
-    setIconUrlDraft('');
-  };
-
-  const handleIconPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
-    for (const item of e.clipboardData.items) {
-      if (item.type.startsWith('image/')) {
-        e.preventDefault();
-        const file = item.getAsFile();
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-          const dataUrl = ev.target?.result as string;
-          if (dataUrl) handleIconChange(dataUrl);
-        };
-        reader.readAsDataURL(file);
-        return;
-      }
-    }
-  };
-
-  // リンク先ページの種別と、ノート⇄ブック変換（内容を保持する）
-  const isBook = livePage?.type === 'book';
-  const isDatabase = livePage?.type === 'database';
-
-  const convertLinkedToBook = async () => {
-    setContextMenu(null);
-    if (!pageId || !user || !livePage) return;
-    if (!window.confirm(`「${title}」をブックに変換しますか？\n現在の内容は第1章になります。`)) return;
-    const firstChapter = { ...createBookChapter(0), content: livePage.content };
-    await update(user.uid, pageId, {
-      type: 'book',
-      icon: livePage.icon === '📄' ? '📖' : livePage.icon,
-      content: serializeBookChapters([firstChapter]),
-    });
-  };
-
-  const convertLinkedToNote = async () => {
-    setContextMenu(null);
-    if (!pageId || !user || !livePage) return;
-    if (!window.confirm(`「${title}」をノートに戻しますか？\n全チャプターの内容を1ページに結合します。`)) return;
-    // 全チャプターの本文(doc)を1つの doc に結合して内容を保持
-    const chapters = parseBookChapters(livePage.content);
-    const merged: { type: 'doc'; content: unknown[] } = { type: 'doc', content: [] };
-    for (const ch of chapters) {
-      try {
-        const doc = JSON.parse(ch.content) as { content?: unknown[] };
-        if (Array.isArray(doc?.content)) merged.content.push(...doc.content);
-      } catch { /* ignore */ }
-    }
-    await update(user.uid, pageId, {
-      type: 'page', // 'page' = ノート扱い（undefined は merge で消えず反映されないため明示）
-      content: JSON.stringify(merged),
-    });
-  };
-
-  return (
-    <NodeViewWrapper data-type="page-link" contentEditable={false}>
-      {/* 右クリックコンテキストメニュー */}
-      {contextMenu && (
-        <div
-          ref={contextMenuRef}
-          className="fixed z-[200] min-w-[120px] rounded-lg border border-gray-100 bg-white py-1 shadow-xl"
-          style={{ top: contextMenu.y, left: contextMenu.x }}
-        >
-          {/* リンク先がノート/ブックのときだけ変換を出す（DB・未解決リンクは対象外） */}
-          {livePage && !isDatabase && !isUnresolved && (
-            <>
-              {isBook ? (
-                <button
-                  onMouseDown={(e) => { e.preventDefault(); convertLinkedToNote(); }}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  📄 ノートに変換
-                </button>
-              ) : (
-                <button
-                  onMouseDown={(e) => { e.preventDefault(); convertLinkedToBook(); }}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  📚 ブックに変換
-                </button>
-              )}
-              <div className="my-1 border-t border-gray-100" />
-            </>
-          )}
-          {/* ページID（NotionPlus）をコピー＝Claude Code へ正確に渡す用 */}
-          {pageId && !isUnresolved && (
-            <button
-              onMouseDown={(e) => { e.preventDefault(); setContextMenu(null); copyNotionPlusPageId(pageId, title); }}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
-            >
-              🆔 IDをコピー
-            </button>
-          )}
-          <button
-            onMouseDown={(e) => {
-              e.preventDefault();
-              setContextMenu(null);
-              const pos = typeof getPos === 'function' ? getPos() : undefined;
-              if (typeof pos === 'number' && tiptapEditor) {
-                // focus() を先に当てないと execCommand('cut') が ProseMirror に届かず無反応になる（貼り付けと同じ手順）
-                tiptapEditor.chain().focus().setNodeSelection(pos).run();
-                setTimeout(() => document.execCommand('cut'), 10);
-              }
-            }}
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
-          >
-            ✂️ 切り取り
-          </button>
-          <button
-            onMouseDown={(e) => { e.preventDefault(); setContextMenu(null); deleteNode(); }}
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-red-500 hover:bg-red-50"
-          >
-            🗑️ 削除
-          </button>
-        </div>
-      )}
-      <div className="flex w-full items-center gap-1 py-px"
-        draggable={!isUnresolved && !!pageId}
-        onDragStart={(e) => {
-          // サイドバーのページ項目にドロップ＝その親の下に入れる（Sidebar の PageTreeEntry.handleDrop が
-          // application/x-page-id を読んで parentId を付け替える）。UUIDフォールバック用に text/plain も渡す。
-          if (isUnresolved || !pageId) { e.preventDefault(); return; }
-          // ★stopPropagation 必須：これが無いとエディタ本体(ProseMirror)の dragstart が後から走って
-          // dataTransfer を自前のスライスで上書き（clearData）し、渡した application/x-page-id が消える＝ドロップ先で親付け替えできない。
-          e.stopPropagation();
-          e.dataTransfer.effectAllowed = 'move';
-          e.dataTransfer.setData('application/x-page-id', pageId);
-          e.dataTransfer.setData('text/plain', pageId);
-        }}
-        onContextMenu={handleContextMenu}
-        style={!isUnresolved && pageId ? { cursor: 'grab' } : undefined}>
-        <div className="relative" ref={pickerRef}>
-          <button
-            onClick={(e) => { e.stopPropagation(); setPickerOpen((v) => !v); }}
-            className="rounded p-0.5 hover:bg-gray-100"
-            title="アイコンを変更"
-          >
-            {/* 18px 固定枠・overflow-hidden+rounded で四角クリッピング */}
-            {/* style={{ }} はCSSの height:auto より優先度が高いためバグ回避 */}
-            <span className="flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center overflow-hidden rounded">
-              {isImageSrc(icon) ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={icon} alt="" className="h-full w-full object-cover" style={{ height: '18px', width: '18px', aspectRatio: '1/1' }} />
-              ) : (
-                <span className="text-[14px] leading-none">{icon}</span>
-              )}
-            </span>
-          </button>
-          {pickerOpen && (
-            <div className="absolute left-0 top-full z-50 w-72 rounded-xl border border-gray-200 bg-white p-3 shadow-xl">
-              {/* 現在のアイコンが画像（外部URL/貼付）なら、何の画像か分かるよう大きめにプレビュー（クリックで拡大） */}
-              {isImageSrc(icon) && <IconImagePreview src={icon} />}
-              <p className="mb-1 text-xs font-medium text-gray-400">画像URL / コピペ</p>
-              <div className="flex gap-1">
-                <input type="text" value={iconUrlDraft} onChange={(e) => setIconUrlDraft(e.target.value)}
-                  onPaste={handleIconPaste}
-                  onKeyDown={(e) => e.key === 'Enter' && iconUrlDraft && handleIconChange(iconUrlDraft)}
-                  className="min-w-0 flex-1 rounded border border-gray-200 px-2 py-1 text-xs outline-none focus:border-brand-400" />
-                <button onClick={() => iconUrlDraft && handleIconChange(iconUrlDraft)} disabled={!iconUrlDraft}
-                  className="rounded bg-brand-500 px-2 py-1 text-xs text-white hover:bg-brand-600 disabled:opacity-40">設定</button>
-              </div>
-              {isImageSrc(iconUrlDraft) && (
-                <div className="mt-2 flex items-center gap-2">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={iconUrlDraft} alt="" className="block h-8 w-8 rounded-md object-cover" style={{ aspectRatio: '1/1' }}
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                  <span className="text-xs text-gray-400">プレビュー</span>
-                </div>
-              )}
-              <p className="mb-1 mt-3 text-xs font-medium text-gray-400">絵文字</p>
-              <div className="grid grid-cols-8 gap-0.5 max-h-48 overflow-y-auto">
-                {EMOJI_PRESETS.map((emoji) => (
-                  <button key={emoji} onClick={() => handleIconChange(emoji)}
-                    className={`rounded p-1 text-base hover:bg-gray-100 ${icon === emoji ? 'bg-brand-50 ring-1 ring-brand-400' : ''}`}>
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-        {isUnresolved ? (
-          <span
-            className="cursor-not-allowed text-[0.95em] text-gray-400 line-through opacity-60"
-            title="このページはインポートされていません（ツリー外の参照）"
-          >
-            {title || 'Untitled'}
-          </span>
-        ) : (
-          <button onClick={() => onPageNavigate ? onPageNavigate(href) : router.push(href)} className="cursor-pointer hover:opacity-70">
-            <span className="text-[0.95em] text-gray-700 underline">{title || 'Untitled'}</span>
-          </button>
-        )}
-      </div>
-    </NodeViewWrapper>
-  );
-}
-
-const PageLinkNode = TiptapNode.create({
-  name: 'pageLink',
-  group: 'block',
-  atom: true,
-  addAttributes() {
-    return {
-      href: { default: null },
-      title: { default: '' },
-      icon: { default: '📄' },
-    };
-  },
-  parseHTML() {
-    return [
-      { tag: 'div[data-type="page-link"]' },
-      { tag: 'span[data-type="page-link"]' }, // v1.1.28〜v1.1.31 インライン期間との後方互換
-    ];
-  },
-  renderHTML({ HTMLAttributes }) { return ['div', { ...HTMLAttributes, 'data-type': 'page-link' }]; },
-  addNodeView() { return ReactNodeViewRenderer(PageLinkView); },
-});
-
-
-
-
 
 
 
@@ -726,878 +446,6 @@ const InlineDatabaseNode = TiptapNode.create({
   addNodeView() { return ReactNodeViewRenderer(InlineDatabaseEmbed); },
 });
 
-// ── ページテーブル（ページリンク整理ボード）────────────────────────────
-// 大見出し（セクション）＋列（小見出し）＋各列にページリンクの縦並び、で整理する。
-// データはノード attrs.sections に保持（本文JSON内・新規DB不要）。
-
-interface PtLink { href: string; title: string; icon: string }
-interface PtColumn { id: string; heading: string; links: PtLink[]; color?: string; width?: number }
-interface PtSection { id: string; title: string; columns: PtColumn[]; framed?: boolean; bg?: string; borderWidth?: number }
-
-const PT_DEFAULT_COLOR = '#F1F1EF'; // リスト（カンバン列）の既定背景＝淡グレー
-const PT_DEFAULT_WIDTH = 240;       // リストの既定幅(px)
-const PT_MIN_WIDTH = 160;
-const PT_MAX_WIDTH = 520;
-
-const ptNewId = () =>
-  (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `pt-${Date.now()}-${performance.now()}`;
-
-function ptDefaultSections(): PtSection[] {
-  return [{
-    id: ptNewId(),
-    title: '',
-    columns: [
-      { id: ptNewId(), heading: '', links: [] },
-      { id: ptNewId(), heading: '', links: [] },
-    ],
-  }];
-}
-
-function ptParseSections(raw: unknown): PtSection[] {
-  let v: unknown = raw;
-  if (typeof v === 'string') { try { v = JSON.parse(v); } catch { v = null; } }
-  if (Array.isArray(v) && v.length > 0) return v as PtSection[];
-  return ptDefaultSections();
-}
-
-const ptIdFromHref = (href: string) => href?.match(/\/notion-plus\/([^/?#]+)/)?.[1];
-
-function PageTableView({ node, updateAttributes, editor: ptEditor, deleteNode, getPos }: NodeViewProps) {
-  const router = useRouter();
-  const onPageNavigate = useContext(PageNavigationContext);
-  const currentPageId = useContext(EditorPageIdContext);
-  const { user } = useAuthStore();
-  const pages = useNotionPageStore((s) => s.pages);
-  const addPage = useNotionPageStore((s) => s.add);
-  const update = useNotionPageStore((s) => s.update);
-
-  const sections = useMemo(() => ptParseSections(node.attrs.sections), [node.attrs.sections]);
-  const commit = useCallback((next: PtSection[]) => updateAttributes({ sections: next }), [updateAttributes]);
-
-  // 切り取り中のリンク位置（移動用・実データは貼り付け時に移す＝消失しない）
-  const [cut, setCut] = useState<{ s: number; c: number; i: number } | null>(null);
-  // ＋追加ピッカー（どの列に追加するか）。位置は fixed＋portal で最前面に出す（スクロール領域に切られない）
-  const [picker, setPicker] = useState<{ s: number; c: number } | null>(null);
-  const [pickerPos, setPickerPos] = useState<{ top: number; left: number } | null>(null);
-  const [query, setQuery] = useState('');
-  const [colorOpenCol, setColorOpenCol] = useState<{ s: number; c: number } | null>(null);
-  const [colorPos, setColorPos] = useState<{ top: number; left: number } | null>(null);
-  const [sectionMenu, setSectionMenu] = useState<number | null>(null);
-  const [sectionMenuPos, setSectionMenuPos] = useState<{ top: number; left: number } | null>(null);
-  const [resizing, setResizing] = useState<{ s: number; c: number; w: number } | null>(null);
-  const dragSrc = useRef<{ s: number; c: number; i: number } | null>(null);
-  const pickerRef = useRef<HTMLDivElement>(null);
-  // 看板カードの右クリックメニュー（ブック⇄ノート変換）
-  const [cardMenu, setCardMenu] = useState<{ pageId: string; type: string; x: number; y: number } | null>(null);
-  // カンバンビュー自体の右クリックメニュー（解除／削除）。カードや入力欄は各自の挙動を優先する。
-  const [blockMenu, setBlockMenu] = useState<{ x: number; y: number } | null>(null);
-
-  // 解除：カンバンを「ふつうのページリンク一覧」に戻す（列・大見出しの構造だけ外し、ページ自体は1件も失わない）。
-  const dissolveToLinks = useCallback(() => {
-    if (typeof getPos !== 'function') return;
-    const pos = getPos();
-    if (pos == null) return;
-    const links = sections.flatMap((s) => s.columns.flatMap((c) => c.links));
-    const content = links.length
-      ? links.map((lk) => ({ type: 'pageLink', attrs: { href: lk.href, title: lk.title, icon: lk.icon } }))
-      : [{ type: 'paragraph' }];
-    ptEditor.chain().focus().insertContentAt({ from: pos, to: pos + node.nodeSize }, content).run();
-  }, [getPos, sections, ptEditor, node]);
-
-  // 看板カードのリンク先ページをブックに変換（本文ページリンクの右クリックと同じ挙動）
-  const convertCardToBook = async (pageId: string) => {
-    setCardMenu(null);
-    const lp = pages.find((p) => p.id === pageId);
-    if (!user || !lp || lp.type === 'book' || lp.type === 'database') return;
-    if (!window.confirm(`「${lp.title || 'Untitled'}」をブックに変換しますか？\n現在の内容は第1章になります。`)) return;
-    const firstChapter = { ...createBookChapter(0), content: lp.content };
-    await update(user.uid, pageId, {
-      type: 'book',
-      icon: lp.icon === '📄' ? '📖' : lp.icon,
-      content: serializeBookChapters([firstChapter]),
-    });
-  };
-  // 看板カードのリンク先ブックをノートに戻す（全チャプターを1ページに結合）
-  const convertCardToNote = async (pageId: string) => {
-    setCardMenu(null);
-    const lp = pages.find((p) => p.id === pageId);
-    if (!user || !lp || lp.type !== 'book') return;
-    if (!window.confirm(`「${lp.title || 'Untitled'}」をノートに戻しますか？\n全チャプターの内容を1ページに結合します。`)) return;
-    const chapters = parseBookChapters(lp.content);
-    const merged: { type: 'doc'; content: unknown[] } = { type: 'doc', content: [] };
-    for (const ch of chapters) {
-      try { const doc = JSON.parse(ch.content) as { content?: unknown[] }; if (Array.isArray(doc?.content)) merged.content.push(...doc.content); } catch { /* ignore */ }
-    }
-    await update(user.uid, pageId, { type: 'page', content: JSON.stringify(merged) });
-  };
-
-  // ホバー枠の中だと消えるので、色/セクションメニューは最前面ポータルで開く（位置をボタンから算出）
-  const openColorMenu = (e: React.MouseEvent, si: number, ci: number) => {
-    if (colorOpenCol?.s === si && colorOpenCol?.c === ci) { setColorOpenCol(null); return; }
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setColorPos({ top: r.bottom + 6, left: Math.max(8, Math.min(r.left - 70, window.innerWidth - 200)) });
-    setColorOpenCol({ s: si, c: ci });
-  };
-  const openSectionMenu = (e: React.MouseEvent, si: number) => {
-    if (sectionMenu === si) { setSectionMenu(null); return; }
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setSectionMenuPos({ top: r.bottom + 6, left: Math.max(8, Math.min(r.left, window.innerWidth - 200)) });
-    setSectionMenu(si);
-  };
-
-  // ⑤ 重複排除: 看板に入れたページは、同じ本文内の単体ページリンクを削除（看板を正の場所にする）
-  const removeBodyPageLink = (href: string) => {
-    const id = ptIdFromHref(href);
-    if (!id || !ptEditor) return;
-    const dels: { from: number; to: number }[] = [];
-    ptEditor.state.doc.descendants((n, pos) => {
-      if (n.type.name === 'pageLink') {
-        const h = n.attrs.href as string;
-        if (h && ptIdFromHref(h) === id) dels.push({ from: pos, to: pos + n.nodeSize });
-      }
-    });
-    if (!dels.length) return;
-    let tr = ptEditor.state.tr;
-    dels.sort((a, b) => b.from - a.from).forEach((d) => { tr = tr.delete(d.from, d.to); });
-    ptEditor.view.dispatch(tr);
-  };
-
-  const openPicker = (e: React.MouseEvent, si: number, ci: number) => {
-    const isSame = picker?.s === si && picker?.c === ci;
-    if (isSame) { setPicker(null); setPickerPos(null); return; }
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const W = 240, H = 290;
-    const left = Math.max(8, Math.min(r.left, window.innerWidth - W - 8));
-    let top = r.bottom + 4;
-    if (top + H > window.innerHeight) top = Math.max(8, r.top - H - 4); // 下にはみ出すなら上に開く
-    setPickerPos({ top, left });
-    setPicker({ s: si, c: ci });
-    setQuery('');
-  };
-  const closePicker = () => { setPicker(null); setPickerPos(null); setQuery(''); };
-
-  useEffect(() => {
-    if (!picker) return;
-    const h = (e: MouseEvent) => { if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) { setPicker(null); setPickerPos(null); } };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, [picker]);
-
-  // ── セクション操作 ──
-  const setSection = (si: number, fn: (s: PtSection) => PtSection) =>
-    commit(sections.map((s, i) => (i === si ? fn(s) : s)));
-  const addSection = () => commit([...sections, { id: ptNewId(), title: '', columns: [{ id: ptNewId(), heading: '', links: [] }, { id: ptNewId(), heading: '', links: [] }] }]);
-  const removeSection = (si: number) => commit(sections.filter((_, i) => i !== si));
-  const moveSection = (si: number, dir: -1 | 1) => {
-    const j = si + dir; if (j < 0 || j >= sections.length) return;
-    const next = [...sections]; [next[si], next[j]] = [next[j], next[si]]; commit(next);
-  };
-
-  // ── 列操作 ──
-  const addColumn = (si: number) => setSection(si, (s) => ({ ...s, columns: [...s.columns, { id: ptNewId(), heading: '', links: [] }] }));
-  const removeColumn = (si: number, ci: number) => setSection(si, (s) => ({ ...s, columns: s.columns.filter((_, i) => i !== ci) }));
-  const moveColumn = (si: number, ci: number, dir: -1 | 1) => setSection(si, (s) => {
-    const j = ci + dir; if (j < 0 || j >= s.columns.length) return s;
-    const cols = [...s.columns]; [cols[ci], cols[j]] = [cols[j], cols[ci]]; return { ...s, columns: cols };
-  });
-  const setColumnColor = (si: number, ci: number, color: string) =>
-    setSection(si, (s) => ({ ...s, columns: s.columns.map((c, i) => (i === ci ? { ...c, color } : c)) }));
-  const setColumnWidth = (si: number, ci: number, width: number) =>
-    setSection(si, (s) => ({ ...s, columns: s.columns.map((c, i) => (i === ci ? { ...c, width } : c)) }));
-  const toggleFramed = (si: number) => setSection(si, (s) => ({ ...s, framed: s.framed === false }));
-  const setSectionBg = (si: number, bg: string) => setSection(si, (s) => ({ ...s, bg: bg || undefined }));
-  const setSectionBorderWidth = (si: number, w: number) => setSection(si, (s) => ({ ...s, borderWidth: w }));
-
-  // リスト幅のドラッグリサイズ（移動中はローカル state、離したら確定）
-  const startResize = (e: React.MouseEvent, si: number, ci: number, startW: number) => {
-    e.preventDefault(); e.stopPropagation();
-    const startX = e.clientX;
-    const clamp = (w: number) => Math.max(PT_MIN_WIDTH, Math.min(PT_MAX_WIDTH, w));
-    setResizing({ s: si, c: ci, w: startW });
-    const onMove = (ev: MouseEvent) => setResizing({ s: si, c: ci, w: clamp(startW + (ev.clientX - startX)) });
-    const onUp = (ev: MouseEvent) => {
-      window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp);
-      setResizing(null); setColumnWidth(si, ci, clamp(startW + (ev.clientX - startX)));
-    };
-    window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
-  };
-
-  // カードのドラッグ移動（リスト間/並べ替え）。tIndex の位置に挿入
-  const dropCard = (ts: number, tc: number, tIndex: number) => {
-    const src = dragSrc.current; dragSrc.current = null;
-    if (!src) return;
-    const moved = sections[src.s]?.columns[src.c]?.links[src.i];
-    if (!moved) return;
-    const removed = sections.map((s, si) => ({
-      ...s,
-      columns: s.columns.map((c, ci) =>
-        (si === src.s && ci === src.c) ? { ...c, links: c.links.filter((_, k) => k !== src.i) } : c),
-    }));
-    let idx = tIndex;
-    if (src.s === ts && src.c === tc && src.i < tIndex) idx = tIndex - 1; // 同リストで前を抜いた分ずらす
-    const next = removed.map((s, si) => ({
-      ...s,
-      columns: s.columns.map((c, ci) => {
-        if (!(si === ts && ci === tc)) return c;
-        const links = [...c.links]; links.splice(idx, 0, moved); return { ...c, links };
-      }),
-    }));
-    commit(next);
-  };
-
-  // ── リンク操作 ──
-  const addLink = (si: number, ci: number, link: PtLink) => setSection(si, (s) => ({
-    ...s, columns: s.columns.map((c, i) => (i === ci ? { ...c, links: [...c.links, link] } : c)),
-  }));
-  const removeLink = (si: number, ci: number, li: number) => setSection(si, (s) => ({
-    ...s, columns: s.columns.map((c, i) => (i === ci ? { ...c, links: c.links.filter((_, k) => k !== li) } : c)),
-  }));
-  // 切り取り→貼り付け（列・セクションをまたいで移動）
-  const pasteHere = (ts: number, tc: number) => {
-    if (!cut) return;
-    const moved = sections[cut.s]?.columns[cut.c]?.links[cut.i];
-    if (!moved) { setCut(null); return; }
-    const next = sections.map((s, si) => ({
-      ...s,
-      columns: s.columns.map((c, ci) => {
-        let links = c.links;
-        if (si === cut.s && ci === cut.c) links = links.filter((_, k) => k !== cut.i);
-        if (si === ts && ci === tc) links = [...links, moved];
-        return links === c.links ? c : { ...c, links };
-      }),
-    }));
-    commit(next); setCut(null);
-  };
-
-  // 既存ページ追加（看板に入れたら本文の単体リンクは重複排除で消す）
-  const pickExisting = (si: number, ci: number, p: NotionPage) => {
-    const href = `/notion-plus/${p.id}`;
-    addLink(si, ci, { href, title: p.title || 'Untitled', icon: p.icon || '📄' });
-    removeBodyPageLink(href);
-    closePicker();
-  };
-  // 新規サブページ作成して追加（現在ページの子にする）
-  const createAndAdd = async (si: number, ci: number) => {
-    if (!user) return;
-    const np = await addPage(user.uid, currentPageId ? { parentId: currentPageId } : {});
-    addLink(si, ci, { href: `/notion-plus/${np.id}`, title: np.title || 'Untitled', icon: np.icon || '📄' });
-    closePicker();
-  };
-
-  const navigate = (href: string) => onPageNavigate ? onPageNavigate(href) : router.push(href);
-
-  // 検索なしでも最近更新したノートが上に来るよう updatedAt の新しい順に並べる（検索の手間を減らす）
-  const filteredPages = pages
-    .filter((p) => (p.title || '').toLowerCase().includes(query.toLowerCase()))
-    .slice()
-    .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
-    .slice(0, 30);
-
-  return (
-    <NodeViewWrapper data-type="page-table" contentEditable={false}>
-      <div className="page-table my-3" contentEditable={false}
-        onContextMenu={(e) => {
-          // 入力欄はブラウザ標準メニュー（コピペ）を優先。カードは各自の onContextMenu が
-          // stopPropagation 済みなのでここには来ない。それ以外＝ビューの余白/見出し/列上で解除メニュー。
-          const tgt = e.target as HTMLElement;
-          if (tgt.closest('input, textarea')) return;
-          e.preventDefault();
-          e.stopPropagation();
-          setBlockMenu({ x: e.clientX, y: e.clientY });
-        }}>
-        {sections.map((sec, si) => {
-          const framed = sec.framed !== false; // 既定で枠あり（明示 false のみ枠なし）
-          const panel = framed || !!sec.bg;    // 枠 or 背景があれば角丸＋余白のパネルに
-          return (
-          <div key={sec.id} className={`mb-5 ${panel ? 'rounded-2xl p-4' : ''}`}
-            style={{
-              background: sec.bg || undefined,
-              ...(framed ? { borderStyle: 'solid', borderColor: '#d1d5db', borderWidth: `${sec.borderWidth ?? 1}px` } : {}),
-            }}>
-            {/* 大見出し（大きめ見出し） */}
-            <div className="group/sec mb-3 flex items-center gap-1.5">
-              <input
-                value={sec.title}
-                onChange={(e) => setSection(si, (s) => ({ ...s, title: e.target.value }))}
-                placeholder="大見出し"
-                className="min-w-0 max-w-md flex-none bg-transparent text-xl font-bold text-gray-800 outline-none placeholder:font-bold placeholder:text-gray-300"
-              />
-              <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover/sec:opacity-100">
-                {si > 0 && <button onClick={() => moveSection(si, -1)} className="flex h-6 w-6 items-center justify-center rounded text-gray-400 hover:bg-gray-100" title="上へ">↑</button>}
-                {si < sections.length - 1 && <button onClick={() => moveSection(si, 1)} className="flex h-6 w-6 items-center justify-center rounded text-gray-400 hover:bg-gray-100" title="下へ">↓</button>}
-                <button onClick={(e) => openSectionMenu(e, si)} className="flex h-6 w-6 items-center justify-center rounded text-gray-400 hover:bg-gray-100" title="セクション設定">⚙</button>
-              </span>
-            </div>
-            {/* カンバン: リスト（コールアウト風カード）を横並び＋折り返し。items-stretch で同列のリスト高さを揃える */}
-            <div className="flex flex-wrap items-stretch gap-3">
-              {sec.columns.map((col, ci) => {
-                const w = (resizing && resizing.s === si && resizing.c === ci) ? resizing.w : (col.width || PT_DEFAULT_WIDTH);
-                return (
-                <div key={col.id} className="group/col relative shrink-0 rounded-xl p-2" style={{ width: w, background: col.color || PT_DEFAULT_COLOR }}>
-                  {/* リスト見出し */}
-                  <div className="mb-1.5 flex items-center gap-0.5 px-1">
-                    <input
-                      value={col.heading}
-                      onChange={(e) => setSection(si, (s) => ({ ...s, columns: s.columns.map((c, k) => (k === ci ? { ...c, heading: e.target.value } : c)) }))}
-                      placeholder="リスト名"
-                      className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-gray-700 outline-none placeholder:font-normal placeholder:text-gray-400"
-                    />
-                    {/* カード追加（上部・常時表示）。下部の「＋カードを追加」は廃止し見やすさ優先 */}
-                    <button onClick={(e) => openPicker(e, si, ci)} className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-400 hover:bg-black/5 hover:text-brand-500" title="カードを追加">＋</button>
-                    <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover/col:opacity-100">
-                      {/* 色変更 */}
-                      <button onClick={(e) => openColorMenu(e, si, ci)} className="flex h-5 w-5 items-center justify-center rounded hover:bg-black/5" title="色を変更">
-                        <span className="block h-3.5 w-3.5 rounded-full border border-black/15" style={{ background: col.color || PT_DEFAULT_COLOR }} />
-                      </button>
-                      {ci > 0 && <button onClick={() => moveColumn(si, ci, -1)} className="flex h-5 w-5 items-center justify-center rounded text-gray-400 hover:bg-black/5 hover:text-gray-700" title="左へ">‹</button>}
-                      {ci < sec.columns.length - 1 && <button onClick={() => moveColumn(si, ci, 1)} className="flex h-5 w-5 items-center justify-center rounded text-gray-400 hover:bg-black/5 hover:text-gray-700" title="右へ">›</button>}
-                      {sec.columns.length > 1 && <button onClick={() => removeColumn(si, ci)} className="flex h-5 w-5 items-center justify-center rounded text-gray-400 hover:bg-black/5 hover:text-red-400" title="リスト削除">✕</button>}
-                    </span>
-                  </div>
-                  {/* カード群（空きへドロップで末尾に移動）。空リストでもドロップできるよう最小高さを確保 */}
-                  <div className="min-h-[20px] space-y-1.5"
-                    onDragOver={(e) => { if (dragSrc.current) { e.preventDefault(); e.stopPropagation(); } }}
-                    onDrop={(e) => { if (dragSrc.current) { e.preventDefault(); e.stopPropagation(); dropCard(si, ci, col.links.length); } }}>
-                    {col.links.map((lk, li) => {
-                      const live = pages.find((p) => p.id === ptIdFromHref(lk.href));
-                      const title = live?.title || lk.title || 'Untitled';
-                      const icon = live?.icon || lk.icon || '📄';
-                      const isCut = cut?.s === si && cut?.c === ci && cut?.i === li;
-                      return (
-                        <div key={li} draggable
-                          onDragStart={(e) => { dragSrc.current = { s: si, c: ci, i: li }; e.dataTransfer.effectAllowed = 'move'; e.stopPropagation(); }}
-                          onDragEnd={() => { dragSrc.current = null; }}
-                          onDragOver={(e) => { if (dragSrc.current) { e.preventDefault(); e.stopPropagation(); } }}
-                          onDrop={(e) => { if (dragSrc.current) { e.preventDefault(); e.stopPropagation(); dropCard(si, ci, li); } }}
-                          onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); const pid = ptIdFromHref(lk.href); if (pid) setCardMenu({ pageId: pid, type: live?.type || 'page', x: e.clientX, y: e.clientY }); }}
-                          className={`group/lk flex min-h-[34px] cursor-grab items-center gap-1.5 rounded-lg bg-white px-2.5 py-1.5 shadow-sm ring-1 ring-black/[0.04] transition hover:ring-brand-200 active:cursor-grabbing ${isCut ? 'opacity-40 ring-2 ring-brand-300' : ''}`}>
-                          {/* アイコンは絵文字でも画像でも 16px 角の枠に収めて行高を一定にする（カード高さ統一） */}
-                          <span className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden text-[13px] leading-none">{isImageSrc(icon)
-                            // eslint-disable-next-line @next/next/no-img-element
-                            ? <img src={icon} alt="" className="h-4 w-4 rounded object-cover" />
-                            : icon}</span>
-                          <button onClick={() => navigate(lk.href)} className="min-w-0 flex-1 break-words text-left text-[13px] leading-snug text-gray-700 hover:text-brand-600" title={title}>
-                            {title}
-                          </button>
-                          <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover/lk:opacity-100">
-                            <button onClick={() => setCut(isCut ? null : { s: si, c: ci, i: li })} className="flex h-5 w-5 items-center justify-center rounded text-gray-300 hover:bg-gray-100 hover:text-brand-500" title={isCut ? '切り取り解除' : '切り取り'}>✂</button>
-                            <button onClick={() => removeLink(si, ci, li)} className="flex h-5 w-5 items-center justify-center rounded text-gray-300 hover:bg-gray-100 hover:text-red-400" title="削除">✕</button>
-                          </span>
-                        </div>
-                      );
-                    })}
-                    {/* 貼り付け先（切り取り中のみ） */}
-                    {cut && (
-                      <button onClick={() => pasteHere(si, ci)} className="w-full rounded-lg border border-dashed border-brand-300 bg-white/60 px-2 py-1 text-[11px] text-brand-500 hover:bg-white">
-                        ここに貼り付け
-                      </button>
-                    )}
-                  </div>
-                  {/* 幅リサイズハンドル（右端） */}
-                  <div onMouseDown={(e) => startResize(e, si, ci, col.width || PT_DEFAULT_WIDTH)}
-                    className="absolute -right-1 top-0 h-full w-2 cursor-col-resize opacity-0 transition group-hover/col:opacity-100"
-                    title="幅を変更">
-                    <span className="absolute right-1 top-1/2 h-8 w-1 -translate-y-1/2 rounded-full bg-gray-300" />
-                  </div>
-                </div>
-                );
-              })}
-              {/* リスト追加 */}
-              <button onClick={() => addColumn(si)}
-                className="shrink-0 self-start rounded-xl border-2 border-dashed border-gray-200 px-3 py-2 text-left text-[12px] text-gray-400 transition hover:border-gray-300 hover:text-gray-600">
-                ＋ リストを追加
-              </button>
-            </div>
-          </div>
-          );
-        })}
-        {/* 大見出し追加 */}
-        <button onClick={addSection} className="rounded-md px-2 py-1 text-xs text-gray-400 hover:bg-gray-50 hover:text-brand-500">
-          ＋ 大見出しを追加
-        </button>
-      </div>
-      {/* メニューの外側クリックで閉じる薄い背景 */}
-      {(sectionMenu !== null || colorOpenCol) && (
-        <div className="fixed inset-0 z-[5]" onMouseDown={() => { setSectionMenu(null); setSectionMenuPos(null); setColorOpenCol(null); setColorPos(null); }} />
-      )}
-      {/* 色メニュー（最前面ポータル） */}
-      {(() => {
-        if (!colorOpenCol || !colorPos || typeof document === 'undefined') return null;
-        const co = colorOpenCol;
-        const cur = sections[co.s]?.columns[co.c]?.color || PT_DEFAULT_COLOR;
-        return createPortal(
-          <div style={{ position: 'fixed', top: colorPos.top, left: colorPos.left }}
-            className="z-[1000] flex gap-1 rounded-lg border border-gray-200 bg-white p-1.5 shadow-2xl">
-            {CALLOUT_BG_COLORS.map((c) => (
-              <button key={c.value} title={c.label} onClick={() => { setColumnColor(co.s, co.c, c.value); setColorOpenCol(null); setColorPos(null); }}
-                className="h-6 w-6 rounded-full hover:ring-2 hover:ring-brand-300"
-                style={{ background: c.value, border: cur === c.value ? '2px solid #7c3aed' : '1px solid #e5e7eb' }} />
-            ))}
-          </div>,
-          document.body,
-        );
-      })()}
-      {/* セクション設定メニュー（最前面ポータル） */}
-      {(() => {
-        if (sectionMenu === null || !sectionMenuPos || typeof document === 'undefined') return null;
-        const si = sectionMenu;
-        const isFramed = sections[si]?.framed !== false;
-        const curBg = sections[si]?.bg || '';
-        return createPortal(
-          <div style={{ position: 'fixed', top: sectionMenuPos.top, left: sectionMenuPos.left }}
-            className="z-[1000] w-52 rounded-xl border border-gray-200 bg-white p-2 shadow-2xl">
-            <label className="flex items-center justify-between gap-2 rounded px-1.5 py-1 text-xs text-gray-600 hover:bg-gray-50">
-              <span>枠で囲む</span>
-              <input type="checkbox" checked={isFramed} onChange={() => toggleFramed(si)} className="h-4 w-4 accent-brand-500" />
-            </label>
-            {/* 枠線の太さ（枠ありのときだけ） */}
-            {isFramed && (
-              <div className="mt-1 px-1.5 py-1">
-                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">枠線の太さ</p>
-                <div className="flex gap-1">
-                  {[1, 2, 3, 4].map((w) => (
-                    <button key={w} onClick={() => setSectionBorderWidth(si, w)}
-                      className={`flex-1 rounded border py-1 text-[11px] transition ${(sections[si]?.borderWidth ?? 1) === w ? 'border-brand-400 bg-brand-50 font-medium text-brand-600' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
-                      {w}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            {/* セクション背景色（枠の中） */}
-            <div className="mt-1 px-1.5 py-1">
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">背景色</p>
-              <div className="flex flex-wrap gap-1">
-                {[{ label: 'なし', value: '' }, ...PT_SECTION_BG_COLORS].map((c) => (
-                  <button key={c.value || 'none'} title={c.label} onClick={() => setSectionBg(si, c.value)}
-                    className="flex h-5 w-5 items-center justify-center rounded-full hover:ring-2 hover:ring-brand-300"
-                    style={{ background: c.value || '#ffffff', border: curBg === c.value ? '2px solid #7c3aed' : '1px solid #e5e7eb' }}>
-                    {c.value === '' && <span className="text-[10px] leading-none text-gray-300">/</span>}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <button onClick={() => { addColumn(si); setSectionMenu(null); setSectionMenuPos(null); }} className="mt-0.5 w-full rounded px-1.5 py-1 text-left text-xs text-gray-600 hover:bg-gray-50">＋ リストを追加</button>
-            {sections.length > 1 && (
-              <button onClick={() => { removeSection(si); setSectionMenu(null); setSectionMenuPos(null); }} className="mt-0.5 w-full rounded px-1.5 py-1 text-left text-xs text-red-500 hover:bg-red-50">🗑️ この大見出しを削除</button>
-            )}
-          </div>,
-          document.body,
-        );
-      })()}
-      {/* カンバンビュー自体の右クリックメニュー（解除／削除） */}
-      {blockMenu && typeof document !== 'undefined' && createPortal(
-        <>
-          <div className="fixed inset-0 z-[999]" onMouseDown={() => setBlockMenu(null)} />
-          <div style={{ position: 'fixed', top: blockMenu.y, left: blockMenu.x }}
-            className="z-[1000] w-60 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-2xl">
-            <button
-              onMouseDown={(e) => { e.preventDefault(); dissolveToLinks(); setBlockMenu(null); }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
-              📄 カンバンを解除（リンク一覧に戻す）
-            </button>
-            <button
-              onMouseDown={(e) => { e.preventDefault(); setBlockMenu(null); if (window.confirm('このカンバンビューを削除しますか？\n（カードの中のページ自体は消えません）')) deleteNode(); }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-500 hover:bg-red-50">
-              🗑️ カンバンごと削除
-            </button>
-          </div>
-        </>,
-        document.body,
-      )}
-      {/* 看板カードの右クリックメニュー（ブック⇄ノート変換） */}
-      {cardMenu && typeof document !== 'undefined' && createPortal(
-        <>
-          <div className="fixed inset-0 z-[999]" onMouseDown={() => setCardMenu(null)} />
-          <div style={{ position: 'fixed', top: cardMenu.y, left: cardMenu.x }}
-            className="z-[1000] w-44 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-2xl">
-            {cardMenu.type === 'book' ? (
-              <button onMouseDown={(e) => { e.preventDefault(); convertCardToNote(cardMenu.pageId); }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
-                📄 ノートに変換
-              </button>
-            ) : cardMenu.type === 'database' ? (
-              <div className="px-3 py-2 text-xs text-gray-400">このカードは変換できません</div>
-            ) : (
-              <button onMouseDown={(e) => { e.preventDefault(); convertCardToBook(cardMenu.pageId); }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
-                📚 ブックに変換
-              </button>
-            )}
-          </div>
-        </>,
-        document.body,
-      )}
-      {/* ＋追加ピッカー: portal＋fixed で最前面（スクロール領域に切られない）*/}
-      {(() => {
-        if (!picker || !pickerPos || typeof document === 'undefined') return null;
-        const pk = picker;
-        return createPortal(
-          <div ref={pickerRef} style={{ position: 'fixed', top: pickerPos.top, left: pickerPos.left, width: 240 }}
-            className="z-[1000] rounded-xl border border-gray-200 bg-white p-2 shadow-2xl">
-            <button onMouseDown={(e) => { e.preventDefault(); createAndAdd(pk.s, pk.c); }}
-              className="mb-1 flex w-full items-center gap-1.5 rounded-md bg-brand-50 px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-100">
-              ＋ 新規ページを作成して追加
-            </button>
-            <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="既存ページを検索..."
-              className="mb-1 w-full rounded border border-gray-200 px-2 py-1 text-xs outline-none focus:border-brand-400" />
-            <div className="max-h-52 overflow-y-auto">
-              {filteredPages.length === 0 ? (
-                <p className="px-2 py-1 text-xs text-gray-400">該当なし</p>
-              ) : filteredPages.map((p) => (
-                <button key={p.id} onMouseDown={(e) => { e.preventDefault(); pickExisting(pk.s, pk.c, p); }}
-                  className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-xs text-gray-700 hover:bg-gray-50">
-                  <span className="shrink-0 text-sm leading-none">{isImageSrc(p.icon)
-                    // eslint-disable-next-line @next/next/no-img-element
-                    ? <img src={p.icon} alt="" className="h-4 w-4 rounded object-cover" />
-                    : (p.icon || '📄')}</span>
-                  <span className="truncate">{p.title || 'Untitled'}</span>
-                </button>
-              ))}
-            </div>
-          </div>,
-          document.body,
-        );
-      })()}
-    </NodeViewWrapper>
-  );
-}
-
-const PageTableNode = TiptapNode.create({
-  name: 'pageTable',
-  group: 'block',
-  atom: true,
-  addAttributes() {
-    return {
-      sections: {
-        default: null,
-        parseHTML: (el) => { try { return JSON.parse(el.getAttribute('data-sections') || 'null'); } catch { return null; } },
-        renderHTML: (attrs) => ({ 'data-sections': JSON.stringify(attrs.sections ?? []) }),
-      },
-    };
-  },
-  parseHTML() { return [{ tag: 'div[data-type="page-table"]' }]; },
-  renderHTML({ HTMLAttributes }) { return ['div', { ...HTMLAttributes, 'data-type': 'page-table' }]; },
-  addNodeView() { return ReactNodeViewRenderer(PageTableView); },
-});
-
-// ── テーブルビュー（ページ＋説明の表）──────────────────────────────────
-// 看板（pageTable）と同じ並びの新ビュー。1行＝「左セル：ページリンク／右セル：そのページの説明文」。
-// データはノード attrs に保持（本文JSON内・新規DB不要）。
-interface PdRow { id: string; href: string; title: string; icon: string; desc: string }
-
-const PD_DEFAULT_LEFT_WIDTH = 240; // 左（ページ列）の既定幅(px)
-const PD_MIN_LEFT_WIDTH = 140;
-const PD_MAX_LEFT_WIDTH = 480;
-
-function pdParseRows(raw: unknown): PdRow[] {
-  let v: unknown = raw;
-  if (typeof v === 'string') { try { v = JSON.parse(v); } catch { v = null; } }
-  if (Array.isArray(v)) return v as PdRow[];
-  return [];
-}
-
-function PageDescTableView({ node, updateAttributes, editor: pdEditor }: NodeViewProps) {
-  const router = useRouter();
-  const onPageNavigate = useContext(PageNavigationContext);
-  const currentPageId = useContext(EditorPageIdContext);
-  const { user } = useAuthStore();
-  const pages = useNotionPageStore((s) => s.pages);
-  const addPage = useNotionPageStore((s) => s.add);
-
-  const rows = useMemo(() => pdParseRows(node.attrs.rows), [node.attrs.rows]);
-  const title = (node.attrs.title as string) || '';
-  const leftLabel = (node.attrs.leftLabel as string) || '';
-  const rightLabel = (node.attrs.rightLabel as string) || '';
-  const headerColor = (node.attrs.headerColor as string) || '';
-  const leftWidth = (node.attrs.leftWidth as number) || PD_DEFAULT_LEFT_WIDTH;
-
-  const commitRows = useCallback((next: PdRow[]) => updateAttributes({ rows: next }), [updateAttributes]);
-
-  const [picker, setPicker] = useState(false);
-  const [pickerPos, setPickerPos] = useState<{ top: number; left: number } | null>(null);
-  const [query, setQuery] = useState('');
-  const [resizing, setResizing] = useState<number | null>(null);
-  const [colorOpen, setColorOpen] = useState(false);
-  const [colorPos, setColorPos] = useState<{ top: number; left: number } | null>(null);
-  const pickerRef = useRef<HTMLDivElement>(null);
-  const dragSrc = useRef<number | null>(null);
-
-  const openColorMenuAt = (x: number, y: number) => {
-    setColorPos({ top: y + 4, left: Math.max(8, Math.min(x - 80, window.innerWidth - 220)) });
-    setColorOpen(true);
-  };
-  // 色丸ボタン：その下に開く
-  const openColorMenu = (e: React.MouseEvent) => {
-    if (colorOpen) { setColorOpen(false); setColorPos(null); return; }
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    openColorMenuAt(r.left + 80, r.bottom + 2);
-  };
-  // ヘッダーを右クリック：マウス位置に開く
-  const openColorMenuCtx = (e: React.MouseEvent) => {
-    e.preventDefault(); e.stopPropagation();
-    openColorMenuAt(e.clientX + 80, e.clientY);
-  };
-  // ヘッダー行の既定背景（色未指定のとき）
-  const headerBg = headerColor || '#f9fafb';
-
-  // 重複排除: 表に入れたページは、同じ本文内の単体ページリンクを削除（表を正の場所にする＝看板と同じ思想）
-  const removeBodyPageLink = (href: string) => {
-    const id = ptIdFromHref(href);
-    if (!id || !pdEditor) return;
-    const dels: { from: number; to: number }[] = [];
-    pdEditor.state.doc.descendants((n, pos) => {
-      if (n.type.name === 'pageLink') {
-        const h = n.attrs.href as string;
-        if (h && ptIdFromHref(h) === id) dels.push({ from: pos, to: pos + n.nodeSize });
-      }
-    });
-    if (!dels.length) return;
-    let tr = pdEditor.state.tr;
-    dels.sort((a, b) => b.from - a.from).forEach((d) => { tr = tr.delete(d.from, d.to); });
-    pdEditor.view.dispatch(tr);
-  };
-
-  const openPicker = (e: React.MouseEvent) => {
-    if (picker) { setPicker(false); setPickerPos(null); return; }
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const W = 260, H = 300;
-    const left = Math.max(8, Math.min(r.left, window.innerWidth - W - 8));
-    let top = r.bottom + 4;
-    if (top + H > window.innerHeight) top = Math.max(8, r.top - H - 4);
-    setPickerPos({ top, left });
-    setPicker(true); setQuery('');
-  };
-  const closePicker = () => { setPicker(false); setPickerPos(null); setQuery(''); };
-
-  useEffect(() => {
-    if (!picker) return;
-    const h = (e: MouseEvent) => { if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) closePicker(); };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, [picker]);
-
-  // 既存ページを行として追加（本文の単体リンクは重複排除で消す）
-  const addRowFromPage = (p: NotionPage) => {
-    const href = `/notion-plus/${p.id}`;
-    if (rows.some((r) => r.href === href)) { closePicker(); return; } // 既に表にある
-    commitRows([...rows, { id: ptNewId(), href, title: p.title || 'Untitled', icon: p.icon || '📄', desc: '' }]);
-    removeBodyPageLink(href);
-    closePicker();
-  };
-  // 新規サブページを作成して行に追加（現在ページの子にする）
-  const createAndAdd = async () => {
-    if (!user) return;
-    const np = await addPage(user.uid, currentPageId ? { parentId: currentPageId } : {});
-    commitRows([...rows, { id: ptNewId(), href: `/notion-plus/${np.id}`, title: np.title || 'Untitled', icon: np.icon || '📄', desc: '' }]);
-    closePicker();
-  };
-
-  const setDesc = (i: number, desc: string) => commitRows(rows.map((r, k) => (k === i ? { ...r, desc } : r)));
-  const removeRow = (i: number) => commitRows(rows.filter((_, k) => k !== i));
-  const moveRow = (i: number, dir: -1 | 1) => {
-    const j = i + dir; if (j < 0 || j >= rows.length) return;
-    const next = [...rows]; [next[i], next[j]] = [next[j], next[i]]; commitRows(next);
-  };
-  // 行のドラッグ並べ替え（target の位置へ挿入）
-  const dropRow = (target: number) => {
-    const src = dragSrc.current; dragSrc.current = null;
-    if (src === null || src === target) return;
-    const next = [...rows];
-    const [moved] = next.splice(src, 1);
-    const idx = src < target ? target - 1 : target;
-    next.splice(idx, 0, moved);
-    commitRows(next);
-  };
-
-  const navigate = (href: string) => onPageNavigate ? onPageNavigate(href) : router.push(href);
-
-  // 左列幅のドラッグリサイズ（移動中はローカル state、離したら確定）
-  const startResize = (e: React.MouseEvent, startW: number) => {
-    e.preventDefault(); e.stopPropagation();
-    const startX = e.clientX;
-    const clamp = (w: number) => Math.max(PD_MIN_LEFT_WIDTH, Math.min(PD_MAX_LEFT_WIDTH, w));
-    setResizing(startW);
-    const onMove = (ev: MouseEvent) => setResizing(clamp(startW + (ev.clientX - startX)));
-    const onUp = (ev: MouseEvent) => {
-      window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp);
-      setResizing(null); updateAttributes({ leftWidth: clamp(startW + (ev.clientX - startX)) });
-    };
-    window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
-  };
-
-  // 検索なしでも最近更新したノートが上に来る（看板と同じ）
-  const filteredPages = pages
-    .filter((p) => (p.title || '').toLowerCase().includes(query.toLowerCase()))
-    .slice()
-    .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
-    .slice(0, 30);
-
-  const lw = resizing ?? leftWidth;
-
-  return (
-    <NodeViewWrapper data-type="page-desc-table" contentEditable={false}>
-      <div className="page-desc-table my-3" contentEditable={false}>
-        {/* タイトル（任意） */}
-        <input
-          value={title}
-          onChange={(e) => updateAttributes({ title: e.target.value })}
-          placeholder="テーブルのタイトル（任意）"
-          className="mb-2 w-full max-w-md bg-transparent text-lg font-bold text-gray-800 outline-none placeholder:font-normal placeholder:text-gray-300"
-        />
-        <div className="overflow-hidden rounded-xl border border-gray-200">
-          {/* ヘッダー行（列名は編集可・既定は「ページ」「説明」・背景色は変更可。右クリックでも色メニュー） */}
-          <div className="group/hd flex border-b border-gray-200" style={{ background: headerBg }} onContextMenu={openColorMenuCtx}>
-            <div className="relative shrink-0 border-r border-gray-200 px-3 py-2" style={{ width: lw }}>
-              <input value={leftLabel} onChange={(e) => updateAttributes({ leftLabel: e.target.value })}
-                placeholder="ページ" className="w-full bg-transparent text-xs font-semibold text-gray-600 outline-none placeholder:font-normal placeholder:text-gray-400" />
-              {/* 左列リサイズハンドル */}
-              <div onMouseDown={(e) => startResize(e, leftWidth)}
-                className="absolute -right-1 top-0 z-10 h-full w-2 cursor-col-resize" title="幅を変更">
-                <span className="absolute right-1 top-1/2 h-4 w-1 -translate-y-1/2 rounded-full bg-gray-300 opacity-0 transition hover:opacity-100" />
-              </div>
-            </div>
-            <div className="flex flex-1 items-center px-3 py-2">
-              <input value={rightLabel} onChange={(e) => updateAttributes({ rightLabel: e.target.value })}
-                placeholder="説明" className="min-w-0 flex-1 bg-transparent text-xs font-semibold text-gray-600 outline-none placeholder:font-normal placeholder:text-gray-400" />
-              {/* ヘッダー色を変更（常時表示の色丸。右クリックでも開く） */}
-              <button onClick={openColorMenu} className="ml-1 flex h-6 shrink-0 items-center gap-1 rounded px-1.5 text-[10px] text-gray-400 transition hover:bg-black/5 hover:text-gray-600" title="ヘッダーの色を変更（右クリックでも可）">
-                <span className="block h-3.5 w-3.5 rounded-full border border-black/15" style={{ background: headerBg }} />
-                <span>色</span>
-              </button>
-            </div>
-          </div>
-          {/* データ行 */}
-          {rows.length === 0 ? (
-            <div className="px-3 py-4 text-center text-xs text-gray-400">行がありません。下の「＋ 行を追加」から始めましょう。</div>
-          ) : rows.map((r, i) => {
-            const live = pages.find((p) => p.id === ptIdFromHref(r.href));
-            const rTitle = live?.title || r.title || 'Untitled';
-            const rIcon = live?.icon || r.icon || '📄';
-            return (
-              <div key={r.id} className="group/row flex border-b border-gray-100 last:border-b-0"
-                onDragOver={(e) => { if (dragSrc.current !== null) { e.preventDefault(); } }}
-                onDrop={(e) => { if (dragSrc.current !== null) { e.preventDefault(); dropRow(i); } }}>
-                {/* 左：ページリンク */}
-                <div className="flex shrink-0 items-start gap-1 border-r border-gray-100 px-2 py-2" style={{ width: lw }}>
-                  <span draggable
-                    onDragStart={(e) => {
-                      dragSrc.current = i;
-                      e.dataTransfer.effectAllowed = 'move';
-                      // 表の外（サイドバー等）へ出す用にページIDを載せる。stopPropagation で ProseMirror の
-                      // dragstart に dataTransfer を奪われないようにする（本文リンクと同じ対策）。
-                      const pid = ptIdFromHref(r.href);
-                      if (pid) { e.dataTransfer.setData('application/x-page-id', pid); e.dataTransfer.setData('text/plain', pid); }
-                      e.stopPropagation();
-                    }}
-                    onDragEnd={(e) => {
-                      // 表の外へドロップ成功（dropEffect=move）かつ、表内の並べ替え(dropRow)で消費されていない
-                      // ＝表の外へ出した、とみなして行を除去する。ドロップ失敗(none)なら何もしない＝誤削除防止。
-                      if (e.dataTransfer.dropEffect === 'move' && dragSrc.current !== null) removeRow(i);
-                      dragSrc.current = null;
-                    }}
-                    className="mt-0.5 cursor-grab select-none text-[11px] leading-none text-gray-300 opacity-0 transition group-hover/row:opacity-100 active:cursor-grabbing" title="ドラッグ：表内で並べ替え／表の外(サイドバー等)へ出すと取り出し">⠿</span>
-                  <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden text-[13px] leading-none">{isImageSrc(rIcon)
-                    // eslint-disable-next-line @next/next/no-img-element
-                    ? <img src={rIcon} alt="" className="h-4 w-4 rounded object-cover" />
-                    : rIcon}</span>
-                  <button onClick={() => navigate(r.href)} className="min-w-0 flex-1 break-words text-left text-[13px] leading-snug text-gray-700 hover:text-brand-600" title={rTitle}>{rTitle}</button>
-                  <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover/row:opacity-100">
-                    {i > 0 && <button onClick={() => moveRow(i, -1)} className="flex h-5 w-5 items-center justify-center rounded text-gray-300 hover:bg-gray-100 hover:text-gray-600" title="上へ">↑</button>}
-                    {i < rows.length - 1 && <button onClick={() => moveRow(i, 1)} className="flex h-5 w-5 items-center justify-center rounded text-gray-300 hover:bg-gray-100 hover:text-gray-600" title="下へ">↓</button>}
-                    <button onClick={() => removeRow(i)} className="flex h-5 w-5 items-center justify-center rounded text-gray-300 hover:bg-gray-100 hover:text-red-400" title="行を削除">✕</button>
-                  </span>
-                </div>
-                {/* 右：説明（自動で高さが伸びる） */}
-                <div className="flex-1 px-2 py-1.5">
-                  <textarea value={r.desc} onChange={(e) => setDesc(i, e.target.value)} rows={1}
-                    placeholder="説明を入力..."
-                    onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = `${t.scrollHeight}px`; }}
-                    ref={(el) => { if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; } }}
-                    className="block w-full resize-none overflow-hidden bg-transparent text-[13px] leading-snug text-gray-700 outline-none placeholder:text-gray-300" />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        {/* 行追加 */}
-        <button onClick={openPicker} className="mt-1.5 rounded-md px-2 py-1 text-xs text-gray-400 hover:bg-gray-50 hover:text-brand-500">
-          ＋ 行を追加
-        </button>
-      </div>
-      {/* ヘッダー色メニューの外側クリックで閉じる薄い背景 */}
-      {colorOpen && <div className="fixed inset-0 z-[5]" onMouseDown={() => { setColorOpen(false); setColorPos(null); }} />}
-      {/* ヘッダー色メニュー（最前面ポータル）*/}
-      {colorOpen && colorPos && typeof document !== 'undefined' && createPortal(
-        <div style={{ position: 'fixed', top: colorPos.top, left: colorPos.left, width: 196 }}
-          className="z-[1000] flex flex-wrap gap-1 rounded-lg border border-gray-200 bg-white p-1.5 shadow-2xl">
-          {CALLOUT_BG_COLORS.map((c) => (
-            <button key={c.value || 'none'} title={c.label}
-              onClick={() => { updateAttributes({ headerColor: c.value }); setColorOpen(false); setColorPos(null); }}
-              className="flex h-6 w-6 items-center justify-center rounded-full hover:ring-2 hover:ring-brand-300"
-              style={{ background: c.value || '#ffffff', border: (headerColor || '') === c.value ? '2px solid #7c3aed' : '1px solid #e5e7eb' }}>
-              {c.value === '' && <span className="text-[10px] leading-none text-gray-300">/</span>}
-            </button>
-          ))}
-        </div>,
-        document.body,
-      )}
-      {/* ＋追加ピッカー: portal＋fixed で最前面（スクロール領域に切られない）*/}
-      {picker && pickerPos && typeof document !== 'undefined' && createPortal(
-        <div ref={pickerRef} style={{ position: 'fixed', top: pickerPos.top, left: pickerPos.left, width: 260 }}
-          className="z-[1000] rounded-xl border border-gray-200 bg-white p-2 shadow-2xl">
-          <button onMouseDown={(e) => { e.preventDefault(); createAndAdd(); }}
-            className="mb-1 flex w-full items-center gap-1.5 rounded-md bg-brand-50 px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-100">
-            ＋ 新規ページを作成して追加
-          </button>
-          <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="既存ページを検索..."
-            className="mb-1 w-full rounded border border-gray-200 px-2 py-1 text-xs outline-none focus:border-brand-400" />
-          <div className="max-h-52 overflow-y-auto">
-            {filteredPages.length === 0 ? (
-              <p className="px-2 py-1 text-xs text-gray-400">該当なし</p>
-            ) : filteredPages.map((p) => (
-              <button key={p.id} onMouseDown={(e) => { e.preventDefault(); addRowFromPage(p); }}
-                className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-xs text-gray-700 hover:bg-gray-50">
-                <span className="shrink-0 text-sm leading-none">{isImageSrc(p.icon)
-                  // eslint-disable-next-line @next/next/no-img-element
-                  ? <img src={p.icon} alt="" className="h-4 w-4 rounded object-cover" />
-                  : (p.icon || '📄')}</span>
-                <span className="truncate">{p.title || 'Untitled'}</span>
-              </button>
-            ))}
-          </div>
-        </div>,
-        document.body,
-      )}
-    </NodeViewWrapper>
-  );
-}
-
-const PageDescTableNode = TiptapNode.create({
-  name: 'pageDescTable',
-  group: 'block',
-  atom: true,
-  addAttributes() {
-    return {
-      title:      { default: '', parseHTML: (el) => el.getAttribute('data-title') || '', renderHTML: (attrs) => ({ 'data-title': attrs.title || '' }) },
-      leftLabel:  { default: '', parseHTML: (el) => el.getAttribute('data-left-label') || '', renderHTML: (attrs) => ({ 'data-left-label': attrs.leftLabel || '' }) },
-      rightLabel: { default: '', parseHTML: (el) => el.getAttribute('data-right-label') || '', renderHTML: (attrs) => ({ 'data-right-label': attrs.rightLabel || '' }) },
-      headerColor:{ default: '', parseHTML: (el) => el.getAttribute('data-header-color') || '', renderHTML: (attrs) => ({ 'data-header-color': attrs.headerColor || '' }) },
-      leftWidth:  { default: PD_DEFAULT_LEFT_WIDTH, parseHTML: (el) => Number(el.getAttribute('data-left-width')) || PD_DEFAULT_LEFT_WIDTH, renderHTML: (attrs) => ({ 'data-left-width': String(attrs.leftWidth ?? PD_DEFAULT_LEFT_WIDTH) }) },
-      rows: {
-        default: null,
-        parseHTML: (el) => { try { return JSON.parse(el.getAttribute('data-rows') || 'null'); } catch { return null; } },
-        renderHTML: (attrs) => ({ 'data-rows': JSON.stringify(attrs.rows ?? []) }),
-      },
-    };
-  },
-  parseHTML() { return [{ tag: 'div[data-type="page-desc-table"]' }]; },
-  renderHTML({ HTMLAttributes }) { return ['div', { ...HTMLAttributes, 'data-type': 'page-desc-table' }]; },
-  addNodeView() { return ReactNodeViewRenderer(PageDescTableView); },
-});
-
-
-
 // ── スラッシュコマンド ──────────────────────────────────────────────
 
 interface SlashCommand {
@@ -1790,7 +638,6 @@ export function NotionEditor({
   // 既存ページへのショートカット挿入ピッカー（/ページリンク）
   const allPages = useNotionPageStore((s) => s.pages);
   const [pageLinkPicker, setPageLinkPicker] = useState<{ top: number; left: number } | null>(null);
-  const [pageLinkQuery, setPageLinkQuery] = useState('');
   // 特急メモ挿入ピッカー（/特急メモ）：未消化メモをカーソル位置に挿入＝消化
   const learningItems = useLearningStore((s) => s.items);
   const addLearningItem = useLearningStore((s) => s.add);
@@ -1836,6 +683,50 @@ export function NotionEditor({
 
   const { user } = useAuthStore();
   const { add: addPage } = useNotionPageStore();
+  const updatePage = useNotionPageStore((s) => s.update);
+
+  // ── 共有エディタへ渡す「差し込み口」──────────────────────────────
+  // ページリンク／ページテーブル／テーブルビューは @futa/editor 側にあり、
+  // ページ一覧の持ち方を知らない。ここで NotionPLUS のストアと繋ぐ。
+  const editorHost: EditorHost = useMemo(() => ({
+    uid: user?.uid ?? '',
+    currentPageId: notionPageId ?? '',
+    pages: allPages,
+    addPage: async (opts) => {
+      const np = await addPage(user!.uid, opts.parentId ? { parentId: opts.parentId } : {});
+      return np;
+    },
+    updatePage: async (id, patch) => { await updatePage(user!.uid, id, patch as Partial<NotionPage>); },
+    pageHref: (id) => `/notion-plus/${id}`,
+    pageIdFromHref: (href) => href?.match(/\/notion-plus\/([^/?#]+)/)?.[1],
+    navigate: (href) => { if (onPageNavigate) onPageNavigate(href); else router.push(href); },
+    copyPageId: (id, title) => copyNotionPlusPageId(id, title),
+    book: {
+      convertToBook: async (pageId) => {
+        const lp = allPages.find((p) => p.id === pageId);
+        if (!user || !lp || lp.type === 'book' || lp.type === 'database') return;
+        if (!window.confirm(`「${lp.title || 'Untitled'}」をブックに変換しますか？
+現在の内容は第1章になります。`)) return;
+        const firstChapter = { ...createBookChapter(0), content: lp.content };
+        await updatePage(user.uid, pageId, {
+          type: 'book',
+          icon: lp.icon === '📄' ? '📖' : lp.icon,
+          content: serializeBookChapters([firstChapter]),
+        });
+      },
+      convertToNote: async (pageId) => {
+        const lp = allPages.find((p) => p.id === pageId);
+        if (!user || !lp || lp.type !== 'book') return;
+        if (!window.confirm(`「${lp.title || 'Untitled'}」をノートに戻しますか？
+全チャプターの内容を1ページに結合します。`)) return;
+        const merged: { type: 'doc'; content: unknown[] } = { type: 'doc', content: [] };
+        for (const ch of parseBookChapters(lp.content)) {
+          try { const doc = JSON.parse(ch.content) as { content?: unknown[] }; if (Array.isArray(doc?.content)) merged.content.push(...doc.content); } catch { /* ignore */ }
+        }
+        await updatePage(user.uid, pageId, { type: 'page', content: JSON.stringify(merged) });
+      },
+    },
+  }), [user, notionPageId, allPages, addPage, updatePage, onPageNavigate, router]);
 
   const inlineDbCommand: SlashCommand = useMemo(() => ({
     label: 'データベース',
@@ -2025,7 +916,6 @@ export function NotionEditor({
     // 既存ページへのショートカット：検索ピッカーを開く（選択後に pageLink を挿入）
     if (cmd.openPageLinkPicker) {
       const coords = editor.view.coordsAtPos(editor.state.selection.from);
-      setPageLinkQuery('');
       setPageLinkPicker({ top: coords.bottom + 8, left: coords.left });
       return;
     }
@@ -2048,9 +938,9 @@ export function NotionEditor({
     setPageLinkPicker(null);
     editor?.chain().focus().insertContent({
       type: 'pageLink',
-      attrs: { href: `/notion-plus/${p.id}`, title: p.title || 'Untitled', icon: p.icon || '📄' },
+      attrs: { href: editorHost.pageHref(p.id), title: p.title || 'Untitled', icon: p.icon || '📄' },
     }).run();
-  }, [editor]);
+  }, [editor, editorHost]);
 
   // 特急メモを「消化」：カーソル位置に 見出し3（タイトル）＋本文段落 を挿入し、
   // その内容を学習アイテムとして復習登録（このページ紐づけ）、元の特急メモは削除する。
@@ -2562,6 +1452,7 @@ export function NotionEditor({
   const outerClass = `relative flex flex-1 overflow-y-auto ${stickyToolbar ? 'min-h-0 pb-8 pt-2' : 'py-8'} ${notionPlusLayout === 'center' ? 'justify-center px-6' : 'pl-16 pr-8'}`;
 
   return (
+    <EditorHostContext.Provider value={editorHost}>
     <EditorUidContext.Provider value={user?.uid ?? ''}>
     <EditorPageIdContext.Provider value={notionPageId ?? ''}>
     <PageNavigationContext.Provider value={onPageNavigate ?? null}>
@@ -2950,40 +1841,14 @@ export function NotionEditor({
         </>
       )}
 
-      {/* 既存ページへのショートカット挿入ピッカー（/ページリンク） */}
-      {pageLinkPicker && typeof document !== 'undefined' && createPortal(
-        <>
-          <div className="fixed inset-0 z-[1000]" onMouseDown={() => setPageLinkPicker(null)} />
-          <div style={{ position: 'fixed', top: pageLinkPicker.top, left: pageLinkPicker.left, width: 280 }}
-            className="z-[1001] rounded-xl border border-gray-200 bg-white p-2 shadow-2xl">
-            <p className="px-1 pb-1 text-xs font-medium text-gray-400">ショートカットにするページを選ぶ</p>
-            <input autoFocus value={pageLinkQuery} onChange={(e) => setPageLinkQuery(e.target.value)} placeholder="ページを検索..."
-              className="mb-1 w-full rounded border border-gray-200 px-2 py-1 text-xs outline-none focus:border-brand-400" />
-            <div className="max-h-60 overflow-y-auto">
-              {(() => {
-                const list = allPages
-                  .filter((p) => p.id !== notionPageId && p.type !== 'database')
-                  .filter((p) => (p.title || '').toLowerCase().includes(pageLinkQuery.toLowerCase()))
-                  .slice()
-                  .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
-                  .slice(0, 40);
-                if (list.length === 0) return <p className="px-2 py-1 text-xs text-gray-400">該当なし</p>;
-                return list.map((p) => (
-                  <button key={p.id} onMouseDown={(e) => { e.preventDefault(); insertPageShortcut(p); }}
-                    className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-xs text-gray-700 hover:bg-gray-50">
-                    <span className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden text-sm leading-none">{isImageSrc(p.icon)
-                      // eslint-disable-next-line @next/next/no-img-element
-                      ? <img src={p.icon} alt="" className="h-4 w-4 rounded object-cover" />
-                      : (p.icon || '📄')}</span>
-                    <span className="truncate">{p.title || 'Untitled'}</span>
-                    {p.type === 'book' && <span className="ml-auto shrink-0 text-[10px] text-gray-400">ブック</span>}
-                  </button>
-                ));
-              })()}
-            </div>
-          </div>
-        </>,
-        document.body,
+      {/* 既存ページへのショートカット挿入ピッカー（/ページリンク）＝ふたメモと共通部品 */}
+      {pageLinkPicker && (
+        <PageLinkPicker
+          top={pageLinkPicker.top}
+          left={pageLinkPicker.left}
+          onClose={() => setPageLinkPicker(null)}
+          onPick={(p) => insertPageShortcut(p)}
+        />
       )}
 
       {/* 特急メモ挿入ピッカー（/特急メモ）＝カーソル位置に消化 */}
@@ -3021,6 +1886,7 @@ export function NotionEditor({
     </PageNavigationContext.Provider>
     </EditorPageIdContext.Provider>
     </EditorUidContext.Provider>
+    </EditorHostContext.Provider>
   );
 }
 
