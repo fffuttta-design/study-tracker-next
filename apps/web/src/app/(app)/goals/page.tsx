@@ -17,11 +17,30 @@ const isDone = (g: Goal) => g.status === 'done';
 
 export default function GoalsPage() {
   const { user } = useAuthStore();
-  const { goals, loading, add, update, remove } = useGoalStore();
+  const { goals, loading, add, update, remove, reorder } = useGoalStore();
   const [addOpen, setAddOpen] = useState(false);
   const [filter, setFilter] = useState<Filter>('all');
+  // ドラッグ＆ドロップ並び替え（同じセクションの中だけ入れ替えられる）
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropAt, setDropAt] = useState<{ id: string; place: 'before' | 'after' } | null>(null);
 
   const uid = user?.uid ?? '';
+
+  // 掴んだ行を、狙った行の前／後ろへ入れて order を振り直す
+  const handleDrop = async (targetId: string, place: 'before' | 'after') => {
+    const from = dragId;
+    setDragId(null);
+    setDropAt(null);
+    if (!from || from === targetId) return;
+    const src = goals.find((g) => g.id === from);
+    const dst = goals.find((g) => g.id === targetId);
+    // 未完了と完了はセクションが違うので混ぜない（跨ぐドロップは無視）
+    if (!src || !dst || isDone(src) !== isDone(dst)) return;
+    const ids = goals.map((g) => g.id).filter((id) => id !== from);
+    const at = ids.indexOf(targetId);
+    ids.splice(place === 'before' ? at : at + 1, 0, from);
+    await reorder(uid, ids);
+  };
 
   const counts = useMemo(() => ({
     all: goals.length,
@@ -107,7 +126,19 @@ export default function GoalsPage() {
               </div>
               <div className="space-y-1">
                 {items.map((goal) => (
-                  <GoalCard key={goal.id} goal={goal} uid={uid} onUpdate={update} onRemove={remove} />
+                  <GoalCard
+                    key={goal.id}
+                    goal={goal}
+                    uid={uid}
+                    onUpdate={update}
+                    onRemove={remove}
+                    dragging={dragId === goal.id}
+                    dropAt={dropAt?.id === goal.id ? dropAt.place : null}
+                    onDragStartItem={() => setDragId(goal.id)}
+                    onDragOverItem={(place) => setDropAt({ id: goal.id, place })}
+                    onDragEndItem={() => { setDragId(null); setDropAt(null); }}
+                    onDropItem={(place) => handleDrop(goal.id, place)}
+                  />
                 ))}
               </div>
             </section>
@@ -124,15 +155,30 @@ export default function GoalsPage() {
 
 function GoalCard({
   goal, uid, onUpdate, onRemove,
+  dragging, dropAt, onDragStartItem, onDragOverItem, onDragEndItem, onDropItem,
 }: {
   goal: Goal;
   uid: string;
   onUpdate: (uid: string, id: string, data: Partial<Goal>) => Promise<void>;
   onRemove: (uid: string, id: string) => Promise<void>;
+  dragging: boolean;
+  dropAt: 'before' | 'after' | null;
+  onDragStartItem: () => void;
+  onDragOverItem: (place: 'before' | 'after') => void;
+  onDragEndItem: () => void;
+  onDropItem: (place: 'before' | 'after') => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
+  // 🔥 掴む所（⠿）を押している間だけ draggable にする。
+  //    行全体を常時 draggable にすると、文字を選ぼうとしただけでドラッグが始まってしまう。
+  const [grabbing, setGrabbing] = useState(false);
   const done = isDone(goal);
+
+  const placeFromEvent = (e: React.DragEvent) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    return e.clientY < r.top + r.height / 2 ? 'before' : 'after';
+  };
 
   const toggleDone = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -147,12 +193,31 @@ function GoalCard({
 
   return (
     <div
-      className={`rounded-xl border bg-white transition-all ${goal.memo ? 'cursor-pointer' : ''} ${
+      draggable={grabbing}
+      onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', goal.id); onDragStartItem(); }}
+      onDragEnd={() => { setGrabbing(false); onDragEndItem(); }}
+      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; onDragOverItem(placeFromEvent(e)); }}
+      onDrop={(e) => { e.preventDefault(); setGrabbing(false); onDropItem(placeFromEvent(e)); }}
+      className={`group relative rounded-xl border bg-white transition-all ${goal.memo ? 'cursor-pointer' : ''} ${
         expanded ? 'border-brand-200 shadow-md' : 'border-gray-100 hover:border-gray-200 hover:shadow-sm'
-      } ${done ? 'opacity-60' : ''}`}
+      } ${done ? 'opacity-60' : ''} ${dragging ? 'opacity-40' : ''}`}
       onClick={() => goal.memo && setExpanded((v) => !v)}
     >
+      {/* ドロップ位置の目印 */}
+      {dropAt && (
+        <div className={`pointer-events-none absolute inset-x-2 h-0.5 rounded bg-brand-500 ${dropAt === 'before' ? '-top-1' : '-bottom-1'}`} />
+      )}
+
       <div className="flex items-center gap-2.5 px-3 py-1.5">
+        {/* 掴む所（ホバーで出る） */}
+        <span
+          onMouseDown={() => setGrabbing(true)}
+          onMouseUp={() => setGrabbing(false)}
+          onClick={(e) => e.stopPropagation()}
+          title="ドラッグして並び替え"
+          className="-ml-1 cursor-grab select-none text-xs leading-none text-gray-300 opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+        >⠿</span>
+
         {/* 完了チェックボックス */}
         <button
           onClick={toggleDone}

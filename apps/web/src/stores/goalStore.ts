@@ -36,7 +36,8 @@ interface GoalState {
   add: (uid: string, params: Pick<Goal, 'title' | 'memo'>) => Promise<void>;
   update: (uid: string, id: string, data: Partial<Goal>) => Promise<void>;
   remove: (uid: string, id: string) => Promise<void>;
-  reorder: (uid: string, fromIndex: number, toIndex: number, statusFilter: GoalStatus) => Promise<void>;
+  /** 並び替え：表示順に並べた id の配列を渡すと、その順に order を振り直す */
+  reorder: (uid: string, orderedIds: string[]) => Promise<void>;
 }
 
 export const useGoalStore = create<GoalState>((set, get) => ({
@@ -64,17 +65,13 @@ export const useGoalStore = create<GoalState>((set, get) => ({
     await deleteDocById(uid, 'goals', id);
   },
 
-  reorder: async (uid, fromIndex, toIndex, statusFilter) => {
+  reorder: async (uid, orderedIds) => {
     const { goals, update } = get();
-    const filtered = goals.filter((g) => g.status === statusFilter);
-    const reordered = [...filtered];
-    const [moved] = reordered.splice(fromIndex, 1);
-    reordered.splice(toIndex, 0, moved);
-    await Promise.all(
-      reordered
-        .map((g, i) => ({ goal: g, newOrder: i }))
-        .filter(({ goal, newOrder }) => goal.order !== newOrder)
-        .map(({ goal, newOrder }) => update(uid, goal.id, { order: newOrder }))
-    );
+    const byId = new Map(goals.map((g) => [g.id, g]));
+    const writes = orderedIds
+      .map((id, i) => ({ goal: byId.get(id), newOrder: i }))
+      .filter((w): w is { goal: Goal; newOrder: number } => !!w.goal && w.goal.order !== w.newOrder)
+      .map(({ goal, newOrder }) => update(uid, goal.id, { order: newOrder }));
+    await Promise.all(writes);
   },
 }));
