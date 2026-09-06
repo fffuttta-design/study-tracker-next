@@ -7,12 +7,12 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useElectronVersion } from '@/hooks/useElectronVersion';
 import appIcon from '@/app/icon.png';
 
-// 画面上部の大タブ（学習リスト / NotionPlus / 絶対覚える）。
+// 画面上部の大タブ（学習リスト / NotionPlus / 覚えるリスト）。
 // v1.0.296〜、左サイドバーのナビを廃止してここへ移した（本文を横いっぱい使うため）。
 const NAV = [
   { href: '/learning', label: '学習リスト', icon: '📚' },
   { href: '/notion-plus', label: 'NotionPlus', icon: '📝' },
-  { href: '/goals', label: '絶対覚える', icon: '🎯' },
+  { href: '/goals', label: '覚えるリスト', icon: '🎯' },
 ];
 
 // 🔥 タブを行き来しても「さっき見ていた所」に戻れるよう、セクションごとに最後の居場所を覚える。
@@ -69,7 +69,7 @@ export function TopTabs() {
 
   useEffect(() => { remember(); }, [pathname, remember]);
 
-  // 🔥 Ctrl+Tab で「学習リスト → NotionPlus → 絶対覚える」を順送り（Ctrl+Shift+Tab で逆送り）。
+  // 🔥 Ctrl+Tab で「学習リスト → NotionPlus → 覚えるリスト」を順送り（Ctrl+Shift+Tab で逆送り）。
   // クリックと同じ扱いにする＝離れる前に居場所を覚え、戻り先も前回の続きにする。
   // ⚠ デスクトップ（Electron）だけで効かせる。ブラウザでは Ctrl+Tab はブラウザ自身の
   //    タブ切替に予約されていて preventDefault が効かず、アプリ側も動くと二重に切り替わるため。

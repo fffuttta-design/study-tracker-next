@@ -7,18 +7,23 @@ export type GoalPriority = 'high' | 'medium' | 'low';
 export interface Goal {
   id: string;
   title: string;
+  /** @deprecated 2026-09-05にUIから廃止。既存データが持っているだけで画面では使わない */
   category: string;
+  /** @deprecated 2026-09-05にUIから廃止。既存データが持っているだけで画面では使わない */
   priority: GoalPriority;
   memo: string;
+  /** 'learning' は旧仕様の名残。いまのUIは 'todo'（未完了）と 'done'（完了）だけを使う */
   status: GoalStatus;
   order: number;
   createdAt: string;
 }
 
-function createGoal(params: Pick<Goal, 'title' | 'category' | 'priority' | 'memo' | 'order'>): Goal {
+function createGoal(params: Pick<Goal, 'title' | 'memo' | 'order'>): Goal {
   return {
     id: `goal_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     status: 'todo',
+    category: '',
+    priority: 'medium',
     createdAt: new Date().toISOString(),
     ...params,
   };
@@ -28,7 +33,7 @@ interface GoalState {
   goals: Goal[];
   loading: boolean;
   subscribe: (uid: string) => () => void;
-  add: (uid: string, params: Pick<Goal, 'title' | 'category' | 'priority' | 'memo'>) => Promise<void>;
+  add: (uid: string, params: Pick<Goal, 'title' | 'memo'>) => Promise<void>;
   update: (uid: string, id: string, data: Partial<Goal>) => Promise<void>;
   remove: (uid: string, id: string) => Promise<void>;
   reorder: (uid: string, fromIndex: number, toIndex: number, statusFilter: GoalStatus) => Promise<void>;
