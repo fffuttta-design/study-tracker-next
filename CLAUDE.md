@@ -150,6 +150,20 @@ Start-Process "$env:LOCALAPPDATA\Programs\study-tracker\学習トラッカー.ex
 3. **メニューの有無を `document.body.innerText` の語で判定しない。**
    ツールバーに「IDをコピー」等が常時表示されているため、何をしても `true` になる。
    判定は**そのメニューにしか無い語**（例：「最上位に作成」）で行う。
+4. **検証の途中でアプリが自動更新して再起動し、デバッグポートが閉じる。**（2026-09-06）
+   配信した新版をアプリ自身が拾って自己置換するため、CDPが `ECONNRESET` で落ちる。
+   待機ループは**接続エラーを握って再試行する**作りにし、落ちたら
+   `--remote-debugging-port=9222` で起動し直す。
+
+### ✅ Vercel反映の確認は、アプリを使わないほうが速い（推奨）
+アプリを起動してCDPで見るより、**Node から直接ビルド済みJSを読む**ほうが確実で速い。
+```js
+const html = await (await fetch('https://study-tracker-next-web.vercel.app/goals')).text();
+const srcs = [...html.matchAll(/src="(\/_next\/static\/[^"]+\.js)"/g)]
+  .map(m => 'https://study-tracker-next-web.vercel.app' + m[1]);
+for (const u of srcs) if ((await (await fetch(u)).text()).includes('<新コードにしか無い文字列>')) hit++;
+```
+反映を確認してから初めてアプリを起動する。**アプリを何度も再起動しない**（Firestoreの読み取りを食う）。
 
 ### 座標の取り方
 右クリックは `Input.dispatchMouseEvent`（`button:'right'`, `buttons:2` を press/release の2回）が確実。
