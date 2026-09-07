@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.1",
-    "@futa/editor": "git+https://github.com/fffuttta-design/futa-editor.git#main",
+    "@futa/editor": "github:fffuttta-design/futa-editor#main",
     "@study-tracker/core": "*",
     "@study-tracker/firebase": "*",
     "@study-tracker/ui": "*",

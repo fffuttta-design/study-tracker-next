@@ -1,6 +1,6 @@
 {
   "name": "study-tracker",
-  "version": "1.0.313",
+  "version": "1.0.314",
   "private": true,
   "type": "module",
   "main": "electron/main.js",
@@ -17,7 +17,7 @@
     "dist:win": "npx electron-builder --win --publish never",
     "dist:win:sync": "node scripts/build-and-sync.mjs",
     "postinstall": "node scripts/link-futa-editor.mjs",
-    "editor:update": "npm install @futa/editor@git+https://github.com/fffuttta-design/futa-editor.git#main && node scripts/link-futa-editor.mjs"
+    "editor:update": "npm install @futa/editor@git+https://github.com/fffuttta-design/futa-editor.git#main -w apps/web && node scripts/link-futa-editor.mjs"
   },
   "build": {
     "appId": "com.studytracker.app",

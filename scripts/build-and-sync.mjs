@@ -30,6 +30,45 @@ const ROOT = path.resolve(__dirname, '..')
 
 const buildInfoPath = path.join(ROOT, 'electron', 'build-info.json')
 
+
+// ── Step -1: @futa/editor（ふたメモと共有のエディタ部品）を最新に進める ──────
+// 🔥 Vercel は package-lock.json に書かれた commit を取りに行く。FutaEditor を直しても、
+//    ここを進めないと配信物には古いままの物が載る。しかも手元はジャンクションで実フォルダを
+//    見ているので「手元では直っているのに配信物だけ古い」＝いちばん気づけない形で食い違う。
+//    詳しい配線は CLAUDE.md「配線」の節。
+const FUTA_EDITOR_DIR  = 'C:\dev\CompanyOps\Application\Utility\FutaEditor'
+const FUTA_EDITOR_SPEC = 'git+https://github.com/fffuttta-design/futa-editor.git#main'
+
+if (existsSync(FUTA_EDITOR_DIR)) {
+  // push されていない変更があるまま配信すると、配信物にだけ入らない。先に止める。
+  let dirty = '', ahead = '0'
+  try {
+    dirty = execSync('git status --porcelain', { cwd: FUTA_EDITOR_DIR, stdio: 'pipe' }).toString().trim()
+    ahead = execSync('git rev-list --count @{u}..HEAD', { cwd: FUTA_EDITOR_DIR, stdio: 'pipe' }).toString().trim()
+  } catch { /* upstream 未設定などで判定できないときは素通り（配信は止めない） */ }
+
+  if (dirty || ahead !== '0') {
+    console.error('\n[build-and-sync] 🛑 FutaEditor に、まだ配信できない変更があります。')
+    if (dirty) console.error('  未コミットの変更:\n' + dirty)
+    if (ahead !== '0') console.error(`  未pushのコミット: ${ahead}件`)
+    console.error(`\n  先に ${FUTA_EDITOR_DIR} で commit → push してから、もう一度配信してください。`)
+    console.error('  （このまま進めると、手元では直っているのに配信物だけ古い状態になります）\n')
+    process.exit(1)
+  }
+}
+
+console.log('[build-and-sync] @futa/editor を最新に進めています...')
+try {
+  execSync(`npm install @futa/editor@${FUTA_EDITOR_SPEC} -w apps/web --silent`, { cwd: ROOT, stdio: 'pipe' })
+  execSync('node scripts/link-futa-editor.mjs', { cwd: ROOT, stdio: 'pipe' })
+  const lock = readFileSync(path.join(ROOT, 'package-lock.json'), 'utf-8')
+  const pin = lock.match(/futa-editor\.git#([0-9a-f]{40})/)?.[1]
+  console.log(`[build-and-sync] @futa/editor 取り込み先: ${pin ? pin.slice(0, 7) : '(不明)'}`)
+} catch (e) {
+  console.error('[build-and-sync] @futa/editor の更新に失敗:', e.message)
+  process.exit(1)
+}
+
 // ── Step 0: buildNumber と version をインクリメント ──────────────
 const buildInfo = JSON.parse(readFileSync(buildInfoPath, 'utf-8'))
 const prevBuildNumber = buildInfo.buildNumber ?? 0

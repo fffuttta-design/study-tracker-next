@@ -220,13 +220,16 @@ C:\dev\CompanyOps\Application\Utility\FutaEditor   ← 部品の実体（パッ�
 ジャンクションに置き換えるので、**FutaEditorを直せば即このアプリにも効く**（今までどおり）。
 FutaEditorが無いPC・Vercelでは何もせず素通りする。
 
-🔥 **∴ FutaEditor を直したときの締めは3手**（1つでも飛ばすと「手元では直っているのに配信物は古い」になる）：
+🔥 **∴ FutaEditor を直したときの締めは2手**（取り込み版の更新は配信コマンドが自動でやる）：
 
 | | やること |
 |---|---|
 | ① | **FutaEditor 側で commit → push**（`Utility\FutaEditor`・publicリポジトリ） |
-| ② | このリポジトリで **`npm run editor:update`**（取り込む版を最新に進める＝`package-lock.json` が変わる） |
-| ③ | いつもの **`npm run dist:win:sync`**（配信） |
+| ② | いつもの **`npm run dist:win:sync`**（配信）<br>　→ ビルド前に取り込む版を自動で最新へ進める |
+
+> 🛑 **FutaEditor に未コミット／未pushがあると、配信コマンドは何もせずその場で止まる。**
+> 「手元では直っているのに配信物だけ古い」を機械的に防ぐため（`scripts/build-and-sync.mjs` の Step -1）。
+> 止まったら①を済ませて、もう一度配信すればよい。手で進めたいときだけ `npm run editor:update`。
 
 | ファイル | 何を書いてあるか |
 |---|---|
