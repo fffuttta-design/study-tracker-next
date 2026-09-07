@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
+import { WindowDragStrip } from '@/components/layout/WindowDragStrip';
 
 export default function LoginPage() {
   const { user, loading, signIn } = useAuthStore();
@@ -29,6 +30,7 @@ export default function LoginPage() {
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
+        <WindowDragStrip />
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
       </div>
     );
@@ -36,6 +38,7 @@ export default function LoginPage() {
 
   return (
     <div className="flex h-screen items-center justify-center bg-gray-50">
+      <WindowDragStrip />
       <div className="w-full max-w-sm rounded-2xl bg-white p-10 shadow-sm">
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-semibold text-gray-900">Study Tracker</h1>

@@ -19,6 +19,12 @@ const NAV = [
 // （覚えないと NotionPlus は毎回ページ一覧の入口に戻ってしまう）
 const LAST_KEY = 'studytracker.lastPathBySection';
 
+// Electron で「窓を掴んで動かせる所」を指定する CSS。
+// drag = 掴める（＝タイトルバー扱い）／ no-drag = 掴めない（＝押せるボタン）。
+// ブラウザでは無視されるだけなので、分岐せずそのまま付けてよい。
+const DRAG = { WebkitAppRegion: 'drag' } as React.CSSProperties;
+const NO_DRAG = { WebkitAppRegion: 'no-drag' } as React.CSSProperties;
+
 // 覚えてよいものだけを残す。学習リストは開いていたタブ（?tab=）だけ、
 // NotionPlus はページのパスだけ（?from= や ?hl= はその場限りなので捨てる）。
 function rememberable(pathname: string): string | null {
@@ -46,6 +52,11 @@ export function TopTabs() {
   const router = useRouter();
   const version = useElectronVersion();
   const [lastPath, setLastPath] = useState<Record<string, string>>({});
+  // デスクトップ版だけ、右端に「─ □ ✕」が重なって描かれる（titleBarOverlay）。
+  // その下にタブが潜り込まないよう余白を空ける。ブラウザでは不要なので付けない。
+  // ⚠ 描画後に判定する（サーバー側では window が無く、初回描画とズレるため）
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => { setIsDesktop(!!window.electronAPI); }, []);
 
   // 起動時に前回の居場所を復元
   useEffect(() => { setLastPath(readStore()); }, []);
@@ -101,7 +112,16 @@ export function TopTabs() {
   }, [remember, router]);
 
   return (
-    <div className="flex shrink-0 items-end gap-1 border-b border-gray-200 bg-gray-50 px-3 pt-1.5">
+    // 🔥 この帯が「窓のタイトルバー」そのもの（Electron側で OS のタイトルバーを消してある）。
+    //    ・高さ40px は electron/main.js の TITLE_BAR.height と必ず揃える
+    //    ・帯は drag ＝ 空いている所を掴めば窓を動かせる／ダブルクリックで最大化
+    //    ・タブは no-drag にしないと「掴む所」になってクリックできなくなる
+    <div
+      style={DRAG}
+      className={`flex h-10 shrink-0 items-end gap-1 border-b border-gray-200 bg-gray-50 pl-3 ${
+        isDesktop ? 'pr-[146px]' : 'pr-3'
+      }`}
+    >
       {/* アプリ名（左端・タブと同じ行） */}
       <div className="mb-1 mr-3 flex shrink-0 items-center gap-1.5">
         <Image src={appIcon} alt="" className="h-5 w-5 rounded" />
@@ -116,6 +136,7 @@ export function TopTabs() {
             key={href}
             href={active ? href : (lastPath[href] ?? href)}
             onClick={remember}
+            style={NO_DRAG}
             className={`-mb-px flex items-center gap-1.5 rounded-t-lg border px-4 py-1.5 text-sm transition-colors ${
               active
                 ? 'border-gray-200 border-b-white bg-white font-medium text-gray-900'

@@ -124,6 +124,15 @@ Firebase Firestore（users/{uid}/コレクション）
 ### 4.0 全体の骨組み（上部の大タブ・v1.0.296〜）
 
 - 画面のいちばん上に **大タブ**（`TopTabs`・`components/layout/TopTabs.tsx`）を置き、**学習リスト／NotionPlus／覚えるリスト**をここで切り替える。左端にアプリ名とバージョン。
+- 🔥 **デスクトップ版ではこの大タブの帯が「窓のタイトルバーそのもの」（v1.0.313〜）。**
+  Electron 側で OS のタイトルバーを消し（`titleBarStyle:'hidden'`）、`─ □ ✕` だけを右上に重ねて描かせている（`titleBarOverlay`）。
+  それまでは「OSのタイトルバー」と「アプリのタブバー」で**同じアプリ名の帯が上下2本**並んでいた。
+  - 帯は `WebkitAppRegion:'drag'`＝**空いている所を掴めば窓を動かせる／ダブルクリックで最大化**。
+    タブだけ `'no-drag'`（掴む所にすると押せなくなる）。
+  - ⚠ **帯の高さ（`h-10`＝40px）と `electron/main.js` の `TITLE_BAR.height` は必ず揃える。** ズレると窓ボタンとタブの段が食い違う。
+  - ⚠ 背景色も揃える（`bg-gray-50`＝`#F9FAFB` ⇄ `titleBarOverlay.color`）。違うと窓ボタンの後ろだけ色が変わる。
+  - ⚠ 右端の `pr-[146px]` は**デスクトップ版のときだけ**付ける（窓ボタンの下にタブが潜らないように）。ブラウザでは不要。
+  - メイン窓と NotionPlus 窓の**両方**に適用している。
 - **左のナビ用サイドバーは廃止**（`Sidebar` は `/notion-plus` 配下でのみ `NotionPageSidebar`＝ページツリーを出し、それ以外では何も描かない）。本文がその分（約224px）横に広がる。
 - レイアウトは `app/(app)/layout.tsx`：縦に「大タブ → （ページツリー＋本文）」。
 - NotionPlus のページツリー内にあった「🏠 ホームに戻る」は大タブと重複するため撤去。
@@ -970,6 +979,7 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-09-07 | v1.0.313 | 改善：**窓の上の帯を1本にした**（→ §4.0）。従来は「Windowsのタイトルバー」と「アプリのタブバー」に**同じアイコンとアプリ名が上下2段**で並んでいた。Electron 側で `titleBarStyle:'hidden'` ＋ `titleBarOverlay`（`#F9FAFB` / 高さ40px）にして OS のタイトルバーを消し、その場所に `TopTabs` を出す形へ。`─ □ ✕` はOSが右上に重ねて描くので操作は変わらない。<br>`TopTabs` 側は高さを `h-10`（40px）に固定し、帯に `WebkitAppRegion:'drag'`（＝掴んで窓を動かせる）、タブに `'no-drag'` を付けた。右端は窓ボタンぶん `pr-[146px]`（**デスクトップ版のときだけ**＝`window.electronAPI` の有無で判定）。<br>**メイン窓と NotionPlus 窓の両方**に適用。本文が縦に約30px広がった。 |
 | 2026-09-07 | v1.0.312 | 新機能：**毎朝8時に「今日の復習 N件」をAndroidへ通知**（→ §4.10）。アプリを開かないと復習日に気づけなかったのを解消。0件の日は送らない。<br>送信は**VPS常駐の新サービス `study-review-notifier`**（`C:\dev\CompanyOps\Application\study-review-notifier`・firebase-adminでFirestoreを読みFCM直送・Cloud Functions不使用＝Blaze不要）。アプリ側は①トークンを `users/{uid}/pushTokens/{token}` に登録（`device:"android_phone"`）②タップで学習リストの「復習」タブを開く、の2つだけ（`src/services/push.ts` 新規・`App.tsx` に `PushRegistrar`）。<br>ネイティブ側＝`MainApplication.createReviewChannel` で通知チャンネル `study_review`（表示名「今日の復習」）を作成、`AndroidManifest.xml` に `POST_NOTIFICATIONS` と既定チャンネルの meta-data を追加。`index.js` に `setBackgroundMessageHandler` を空登録（**無いと data 付き通知が裏で届いた時に落ちる**）。<br>依存追加＝`@react-native-firebase/messaging@21.14.0`（app/auth/firestore と同版で揃える）。<br>🔥 **マニフェスト合成の衝突**＝`@react-native-firebase/messaging` が `default_notification_channel_id` を空文字で宣言しているため、`tools:replace="android:value"`（と `xmlns:tools`）が無いとAndroidビルドが必ず落ちる。<br>**通知バーのアイコン**＝`res/drawable/ic_notification.xml`（ノート＋チェックの白シルエット）＋差し色 `#F59E0B`。指定しないとランチャーアイコンが潰れて「灰色の四角」になる。 |
 | 2026-09-05 | （次回配信） | 改善：**「絶対覚える」を「覚えるリスト」に改称し、ただのチェックリストへ単純化**（`app/(app)/goals/page.tsx` 全面書き換え・`stores/goalStore.ts`・`components/layout/TopTabs.tsx`）。ステータス3段階（未着手→学習中→習得済み）・カテゴリ・優先度を画面から廃止し、**左端の完了チェックボックスだけ**で `todo` ⇄ `done` を切り替える形にした。フィルターは「全て / 未完了 / 完了」、追加・編集モーダルは「タイトル＋メモ」だけ。<br>データは壊さない方針＝`Goal` 型の `category` / `priority` / `status:'learning'` は `@deprecated` を付けて残し、**`'learning'` の既存データは未完了として表示**するので移行不要。`add()` の引数は `Pick<Goal,'title'\|'memo'>` に縮小し、`createGoal` 側で `category:''` / `priority:'medium'` を既定で埋める。<br>`reorder(uid, orderedIds)` は「表示順に並べた id の配列」を受け取り、その順に `order` を振り直す（旧 `reorder(from,to,statusFilter)` は2値化で使えなくなったため差し替え）。<br>行の見た目は**中央寄せ・薄型**（`items-center` / `px-3 py-1.5` / チェックボックス18px / タイトル `text-sm leading-tight` / カード間 `space-y-1`）。 |
 | 2026-09-05 | （次回配信） | 新機能：**サイドバーの余白を右クリック→「最上位に作成」**（📄ページ／📊データベース）。従来は最上位ページを作る導線がヘッダーの`＋`だけで、ページ一覧を見ている流れのまま作れなかった。`Sidebar.tsx` に `rootCtxMenu` 状態を追加し、リストの器である `<nav className="flex-1 overflow-y-auto">` に `onContextMenu` を付けて余白クリックを拾う。作成は既存の `add(uid)`（parentId未指定＝ルート）／`add(uid,{type:'database'})` を再利用し、作成後はそのページへ遷移。<br>🔥 **ページ項目の上ではページ用メニューが優先**：`handleCtxMenu` の先頭に `e.stopPropagation()` を追加していないと、項目の右クリックが親`<nav>`まで伝播して両方のメニューが開く（DnDのときと同じ伝播の罠）。 |

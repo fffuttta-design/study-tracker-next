@@ -12,6 +12,7 @@ import { useMemoStore } from '@/stores/memoStore';
 import { useDailyMemoStore } from '@/stores/dailyMemoStore';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { TopTabs } from '@/components/layout/TopTabs';
+import { WindowDragStrip } from '@/components/layout/WindowDragStrip';
 import { hasDueReview } from '@study-tracker/core';
 import { fetchAllVerified } from '@study-tracker/firebase';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -158,6 +159,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   if (loading || !user) {
     return (
       <div className="flex h-screen items-center justify-center">
+        {/* TopTabs がまだ出ていない＝掴む所が無いので、窓を動かせるように帯を置く */}
+        <WindowDragStrip />
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
       </div>
     );

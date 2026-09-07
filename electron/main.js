@@ -492,6 +492,19 @@ function handleWindowOpen({ url: popupUrl }) {
 // タスクバー枠で開く（見た目は別アプリ、更新の仕組みは共用）。
 let notionWin = null
 
+// ── タイトルバー ─────────────────────────────────────────────────
+// 🔥 Windowsのタイトルバーを消して、その場所にアプリのタブ列（TopTabs）を出す。
+//    これをやらないと「OSのタイトルバー」と「アプリのタブバー」で
+//    同じアプリ名の帯が上下2本に並ぶ（2026-09-07 本人指摘）。
+//    ─ □ ✕ はOSが右上に重ねて描く（overlay）ので、操作は今までどおり。
+//    ⚠ height は TopTabs の高さ（h-10＝40px）と必ず揃える。ズレると窓ボタンとタブの段が食い違う。
+//    ⚠ color は TopTabs の背景（bg-gray-50＝#F9FAFB）と揃える。違うと窓ボタンの後ろだけ色が変わる。
+const TITLE_BAR = {
+  titleBarStyle: 'hidden',
+  titleBarOverlay: { color: '#F9FAFB', symbolColor: '#374151', height: 40 },
+}
+
+
 function createNotionWindow() {
   if (notionWin && !notionWin.isDestroyed()) return notionWin
 
@@ -503,6 +516,7 @@ function createNotionWindow() {
     title: 'NotionPlus',
     icon: getNotionIconPath() ?? getTrayIconPath() ?? undefined,
     show: false,
+    ...TITLE_BAR,
     webPreferences: { nodeIntegration: false, contextIsolation: true, preload: preloadPath },
   })
 
@@ -617,6 +631,7 @@ function createWindow() {
     title: '学習トラッカー',
     icon: getTrayIconPath() ?? undefined,
     show: false, // 準備ができてから表示
+    ...TITLE_BAR,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
