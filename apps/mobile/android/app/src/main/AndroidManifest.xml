@@ -69,6 +69,18 @@
         android:value="study_review"
         tools:replace="android:value" />
 
+      <!-- 通知バーの小アイコンと差し色。
+           🔥 指定しないとランチャーアイコンが使われ、Androidが色を潰して「灰色の四角」になる。
+              指す先は必ず「白のシルエット＋透明」の drawable（ic_notification.xml）。 -->
+      <meta-data
+        android:name="com.google.firebase.messaging.default_notification_icon"
+        android:resource="@drawable/ic_notification"
+        tools:replace="android:resource" />
+      <meta-data
+        android:name="com.google.firebase.messaging.default_notification_color"
+        android:resource="@color/notification_color"
+        tools:replace="android:resource" />
+
       <!-- APK インストール用 FileProvider -->
       <provider
         android:name="androidx.core.content.FileProvider"

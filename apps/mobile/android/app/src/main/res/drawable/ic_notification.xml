@@ -1,0 +1,21 @@
+<!--
+  通知バー（ステータスバー）用の小アイコン。
+
+  🔥 ここは「白のシルエット＋透明」でしか描けない（Android 5以降、OSが
+     アルファだけを見て塗りつぶす）。ランチャーアイコンをそのまま指定すると
+     色が全部つぶれて「灰色の四角」になる＝既定のままに見える。
+  ランチャーアイコン（紫地に白いノート＋黄色いチェック）のうち、
+  形として残る「ノート＋チェック」だけを抜き出してある。
+
+  塗りは1つのパスで evenOdd：①外枠の角丸四角 ②内側の穴 ③チェック（穴の中なのでまた塗られる）
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+  <path
+      android:fillColor="#FFFFFFFF"
+      android:fillType="evenOdd"
+      android:pathData="M6,2 L18,2 A2,2 0 0 1 20,4 L20,20 A2,2 0 0 1 18,22 L6,22 A2,2 0 0 1 4,20 L4,4 A2,2 0 0 1 6,2 Z M6,4 L6,20 L18,20 L18,4 Z M10.36,14.01 L8.23,11.88 L7.5,12.6 L10.36,15.46 L16.5,9.32 L15.78,8.6 Z" />
+</vector>
