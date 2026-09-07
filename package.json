@@ -15,7 +15,9 @@
     "type-check": "turbo type-check",
     "electron:dev": "electron .",
     "dist:win": "npx electron-builder --win --publish never",
-    "dist:win:sync": "node scripts/build-and-sync.mjs"
+    "dist:win:sync": "node scripts/build-and-sync.mjs",
+    "postinstall": "node scripts/link-futa-editor.mjs",
+    "editor:update": "npm install @futa/editor@git+https://github.com/fffuttta-design/futa-editor.git#main && node scripts/link-futa-editor.mjs"
   },
   "build": {
     "appId": "com.studytracker.app",

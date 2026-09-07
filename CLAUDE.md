@@ -206,13 +206,31 @@ C:\dev\CompanyOps\Application\Utility\FutaEditor   ← 部品の実体（パッ�
 - 🔥 **FutaEditor を直したら、必ずふたメモ側もビルドして確かめる**（片方だけの確認は禁止）。
   ルールと地雷の正本＝`C:\dev\CompanyOps\Application\Utility\FutaEditor\CLAUDE.md`。
 
-### 配線（触るときの注意）
-共有パッケージは**このリポジトリの外**にあるので、素の設定では依存を見つけられない。
-次の3箇所で橋を架けてある。**依存を足したときはここも見直す。**
+### 🔥 配線（2026-09-07 に作り直した。ここを勘違いすると Vercel が落ちる）
+
+**取り込み先は GitHub（`git+https://github.com/fffuttta-design/futa-editor.git#main`・publicリポジトリ）。**
+
+> ⚠️ **`file:../../../Utility/FutaEditor` に戻してはいけない。**
+> それはこのPCの中のフォルダを指すだけで、**リポジトリの外**にある。
+> Vercel はこのリポジトリしかコピーしないので `Module not found: Can't resolve '@futa/editor'` で
+> **本番デプロイが必ず落ちる**（2026-09-06〜07、実際に8回連続で落ち、Webが1日半止まった）。
+
+**手元では実フォルダに繋ぎ直している**＝`scripts/link-futa-editor.mjs`（`postinstall` で自動実行）。
+`apps/web/node_modules/@futa/editor` を `C:\dev\CompanyOps\Application\Utility\FutaEditor` への
+ジャンクションに置き換えるので、**FutaEditorを直せば即このアプリにも効く**（今までどおり）。
+FutaEditorが無いPC・Vercelでは何もせず素通りする。
+
+🔥 **∴ FutaEditor を直したときの締めは3手**（1つでも飛ばすと「手元では直っているのに配信物は古い」になる）：
+
+| | やること |
+|---|---|
+| ① | **FutaEditor 側で commit → push**（`Utility\FutaEditor`・publicリポジトリ） |
+| ② | このリポジトリで **`npm run editor:update`**（取り込む版を最新に進める＝`package-lock.json` が変わる） |
+| ③ | いつもの **`npm run dist:win:sync`**（配信） |
 
 | ファイル | 何を書いてあるか |
 |---|---|
-| `apps/web/package.json` | `"@futa/editor": "file:../../../Utility/FutaEditor"` |
+| `apps/web/package.json` | `"@futa/editor": "git+https://github.com/fffuttta-design/futa-editor.git#main"` |
 | `apps/web/next.config.ts` | `transpilePackages` に追加＋`resolve.modules` に自分と直下の node_modules を先頭追加 |
 | `apps/web/tsconfig.json` | `preserveSymlinks: true` ＋ `paths` で apps/web 側にしか無い TipTap を指す |
 | `apps/web/tailwind.config.ts` | `content` に FutaEditor の src を追加（入れないとクラスが出ない） |
