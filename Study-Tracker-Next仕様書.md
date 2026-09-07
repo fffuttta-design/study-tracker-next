@@ -415,6 +415,27 @@ Firebase Firestore（users/{uid}/コレクション）
 - 現在のバージョン表示
 - Electron 版：最新バージョン確認・更新通知
 
+### 4.10 毎朝の復習通知（Android・v1.0.312〜）
+
+**アプリを開かないと復習日に気づけない**問題への対策。毎朝 8:00 JST に
+「📚 今日の復習 5件」＋先頭3件のタイトルをスマホの通知で出す。**復習が0件の日は送らない。**
+
+- **送り主はアプリではなくサーバー**：VPS常駐の `study-review-notifier`
+  （`C:\dev\CompanyOps\Application\study-review-notifier`。Firestoreを読んでFCM直送。Cloud Functions不使用＝Blaze不要）。
+- **アプリ側の役割は2つだけ**（`apps/mobile/src/services/push.ts`）：
+  1. ログイン時に通知許可を取り、この端末のトークンを `users/{uid}/pushTokens/{token}` に登録する
+     （`device: "android_phone"`。許可されなければ登録しない＝宛先が無いのでサーバーは送らない）
+  2. 通知をタップされたら学習リストの**「復習」タブ**を開く（`data.route === 'review'`）
+- **通知チャンネル** `study_review`（表示名「今日の復習」）は `MainApplication.createReviewChannel` が作る。
+  🔥 Android 8+ はチャンネルが無いと通知が出ない。サーバーが送る `channel_id` と必ず一致させる。
+- **裏で受けたとき**：`index.js` で `setBackgroundMessageHandler` を空登録してある。
+  表示自体は notification ペイロードでOSがやるが、**登録しないと data 付き通知が裏で届いた時に落ちる**。
+- 復習の定義（`notionPageId` あり かつ 未完了ステージの予定日が今日以前）は
+  Web・モバイル・Wear・サーバーの**4か所で完全一致**させる。片方だけ変えない。
+
+> 2026-08 に同じ役割を Discord（FutaHisho）で作っていたが、リファクタで消えていた。
+> 通知の主戦場をスマホに移し、**Discord版は復活させない**（本人判断 2026-09-07）。
+
 ---
 
 ## 5. データモデル
@@ -609,11 +630,15 @@ interface ImprovementTask {
 | `memos` | UUID | title, content, order |
 | `dailyMemos` | YYYY-MM-DD | content, updatedAt |
 | `improvementTasks` | UUID | name, detail, completed, order |
+| `pushTokens` | **FCMトークンそのもの** | token, device, platform, updatedAt |
 
 **特記事項**：
 - ワークスペースページ ID = `"workspace"`（旧: `"__workspace__"`、移行済み）
 - `batchUpsert` / `batchDelete` は 500件 単位でチャンク処理
 - 子孫ページの削除は `notionPageStore.remove()` が再帰的に収集してバッチ削除
+- `pushTokens` は**毎朝の復習通知の宛先**（→ §4.10）。ドキュメントIDがトークン文字列そのものなので、
+  同じ端末を何度登録しても増えない。`device` は `"android_phone"`（送信サーバーがこれで絞る）。
+  🔥 **ユーザーの単一ドキュメントではなくサブコレクションに置くのがキモ**＝本体の丸ごと上書きで消えないため
 
 ---
 
@@ -940,6 +965,7 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-09-07 | v1.0.312 | 新機能：**毎朝8時に「今日の復習 N件」をAndroidへ通知**（→ §4.10）。アプリを開かないと復習日に気づけなかったのを解消。0件の日は送らない。<br>送信は**VPS常駐の新サービス `study-review-notifier`**（`C:\dev\CompanyOps\Application\study-review-notifier`・firebase-adminでFirestoreを読みFCM直送・Cloud Functions不使用＝Blaze不要）。アプリ側は①トークンを `users/{uid}/pushTokens/{token}` に登録（`device:"android_phone"`）②タップで学習リストの「復習」タブを開く、の2つだけ（`src/services/push.ts` 新規・`App.tsx` に `PushRegistrar`）。<br>ネイティブ側＝`MainApplication.createReviewChannel` で通知チャンネル `study_review`（表示名「今日の復習」）を作成、`AndroidManifest.xml` に `POST_NOTIFICATIONS` と既定チャンネルの meta-data を追加。`index.js` に `setBackgroundMessageHandler` を空登録（**無いと data 付き通知が裏で届いた時に落ちる**）。<br>依存追加＝`@react-native-firebase/messaging@21.14.0`（app/auth/firestore と同版で揃える）。 |
 | 2026-09-05 | （次回配信） | 改善：**「絶対覚える」を「覚えるリスト」に改称し、ただのチェックリストへ単純化**（`app/(app)/goals/page.tsx` 全面書き換え・`stores/goalStore.ts`・`components/layout/TopTabs.tsx`）。ステータス3段階（未着手→学習中→習得済み）・カテゴリ・優先度を画面から廃止し、**左端の完了チェックボックスだけ**で `todo` ⇄ `done` を切り替える形にした。フィルターは「全て / 未完了 / 完了」、追加・編集モーダルは「タイトル＋メモ」だけ。<br>データは壊さない方針＝`Goal` 型の `category` / `priority` / `status:'learning'` は `@deprecated` を付けて残し、**`'learning'` の既存データは未完了として表示**するので移行不要。`add()` の引数は `Pick<Goal,'title'\|'memo'>` に縮小し、`createGoal` 側で `category:''` / `priority:'medium'` を既定で埋める。<br>`reorder(uid, orderedIds)` は「表示順に並べた id の配列」を受け取り、その順に `order` を振り直す（旧 `reorder(from,to,statusFilter)` は2値化で使えなくなったため差し替え）。<br>行の見た目は**中央寄せ・薄型**（`items-center` / `px-3 py-1.5` / チェックボックス18px / タイトル `text-sm leading-tight` / カード間 `space-y-1`）。 |
 | 2026-09-05 | （次回配信） | 新機能：**サイドバーの余白を右クリック→「最上位に作成」**（📄ページ／📊データベース）。従来は最上位ページを作る導線がヘッダーの`＋`だけで、ページ一覧を見ている流れのまま作れなかった。`Sidebar.tsx` に `rootCtxMenu` 状態を追加し、リストの器である `<nav className="flex-1 overflow-y-auto">` に `onContextMenu` を付けて余白クリックを拾う。作成は既存の `add(uid)`（parentId未指定＝ルート）／`add(uid,{type:'database'})` を再利用し、作成後はそのページへ遷移。<br>🔥 **ページ項目の上ではページ用メニューが優先**：`handleCtxMenu` の先頭に `e.stopPropagation()` を追加していないと、項目の右クリックが親`<nav>`まで伝播して両方のメニューが開く（DnDのときと同じ伝播の罠）。 |
 | 2026-09-05 | （次回配信） | **ハイライト（背景色）の「黄」を濃くした**（`#FEF9CD` → `#FDE047`）。淡すぎて紙の白と見分けがつかず、線を引いた意味が薄かったため。パレットは5か所（ツールバー `BG_COLORS`／コールアウト `CALLOUT_BG_COLORS`／看板セクション `PT_SECTION_BG_COLORS`／表セル `TABLE_CELL_COLORS`／ハイライト既定）すべて同時に更新（NotionEditor.tsx・editor-mobile/page.tsx）。<br>あわせて**既存ノートの黄色も新色へ統一**：過去に3種類の黄（`#FEF9CD`／`#FEF08A`／`#FDE68A`）が混在していたものを `notionPages` 25ページ・163箇所まとめて `#FDE047` に置換（`Skills/studytracker-seiri/core/migrate-yellow.mjs`・バックアップ `backup-yellow-2026-09-05.json`）。 |

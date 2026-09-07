@@ -53,6 +53,21 @@ packages/
 
 ---
 
+## 🔔 このアプリには「相棒のサーバー」が1本ある
+
+**毎朝8時の復習通知の送り主は、このリポジトリではない。**
+VPS常駐の別サービス **`C:\dev\CompanyOps\Application\study-review-notifier`** が
+Firestore を読んで FCM を投げている（Cloud Functions は使わない＝Blaze 不要）。
+
+- **復習の判定条件（`notionPageId` あり かつ 未完了ステージの予定日が今日以前）を変えるときは、
+  4か所を同時に直す**：`apps/web/.../learning/page.tsx` の `dueItems` ／
+  `apps/mobile/.../LearningScreen.tsx` ／ `packages/core/.../learningItem.ts` の `hasDueReview` ／
+  **notifier の `due_items()`**。片方だけ直すと、通知の件数と画面の件数が合わなくなる。
+- 通知が来ないときの切り分けは `study-review-notifier/CLAUDE.md`（`py deploy.py testsend` で即送信できる）。
+- アプリ側の実装は `apps/mobile/src/services/push.ts` と §4.10（仕様書）。
+
+---
+
 ## ルール1：改修後は必ずバージョンを上げること
 
 ### バージョン管理ファイル

@@ -11,6 +11,7 @@ import { checkForUpdate } from './src/services/updateService';
 import { navigationRef } from './src/navigation';
 import { getInitialSharedText, onSharedText } from './src/services/sharedText';
 import { getInitialLaunchRoute, onLaunchRoute } from './src/services/launchRoute';
+import { requestNotificationPermission, registerPushToken, setupNotificationTap } from './src/services/push';
 import { localDateKey } from './src/types';
 
 /**
@@ -154,6 +155,55 @@ function LaunchRouter() {
   return null;
 }
 
+/**
+ * 毎朝の「今日の復習」通知の受け口。
+ *
+ * ログインしたら通知許可を取り、この端末のトークンを Firestore に登録する
+ * （送り主は VPS 常駐の study-review-notifier）。
+ * 通知をタップして開かれたら、学習リストの「復習」タブへ飛ばす。
+ */
+function PushRegistrar() {
+  const user = useAuthStore(s => s.user);
+
+  // トークン登録（ログイン中だけ）
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    let offRefresh: (() => void) | undefined;
+
+    (async () => {
+      const ok = await requestNotificationPermission();
+      if (!ok || cancelled) return; // 断られたら登録しない（サーバーは宛先なし＝送らない）
+      const off = await registerPushToken(user.uid);
+      if (cancelled) off();
+      else offRefresh = off;
+    })();
+
+    return () => { cancelled = true; offRefresh?.(); };
+  }, [user]);
+
+  // 通知タップ → 復習タブ（ナビゲータ／ログイン待ちは LaunchRouter と同じ作法）
+  useEffect(() => {
+    const open = (route: string) => {
+      if (route !== 'review') return;
+      const tryNav = (n = 0) => {
+        if (navigationRef.current && useAuthStore.getState().user) {
+          navigationRef.current.navigate('Main', {
+            screen: 'Learning',
+            params: { initialTab: 'review' },
+          });
+        } else if (n < 20) {
+          setTimeout(() => tryNav(n + 1), 300); // 最大約6秒待つ
+        }
+      };
+      tryNav();
+    };
+    return setupNotificationTap(open);
+  }, []);
+
+  return null;
+}
+
 export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -162,6 +212,7 @@ export default function App() {
         <AuthListener />
         <SharedTextCapture />
         <LaunchRouter />
+        <PushRegistrar />
         <AppNavigator />
       </SafeAreaProvider>
     </GestureHandlerRootView>
