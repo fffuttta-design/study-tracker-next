@@ -55,7 +55,7 @@ packages/
 
 ## 🔔 このアプリには「相棒のサーバー」が1本ある
 
-**毎朝8時の復習通知の送り主は、このリポジトリではない。**
+**毎朝10時の復習通知の送り主は、このリポジトリではない。**
 VPS常駐の別サービス **`C:\dev\CompanyOps\Application\study-review-notifier`** が
 Firestore を読んで FCM を投げている（Cloud Functions は使わない＝Blaze 不要）。
 
