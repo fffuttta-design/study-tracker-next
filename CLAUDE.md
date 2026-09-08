@@ -74,12 +74,15 @@ Firestore を読んで FCM を投げている（Cloud Functions は使わない�
 上の大タブは**どの窓にも出ている**ので、放っておくと同じ画面が2つの窓に並ぶ。
 ∴ **画面ごとに担当の窓を決めてある**（`electron/main.js` の `sectionOwner()`）。
 
+- 🔥 **合言葉は「タブ＝窓の切り替え／リンク＝ページ遷移」。**
+  効かせるのは**大タブとディープリンクだけ**。本文中のリンク（「📖 ノートを開く」等）は
+  今までどおり**その窓でページ遷移**する。
+  ⚠ v1.0.315 で全ナビゲーションをメインプロセスで見張ったところ、「ノートを開く」を押しただけで
+  NotionPlus窓が新しく立ち上がり、かえって鬱陶しくなった（2026-09-08 本人指摘で撤去）。
+  **`guardWindowSection` のような全件監視を復活させない。**
 - 🔥 **大タブに画面を足すときは、担当の窓も同時に決める**＝
   `electron/main.js` の `sectionOwner()` と `TopTabs.tsx` の `ownerOf()` の**両方**。
   決め忘れると既定でメイン窓扱いになり、NotionPlus窓からも開けてしまう。
-- 🔥 **窓ごとに行き先を変える処理を足すときは、排他制御と噛み合うか確かめる。**
-  ログイン後の遷移がその例＝NotionPlus窓まで `/learning` へ飛ばすと弾かれて往復する
-  （`login/page.tsx` で `windowKind` を見て分けてある）。
 - 仕組みの詳細＝仕様書 §4.0。
 
 ## 📅 「今日」は `useToday()` で取る（v1.0.315〜）
@@ -243,12 +246,20 @@ C:\dev\CompanyOps\Application\Utility\FutaEditor   ← 部品の実体（パッ�
 ジャンクションに置き換えるので、**FutaEditorを直せば即このアプリにも効く**（今までどおり）。
 FutaEditorが無いPC・Vercelでは何もせず素通りする。
 
-🔥 **∴ FutaEditor を直したときの締めは2手**（取り込み版の更新は配信コマンドが自動でやる）：
+🔥 **∴ FutaEditor を直したときの締めは3手**（取り込み版の更新は配信コマンドが自動でやる）：
+
+> 🔴 **① の前に、FutaEditor の `package.json` の `version` を必ず上げる**（2026-09-08 に踏んだ）。
+> webpack は `node_modules` の中身を**パッケージの version で新旧判断する**（`snapshot.managedPaths`）。
+> 中身だけ変えて version を据え置くと、**Vercelのビルドキャッシュが前のファイルを使い回す**。
+> しかも**ビルドは成功する**ので、`package-lock.json` が新しい commit を指していても気づけない。
+> 配信コマンドが上げ忘れを検知して止めるようにしてあるが、先に上げるのが本筋。
+
 
 | | やること |
 |---|---|
-| ① | **FutaEditor 側で commit → push**（`Utility\FutaEditor`・publicリポジトリ） |
-| ② | いつもの **`npm run dist:win:sync`**（配信）<br>　→ ビルド前に取り込む版を自動で最新へ進める |
+| ① | **FutaEditor の `package.json` の `version` を上げる**（🔴 これを飛ばすと配信物だけ古くなる） |
+| ② | **FutaEditor 側で commit → push**（`Utility\FutaEditor`・publicリポジトリ） |
+| ③ | いつもの **`npm run dist:win:sync`**（配信）<br>　→ ビルド前に取り込む版を自動で最新へ進める |
 
 > 🛑 **FutaEditor に未コミット／未pushがあると、配信コマンドは何もせずその場で止まる。**
 > 「手元では直っているのに配信物だけ古い」を機械的に防ぐため（`scripts/build-and-sync.mjs` の Step -1）。
