@@ -574,7 +574,10 @@ export default function EditorMobilePage() {
         .mobile-editor pre { background: #f3f4f6; border-radius: 8px; padding: 12px 16px; overflow-x: auto; margin: 0.5rem 0; }
         .mobile-editor code { font-family: monospace; font-size: 0.875em; background: #f3f4f6; padding: 0.1em 0.3em; border-radius: 3px; }
         .mobile-editor pre code { background: none; padding: 0; }
-        .mobile-editor hr { border: none; border-top: 1px solid #e5e7eb; margin: 1rem 0; }
+        /* 区切り線は当たり判定を広げる（線は1pxのまま・PC版と同じ） */
+        .mobile-editor hr { border: none; height: 16px; margin: 0.5rem 0; cursor: pointer;
+          background-image: linear-gradient(#e5e7eb, #e5e7eb); background-size: 100% 1px;
+          background-position: center; background-repeat: no-repeat; }
         .mobile-editor strong { font-weight: 700; }
         .mobile-editor em { font-style: italic; }
         .mobile-editor s { text-decoration: line-through; }

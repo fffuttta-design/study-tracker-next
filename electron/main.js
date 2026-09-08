@@ -511,11 +511,17 @@ const TITLE_BAR = {
 }
 
 // ── ウィンドウの排他制御（同じ画面を2つの窓に出さない）─────────────
-// 🔥 タブ列（TopTabs）はどの窓にも出ているので、放っておくと
+// 🔥 上の大タブ（TopTabs）はどの窓にも出ているので、放っておくと
 //    「NotionPlus窓で"学習リスト"タブを押す」→ 学習リストが2窓に並ぶ。
 //    しかも古い方は開いた日のまま止まるため、昨日の日付の窓が残って混乱する
 //    （2026-09-08 本人指摘）。∴ 画面ごとに「担当の窓」を決め、担当外の窓では開かず、
 //    担当の窓を前に出す。
+//
+// 🔥 効かせるのは【大タブとディープリンクだけ】。本文中のリンク（「ノートを開く」等）は
+//    今までどおり**その窓でのページ遷移**にする（2026-09-08 本人指示）。
+//    once 全部のナビゲーションを見張ったところ、「ノートを開く」を押しただけで
+//    NotionPlus窓が新しく立ち上がってしまい、かえって鬱陶しくなった。
+//    ∴ 合言葉は「タブ＝窓の切り替え／リンク＝ページ遷移」。
 //
 //    main   … 学習リスト / 覚えるリスト / 設定 など
 //    notion … NotionPlus（専用アイコンの窓）
@@ -568,53 +574,6 @@ function showSection(to, { exact = false } = {}) {
   debugLog(`[section] "${to}" → ${kind}窓`)
 }
 
-// その窓が担当外の画面へ行こうとしたら、担当の窓へ渡して自分は元の場所へ戻す。
-// ⚠ タブのクリックは画面側（TopTabs）で先に止めている。ここはその取りこぼし用の網。
-//   SPA（Next.js）の遷移では will-navigate が出ないので did-navigate-in-page も見る。
-function guardWindowSection(win, kind) {
-  // 担当外へ流れたときに、この窓自身が戻る場所。
-  // ノート別窓は「開いたときのノート」がそのまま持ち場。
-  const homePath = () => {
-    if (kind === 'main') return '/learning'
-    if (kind === 'note') {
-      const here = appPathOf(win.webContents.getURL())
-      // ログイン画面など「持ち場ではない所」を掴んだときは既定へ逃がす（往復防止）
-      if (here && sectionOwner(routeOf(here)) === 'notion') return here
-    }
-    return '/notion-plus'
-  }
-  let home = null
-  win.webContents.once('did-finish-load', () => { home = homePath() })
-
-  const foreign = (url) => {
-    const to = appPathOf(url)
-    if (!to) return null
-    const owner = sectionOwner(routeOf(to))
-    if (!owner) return null // どの窓で出してもよい画面（/login など）
-    // ノート別窓は NotionPlus 側の住人＝ノート間の行き来は邪魔しない
-    if (kind === 'note') return owner === 'notion' ? null : to
-    return owner === kind ? null : to
-  }
-
-  // 素のページ遷移（loadURL・リロード・リンクの実遷移）は出る前に止められる
-  win.webContents.on('will-navigate', (e, url) => {
-    const to = foreign(url)
-    if (!to) return
-    e.preventDefault()
-    showSection(to)
-  })
-
-  // SPA（Next.js）の遷移では will-navigate が出ないので、着いた後に引き取って持ち場へ戻す。
-  // ⚠ 戻すのに history.back() は使わない。ログイン直後の自動遷移など「戻ると同じ所へまた飛ぶ」
-  //   経路があり、往復し続けるため。素直に自分の持ち場を読み直す。
-  win.webContents.on('did-navigate-in-page', (_e, url, isMainFrame) => {
-    if (!isMainFrame) return
-    const to = foreign(url)
-    if (!to) return
-    showSection(to)
-    win.loadURL(`${APP_URL}${home ?? homePath()}`)
-  })
-}
 
 
 function createNotionWindow() {
@@ -638,7 +597,6 @@ function createNotionWindow() {
   })
 
   enableReloadKeys(notionWin)
-  guardWindowSection(notionWin, 'notion')
   notionWin.loadURL(`${APP_URL}/notion-plus`)
 
   // Windows のタスクバーで「学習トラッカー」と別グループ・別アイコンにする
@@ -655,9 +613,6 @@ function createNotionWindow() {
   }
 
   notionWin.webContents.setWindowOpenHandler(handleWindowOpen)
-  notionWin.webContents.on('did-create-window', (popupWin, details) => {
-    if (details.url?.startsWith(APP_URL)) guardWindowSection(popupWin, 'note')
-  })
 
   // ウィンドウタイトルは「NotionPlus」で固定（ページ側の document.title で上書きさせない）
   notionWin.on('page-title-updated', (e) => { e.preventDefault() })
@@ -753,7 +708,6 @@ function createWindow() {
   })
 
   enableReloadKeys(mainWin)
-  guardWindowSection(mainWin, 'main')
   mainWin.loadURL(APP_URL)
 
   // ページ読み込み完了後に表示（チラつき防止）
@@ -840,9 +794,6 @@ function createWindow() {
   // ── ポップアップ内の window.open・ナビゲーションを全追跡 ─────────────
   mainWin.webContents.on('did-create-window', (popupWin, details) => {
     debugLog(`[did-create-window] url="${details.url}"`)
-
-    // アプリ内ルートを開いた別窓（ノート単独表示）にも排他制御をかける
-    if (details.url?.startsWith(APP_URL)) guardWindowSection(popupWin, 'note')
 
     // ポップアップ内で更に window.open が呼ばれたら記録して deny
     popupWin.webContents.setWindowOpenHandler(({ url }) => {

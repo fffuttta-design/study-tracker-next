@@ -948,8 +948,11 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
         </div>
       )}
 
-      {/* パンくず（親ページがある場合のみ表示） */}
-      {breadcrumbs.length > 1 && (
+      {/* パンくず（いま開いているページの居場所）。
+          🔥 最上位のページでも必ず出す（2026-09-08 本人指摘）。
+          以前は親がある時だけ出していたので、最上位を開くと居場所の手がかりが
+          本文の見出しだけになり、どのページを見ているのか分からなかった。 */}
+      {breadcrumbs.length > 0 && (
         <div className="flex items-center gap-0.5 overflow-x-auto whitespace-nowrap border-b border-gray-50 px-6 py-1.5 text-xs text-gray-400">
           {breadcrumbs.map((p, i) => (
             <Fragment key={p.id}>
