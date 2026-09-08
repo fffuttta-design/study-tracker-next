@@ -12,7 +12,11 @@ export default function LoginPage() {
   const [signingIn, setSigningIn] = useState(false);
 
   useEffect(() => {
-    if (!loading && user) router.replace('/learning');
+    // 🔥 ログイン後は「その窓の持ち場」へ戻す。NotionPlus窓まで学習リストへ飛ばすと、
+    //    ウィンドウの排他制御（electron/main.js）に弾かれて往復する。
+    if (!loading && user) {
+      router.replace(window.electronAPI?.windowKind === 'notion' ? '/notion-plus' : '/learning');
+    }
   }, [user, loading, router]);
 
   const handleSignIn = async () => {

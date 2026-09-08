@@ -1,8 +1,17 @@
 // preload.cjs - contextBridge for renderer access
 const { contextBridge, ipcRenderer } = require('electron')
 
+// この窓は何の担当か（main / notion / note / quick）。
+// メイン側が additionalArguments で名乗らせている。画面上部のタブが
+// 「自分の担当じゃない画面」を押されたときによその窓へ渡すのに使う。
+const kindArg = process.argv.find((a) => a.startsWith('--st-window='))
+const windowKind = kindArg ? kindArg.slice('--st-window='.length) : 'main'
+
 contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
+  // ウィンドウの排他制御
+  windowKind,
+  openSection: (path) => ipcRenderer.send('open-section', path),
   // アプリ操作
   relaunch: () => ipcRenderer.send('app-relaunch'),
   // ウィンドウへ確実に入力フォーカスを戻す（新規ノート遷移直後の入力不能対策）

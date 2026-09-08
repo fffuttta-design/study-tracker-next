@@ -21,6 +21,9 @@ declare global {
   interface Window {
     electronAPI?: {
       platform: string;
+      // ウィンドウの排他制御（この窓の担当／担当の窓を前に出す）
+      windowKind?: 'main' | 'notion' | 'note' | 'quick';
+      openSection?: (path: string) => void;
       relaunch?: () => void;
       focusWindow?: () => void;
       setReviewCount?: (count: number) => void;

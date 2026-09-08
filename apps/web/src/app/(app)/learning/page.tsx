@@ -23,9 +23,10 @@ import {
   recalcNextReview,
   getNextStageIndex,
 } from '@study-tracker/core';
+import { useToday } from '@/hooks/useToday';
 import { useCategoryStore } from '@/stores/categoryStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { format, addDays, subDays, isToday } from 'date-fns';
+import { format, subDays, isToday } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
@@ -101,7 +102,12 @@ function LearningPageContent() {
     const t = Number(searchParams.get('tab') ?? '0');
     return isNaN(t) ? 0 : Math.min(Math.max(t, 0), 6);
   });
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  // 🔥 学習リストは常に「今日」を映す。日付を前後に送る機能は廃止した（2026-09-08 本人指摘）。
+  //    ・登録は常に今日に入る（dateKey: localDateKey()）ので、前日を出しても書けず見るだけだった
+  //    ・なのに見出しは「今日の登録」「本日の学習」のまま＝別の日を今日として読み違える
+  //    ・過去は「全学習リスト」タブが日付ごとに並べて見せるので、そちらで足りる
+  //    useToday() は日をまたぐと勝手に切り替わる＝開きっぱなしでも昨日で止まらない
+  const selectedDate = useToday();
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [quickInboxOpen, setQuickInboxOpen] = useState(false);
   const [digestItem, setDigestItem] = useState<LearningItem | null>(null);
@@ -155,9 +161,8 @@ function LearningPageContent() {
       {/* 日付ヘッダー */}
       <div className={`border-b px-5 py-3 ${isToday(selectedDate) ? 'border-brand-100 bg-gradient-to-r from-brand-50/60 to-white' : 'border-gray-100 bg-white'}`}>
         <div className="flex items-start justify-between gap-4">
-          {/* 左: 日付ナビ */}
+          {/* 左: 今日の日付（前後には送れない＝常に今日） */}
           <div className="flex items-center gap-1.5 min-w-0">
-            <button onClick={() => setSelectedDate((d) => subDays(d, 1))} className="shrink-0 rounded-lg p-1.5 text-gray-300 hover:bg-gray-100 hover:text-gray-500">‹</button>
             <div className="min-w-0">
               <div className="flex items-baseline gap-1.5 flex-wrap">
                 <span className="text-3xl font-black text-gray-900 leading-none tracking-tight">
@@ -172,10 +177,6 @@ function LearningPageContent() {
               </div>
               <p className="mt-1 text-[11px] text-gray-400 italic truncate">💡 {dailyQuote()}</p>
             </div>
-            <button onClick={() => setSelectedDate((d) => addDays(d, 1))} className="shrink-0 rounded-lg p-1.5 text-gray-300 hover:bg-gray-100 hover:text-gray-500">›</button>
-            {!isToday(selectedDate) && (
-              <button onClick={() => setSelectedDate(new Date())} className="shrink-0 rounded-full border border-brand-200 px-2.5 py-1 text-xs font-medium text-brand-500 hover:bg-brand-50">今日へ</button>
-            )}
           </div>
 
           {/* 右: 今日のスコア */}
@@ -285,8 +286,9 @@ function DashboardTab({ todayItems, dueItems, inboxItems, uid, onAdd, onQuickAdd
         .map(([label, items]) => ({ label, items }))
     : null;
 
-  // 昨日の日付キー
-  const yesterday = toDateKey(subDays(new Date(), 1));
+  // 昨日の日付キー（useToday 基準＝日をまたいでも勝手に繰り上がる）
+  const today = useToday();
+  const yesterday = toDateKey(subDays(today, 1));
 
   // 昨日学んだ → 翌日(stageIndex=0)が due → 左パネル下部に表示
   const yesterdayDueItems = useMemo(
