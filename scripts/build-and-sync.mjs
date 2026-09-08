@@ -55,6 +55,30 @@ if (existsSync(FUTA_EDITOR_DIR)) {
     console.error('  （このまま進めると、手元では直っているのに配信物だけ古い状態になります）\n')
     process.exit(1)
   }
+
+  // 🔥 version を上げ忘れていないか。
+  //    webpack は node_modules の中身を「パッケージの version」で新旧判断する
+  //    （snapshot.managedPaths）。中身だけ変えて version を据え置くと、
+  //    Vercel のビルドキャッシュが前のファイルを使い回し、**ビルドは成功するのに
+  //    配信物だけ古い**という一番気づけない形で食い違う（2026-09-08 に実際に発生）。
+  try {
+    const localVer  = JSON.parse(readFileSync(path.join(FUTA_EDITOR_DIR, 'package.json'), 'utf-8')).version
+    const lock      = JSON.parse(readFileSync(path.join(ROOT, 'package-lock.json'), 'utf-8'))
+    const lockedSha = (lock.packages?.['apps/web/node_modules/@futa/editor']?.resolved ?? '').split('#')[1] ?? ''
+    const headSha   = execSync('git rev-parse HEAD', { cwd: FUTA_EDITOR_DIR, stdio: 'pipe' }).toString().trim()
+    const pinnedVer = JSON.parse(
+      execSync(`git show ${lockedSha}:package.json`, { cwd: FUTA_EDITOR_DIR, stdio: 'pipe' }).toString()
+    ).version
+    if (lockedSha && lockedSha !== headSha && localVer === pinnedVer) {
+      console.error('\n[build-and-sync] 🛑 FutaEditor の version を上げ忘れています。')
+      console.error(`  中身は進んでいる（取り込み済み ${lockedSha.slice(0, 7)} → 最新 ${headSha.slice(0, 7)}）のに version は ${localVer} のまま。`)
+      console.error('  このまま配信すると Vercel のビルドキャッシュが古いファイルを使い回し、')
+      console.error('  ビルドは成功するのに配信物だけ古い、という一番気づけない状態になります。')
+      console.error(`\n  ${FUTA_EDITOR_DIR} の package.json の version を上げて commit → push してから、もう一度配信してください。\n`)
+      process.exit(1)
+    }
+  } catch { /* 判定できないときは素通り（配信は止めない） */ }
+
 }
 
 console.log('[build-and-sync] @futa/editor を最新に進めています...')
