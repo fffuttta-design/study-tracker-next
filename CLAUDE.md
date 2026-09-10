@@ -205,6 +205,30 @@ for (const u of srcs) if ((await (await fetch(u)).text()).includes('<新コー�
 ```
 反映を確認してから初めてアプリを起動する。**アプリを何度も再起動しない**（Firestoreの読み取りを食う）。
 
+### 🔥 Vercelがpushを拾わないことがある（2026-09-10 実際に起きた）
+
+`npm run dist:win:sync` は push まで成功したのに、**Vercel側にデプロイが1件も作られない**ことがある。
+GitHub App の webhook が落ちるだけなので、リポジトリ側は何の異常も出さない＝**気づけない**。
+そのまま「Vercel反映待ち」を延々ポーリングして時間を溶かす（10分待って未反映だった）。
+
+∴ **未反映が5分以上続いたら、待つのをやめて「そもそもデプロイが起きているか」を見る。**
+```
+npx vercel ls study-tracker-next-web      # 一番上の Age が「今」でなければ、拾われていない
+```
+拾われていなかったら、**pushしてあるコミットからこちらでデプロイを起こす**（再pushは不要）。
+```js
+// 認証トークン＝ C:/Users/visit/AppData/Roaming/xdg.data/com.vercel.cli/auth.json の token
+await fetch('https://api.vercel.com/v13/deployments?forceNew=1', { method: 'POST',
+  headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+  body: JSON.stringify({ name: 'study-tracker-next-web',
+    project: 'prj_T3c2uexLBDUP7iYUZUcub7cZc1Ly', target: 'production',
+    gitSource: { type: 'github', repoId: 1241880449, ref: 'master' } }) });
+```
+ビルドは1〜2分で終わる。終わったら上のJS読み取りで反映を確かめる。
+
+---
+
+
 ### 座標の取り方
 右クリックは `Input.dispatchMouseEvent`（`button:'right'`, `buttons:2` を press/release の2回）が確実。
 「サイドバーの余白」は、**nav内の全要素の `bottom` の最大値 + 40px** で求める
