@@ -760,7 +760,9 @@ export function NotionEditor({
       }),
       // コードブロック内でも太字などのインラインマークを使えるようにする（marks:'_'＝全マーク許可）
       CodeBlock.extend({ marks: '_' }),
-      Placeholder.configure({ placeholder: '書き始めるか、「/」でコマンドを入力...' }),
+      // 本文の説明文（「書き始めるか…」）は出さない。毎回同じ案内が本文の1行目に居座って
+      // 邪魔なため（本人指示 2026-09-10・KotoEditor と揃えた）。
+      Placeholder.configure({ placeholder: '' }),
       TaskList,
       TaskItem.configure({ nested: true }),
       Highlight.configure({ multicolor: true }),
