@@ -38,15 +38,11 @@ function rememberable(pathname: string): string | null {
   return null;
 }
 
-// 🔥 ウィンドウの排他制御。タブ列はどの窓にも出ているので、そのまま押させると
-//    「NotionPlus窓で学習リストを開く」＝同じ画面が2窓に並ぶ（2026-09-08 本人指摘）。
-//    ∴ 画面ごとに担当の窓を決め、担当外なら自分では開かずメイン側へ渡して
-//    担当の窓を前に出す。窓の種別は Electron 側が名乗らせている。
-//    main=学習リスト/覚えるリスト / notion=NotionPlus / note=ノートを別窓で開いた物
-function ownerOf(href: string): 'main' | 'notion' {
-  return href.startsWith('/notion-plus') ? 'notion' : 'main';
-}
-
+// 🔥 タブは「今いる窓」で開く（2026-09-10 本人指示）。
+//    v1.0.315〜、画面ごとに担当の窓を決めて、担当外のタブを押したらその窓を前に出していた。
+//    しかしそれだと NotionPlus のタブを押すだけで窓がもう1つ立ち上がる＝鬱陶しい。
+//    ∴ 排他制御はやめて、どのタブもその窓のページ遷移にした。
+//    ⚠ 元々の目的だった「昨日の日付のまま止まった窓が残る」問題は useToday() で別に解決済み。
 function sectionOf(pathname: string): string | null {
   const hit = NAV.find(({ href }) => pathname.startsWith(href));
   return hit ? hit.href : null;
@@ -65,27 +61,8 @@ export function TopTabs() {
   // その下にタブが潜り込まないよう余白を空ける。ブラウザでは不要なので付けない。
   // ⚠ 描画後に判定する（サーバー側では window が無く、初回描画とズレるため）
   const [isDesktop, setIsDesktop] = useState(false);
-  // この窓の担当（ブラウザでは null ＝ 排他制御なし・今までどおり同じ窓で開く）
-  const [winKind, setWinKind] = useState<string | null>(null);
   useEffect(() => {
     setIsDesktop(!!window.electronAPI);
-    setWinKind(window.electronAPI?.windowKind ?? null);
-  }, []);
-
-  // そのタブは「よその窓の担当」か。
-  // ⚠ ノート別窓（note）は自分の持ち場がノート1枚なので、どのタブもよそへ渡す。
-  const isForeign = useCallback(
-    (href: string) => {
-      if (!winKind) return false;
-      if (winKind === 'note') return true;
-      return ownerOf(href) !== winKind;
-    },
-    [winKind]
-  );
-
-  // よその窓の担当なら、その窓を前に出してもらう（自分では開かない）
-  const handoff = useCallback((to: string) => {
-    window.electronAPI?.openSection?.(to);
   }, []);
 
   // 起動時に前回の居場所を復元
@@ -134,14 +111,13 @@ export function TopTabs() {
 
       // remember() の直後なので localStorage から読み直す（state はまだ古い）
       const to = readStore()[next.href] ?? next.href;
-      if (isForeign(next.href)) handoff(to); // よその窓の担当ならその窓を前に出す
-      else router.push(to);
+      router.push(to); // 今いる窓でそのまま移動する
     };
 
     // capture で拾う＝TipTap などページ側のキー処理より先に取る
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [remember, router, isForeign, handoff]);
+  }, [remember, router]);
 
   return (
     // 🔥 この帯が「窓のタイトルバー」そのもの（Electron側で OS のタイトルバーを消してある）。
@@ -164,19 +140,11 @@ export function TopTabs() {
       {NAV.map(({ href, label, icon }) => {
         const active = pathname.startsWith(href);
         const to = active ? href : (lastPath[href] ?? href);
-        const foreign = isForeign(href);
         return (
           <Link
             key={href}
             href={to}
-            onClick={(e) => {
-              remember();
-              // よその窓の担当なら、この窓では開かずその窓を前に出す
-              if (foreign) {
-                e.preventDefault();
-                handoff(to);
-              }
-            }}
+            onClick={remember}
             style={NO_DRAG}
             className={`-mb-px flex items-center gap-1.5 rounded-t-lg border px-4 py-1.5 text-sm transition-colors ${
               active
