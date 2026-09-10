@@ -11,6 +11,8 @@ import TextAlign from '@tiptap/extension-text-align';
 import Link from '@tiptap/extension-link';
 import { TextStyle, Color } from '@tiptap/extension-text-style';
 import Underline from '@tiptap/extension-underline';
+// コピーの「文字だけ」の形（NotionPLUSとふたメモ共通）
+import { clipboardTextSerializer } from '@futa/editor';
 
 // ── カスタムノードのスタブ（モバイルで未対応の拡張を保持・表示するため） ──
 function makeStubNode(name: string, isInline = false) {
@@ -320,6 +322,8 @@ export default function EditorMobilePage() {
     ],
     editorProps: {
       attributes: { class: 'mobile-editor' },
+      // コピーした物を他のアプリ（Discord等）へ貼ったとき、1行おきに空行が入らないようにする
+      clipboardTextSerializer,
     },
     onUpdate: ({ editor }) => {
       if (debounceRef.current) clearTimeout(debounceRef.current);

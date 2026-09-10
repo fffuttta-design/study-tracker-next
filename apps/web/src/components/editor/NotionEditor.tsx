@@ -47,6 +47,7 @@ import {
   PageLinkNode, PageTableNode, PageDescTableNode, ptDefaultSections,
   EditorHostContext, type EditorHost, PageLinkPicker,
   Toolbar,
+  clipboardTextSerializer,
 } from '@futa/editor';
 
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -800,6 +801,8 @@ export function NotionEditor({
       attributes: { class: compact ? 'notion-editor notion-editor-compact' : 'notion-editor' },
       // 壊れたテーブル（セルの無い行・行の無い空テーブル）を貼り付け前に除去して事故を防ぐ
       transformPastedHTML: (html) => sanitizePastedHTML(html),
+      // コピーした物を他のアプリ（Discord等）へ貼ったとき、1行おきに空行が入らないようにする
+      clipboardTextSerializer,
       handlePaste(view, event) {
         const items = event.clipboardData?.items;
         if (items) {
