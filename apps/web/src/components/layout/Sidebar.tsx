@@ -201,14 +201,21 @@ function PageTreeEntry({
   currentId: string | undefined;
   onCtxMenu: (e: React.MouseEvent, page: NotionPage) => void;
 }) {
-  // ブックはサイドバーツリーに表示しない
-  if (page.type === 'book') return null;
-
   const isActive = page.id === currentId;
   const update = useNotionPageStore((s) => s.update);
   const { user } = useAuthStore();
   const router = useRouter();
   const [isDragOver, setIsDragOver] = useState(false);
+
+  // 🔥 ブックは、親を持つものだけサイドバーに出さない（2026-09-11 本人指摘で修正）。
+  //    親の本文にブックへのリンクが載るので、ツリーにも出すと二重になるため隠している。
+  //    しかし **最上位のブックには載せてくれる親の本文が無い**ので、隠すと
+  //    サイドバーから消えて行き場が無くなる（「訴求マスタ」が実際にそうなっていた。
+  //    最上位のノートを右クリック →「ブックに変換」すると、その瞬間に一覧から消える）。
+  //    ∴ 親を持つブックだけ隠し、最上位のブックは出す。
+  //    ⚠ この判定は hooks より後に置くこと。変換の瞬間に type が page→book へ変わるので、
+  //      hooks の前で return すると hooks の数が変わって React が落ちる。
+  if (page.type === 'book' && page.parentId) return null;
 
   const handleDrop = async (e: React.DragEvent) => {
     // 並び替えドラッグ（application/x-reorder-page-id のみ）はここで止めず、親コンテナの
