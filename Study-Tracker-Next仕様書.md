@@ -177,13 +177,24 @@ Firebase Firestore（users/{uid}/コレクション）
   - 登録日表示
 - 消化済み学習アイテム（時間帯グループ）
   - `HH:00～` でグループ化
-  - 昨日の学習（翌日 DUE）は赤色パネルで特別表示
 - 「＋ 追加」「⚡ 特急」ボタン
 
 **右パネル「今日の復習」**
+- 🔥 **復習はここに一本化する（v1.0.321〜）。左パネルに復習を出さない。**
+  v1.0.320 まで、左パネルの下に「昨日の学習」という赤いパネルがあり、昨日学んだ分の1回目の復習だけを
+  そこに出していた。しかし右の「翌日」と**同じ段階（stageIndex=0）**なのに、
+  片方は "学習した日"・もう片方は "復習の間隔" で名前が付いていて、**違いが本人にも分からなかった**
+  （2026-09-11 本人質問「昨日の学習と翌日のセクションって何が違うの？」）。
+  昨日分は右の「翌日」の中に `M/d（E） に学習` として並ぶので、情報は何も失われない。
+  **この分割を復活させない。**
 - ステージ別グループ（色分けバッジ）
   - 翌日 / 3日後 / 7日後 / 2週間後 / 1ヶ月後
-- 各ステージ内を学習日（dateKey）でサブグループ化
+- 各ステージ内を学習日（dateKey）でサブグループ化（`StudiedOnHeader`）
+  - 🔥 **サブグループは1つでも必ず見出しを出す**（いつ学んだ分か分からなくなるため）
+  - 🔥 **`◯日遅れ` / `今日ぶん` バッジを出す（v1.0.321〜）。**
+    ステージ名は "学習日から何日後に復習するか" の意味なので、持ち越した項目が「翌日」の下に
+    居ると誤解を招く。遅れはここで明示する。日数は**学習日ではなく復習予定日**から数える
+    （`recalcNextReview` が復習のたび予定日を引き直すため）＝`lateDaysOf()`
 - 古い順 / 新しい順ソート切り替え
 
 #### タブ 1: 本日の学習
@@ -272,7 +283,30 @@ Firebase Firestore（users/{uid}/コレクション）
 
 ---
 
-### 4.4 NotionPlus（`/notion-plus/[id]`）
+### 4.4 NotionPlus ホーム（`/notion-plus`・v1.0.321〜）
+
+🔥 **NotionPlus の入口＝ダッシュボード（2026-09-11 本人指示）。**
+v1.0.320 まで、ここは `lastViewedNotionPageId` へ `router.replace` するだけの**通過点**で、
+画面としては存在しなかった。今は自分で行き先を選べるホームにしてある。
+∴ **ここで自動リダイレクトしない**（飛ばすとホームが一瞬も見えない）。
+
+| 区画 | 中身 |
+|---|---|
+| 見出し | 「NotionPlus」＋ 総ページ数 |
+| ▶ 続きから | 前回見ていたページ（`lastViewedNotionPageId`）を1枚の大きなカードで。アイコン・題名・親の階層・最終更新 |
+| 🕒 最近開いたページ | `recentNotionPageIds` から最大8件。**続きからの1枚とは重複させない** |
+| ★ お気に入り | `isFavorite` のページ（ルート／子／ブック／DB 問わず）。0件なら付け方を案内する |
+
+- ページが1件も無いときだけ「＋ 最初のページを作成」の空状態を出す。
+- ⚠ **ページ一覧はここに置かない。** 左のサイドバーに常時出ているので重複するうえ、
+  サイドバーと表示が食い違う（2026-09-11、サイドバーに出ないルートページが1件あった）。
+- 閲覧履歴を積むのは `/notion-plus/[id]` 側（`pushRecentNotionPageId`）。
+- 🔥 **上部の大タブは NotionPlus の「開いていたページ」を覚えない**（`TopTabs.tsx` の `rememberable`）。
+  覚えているとタブを押してもホームへ一度も辿り着けない。前回の続きは「続きから」が受け持つ。
+  ⚠ v1.0.320 以前に localStorage へ保存された記憶が残るので、**`readStore()` の読み出し側でも捨てている**。
+  書き込みを止めるだけでは、古い記憶で直リンクし続ける（2026-09-11 に実際に踏んだ）。
+
+### 4.5 NotionPlus ページ（`/notion-plus/[id]`）
 
 #### ページタイプ
 
@@ -362,7 +396,7 @@ Firebase Firestore（users/{uid}/コレクション）
 
 ---
 
-### 4.5 カテゴリページ（`/categories`）
+### 4.6 カテゴリページ（`/categories`）
 
 - 3階層（大・中・小）カテゴリ管理
 - ツリービュー（インデント表示）
@@ -374,7 +408,7 @@ Firebase Firestore（users/{uid}/コレクション）
 
 ---
 
-### 4.6 覚えるリスト（`/goals`）
+### 4.7 覚えるリスト（`/goals`）
 
 **2026-09-05に「絶対覚える（身につけたいことリスト）」から改称し、素直なチェックリストへ単純化した。**
 
@@ -394,7 +428,7 @@ Firebase Firestore（users/{uid}/コレクション）
 
 ---
 
-### 4.7 特急メモページ（`/quick-memo`）
+### 4.8 特急メモページ（`/quick-memo`）
 
 - 日付別 TipTap エディタ（`dailyMemos` コレクション）
 - 日付セクション展開 / 折りたたみ
@@ -404,7 +438,7 @@ Firebase Firestore（users/{uid}/コレクション）
 
 ---
 
-### 4.8 要改修リストページ（`/improvements`）
+### 4.9 要改修リストページ（`/improvements`）
 
 - アクティブタスク：ドラッグ並び替え
   - インライン編集（名前・詳細）
@@ -414,7 +448,7 @@ Firebase Firestore（users/{uid}/コレクション）
 
 ---
 
-### 4.9 設定ページ（`/settings`）
+### 4.10 設定ページ（`/settings`）
 
 **一般**
 - 復習間隔：5段階（翌日 / 3日後 / 7日後 / 2週間後 / 1ヶ月後）
@@ -443,7 +477,7 @@ Firebase Firestore（users/{uid}/コレクション）
 - 現在のバージョン表示
 - Electron 版：最新バージョン確認・更新通知
 
-### 4.10 毎朝の復習通知（Android・v1.0.312〜）
+### 4.11 毎朝の復習通知（Android・v1.0.312〜）
 
 **アプリを開かないと復習日に気づけない**問題への対策。毎朝 10:00 JST に
 「📚 今日の復習 5件」＋先頭3件のタイトルをスマホの通知で出す。**復習が0件の日は送らない。**
@@ -669,7 +703,7 @@ interface ImprovementTask {
 - ワークスペースページ ID = `"workspace"`（旧: `"__workspace__"`、移行済み）
 - `batchUpsert` / `batchDelete` は 500件 単位でチャンク処理
 - 子孫ページの削除は `notionPageStore.remove()` が再帰的に収集してバッチ削除
-- `pushTokens` は**毎朝の復習通知の宛先**（→ §4.10）。ドキュメントIDがトークン文字列そのものなので、
+- `pushTokens` は**毎朝の復習通知の宛先**（→ §4.11）。ドキュメントIDがトークン文字列そのものなので、
   同じ端末を何度登録しても増えない。`device` は `"android_phone"`（送信サーバーがこれで絞る）。
   🔥 **ユーザーの単一ドキュメントではなくサブコレクションに置くのがキモ**＝本体の丸ごと上書きで消えないため
 
@@ -894,7 +928,8 @@ ProseMirror Plugin として実装。外部ライブラリ不要の自前実装�
 | `notionPlusBlockOffsets` | `NotionBlockOffsets` | 全 0 | ブロック Y 位置調整（9種） |
 | `reviewNotificationTime` | `string` | `'08:00'` | 復習通知時刻 |
 | `quickMemoDefaultRows` | `number` | `5` | 日次メモテーブルデフォルト行数 |
-| `lastViewedNotionPageId` | `string \| null` | `null` | 前回表示 NotionPlus ページ |
+| `lastViewedNotionPageId` | `string \| null` | `null` | 前回表示 NotionPlus ページ（ホームの「続きから」） |
+| `recentNotionPageIds` | `string[]` | `[]` | NotionPlus の閲覧履歴（新しい順・最大20件）。ホームの「最近開いたページ」用。🔥 **localStorage にだけ持つ**＝Firestore の読み書きを増やさないため |
 | `dragHandleOffset` | `number` | `0` | ドラッグハンドル縦位置オフセット(px) |
 | `bookChapterFormat` | `'kanji' \| 'arabic' \| 'chapter' \| 'none'` | `'kanji'` | ブック章番号の書式 |
 | `bookNumberHeadings` | `boolean` | `true` | ブック本文に見出し番号(1.1)を表示 |
@@ -998,6 +1033,8 @@ git add -A && git commit -m "..." && git push origin master
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
+| 2026-09-11 | v1.0.322 | 修正：**NotionPlus のタブを押してもホームに着かない**のを解消（→ §4.4）。v1.0.321 で 「開いていたページを覚える」書き込みを止めたが、**v1.0.320 以前に localStorage へ保存された記憶が残っていて**、タブが古いページへ直リンクし続けていた。`TopTabs.tsx` の `readStore()` で読み出し側でも `/notion-plus` の記憶を捨てる。<br>改善：**NotionPlus ホームから「ページ一覧」を外した**。左のサイドバーに常時出ていて重複するうえ、サイドバーに出ないルートページが1件あり**表示が食い違って**いた。 |
+| 2026-09-11 | v1.0.321 | 改善：**学習リストの復習を右パネルに一本化した**（→ §4.1・本人質問「昨日の学習と翌日のセクションって何が違うの？」）。左の赤い「昨日の学習」パネルと右の「翌日」は**同じ段階（stageIndex=0）**なのに、片方は"学習した日"・もう片方は"復習の間隔"で名前が付いていて違いが分からなかった。昨日分は右の「翌日」の中に `M/d（E） に学習` として並ぶので情報は失われない。**この分割を復活させない。**<br>あわせて学習日の見出しを共通部品化（`StudiedOnHeader`）し、**1グループでも必ず出す**ようにしたうえで **`◯日遅れ` / `今日ぶん` バッジ**を追加（`lateDaysOf()`）。ステージ名は"学習日から何日後"の意味なので、持ち越した項目が「翌日」の下に居ると誤解を招くため。日数は学習日ではなく**復習予定日**から数える。<br>新機能：**NotionPlus にホーム画面（ダッシュボード）を新設**（→ §4.4・本人指示）。`/notion-plus` は 前回のページへ即リダイレクトするだけの通過点だったのを、**「▶ 続きから」「🕒 最近開いたページ」「★ お気に入り」**を並べた入口にした。閲覧履歴は `settingsStore.recentNotionPageIds`（新規・最大20件）＝🔥 **localStorage にだけ持つ**（Firestore の読み書きを増やさないため）。あわせて大タブが NotionPlus の開いていたページを覚えるのをやめた（覚えているとホームに一度も辿り着けない）。 |
 | 2026-09-10 | v1.0.318 | 修正：**大タブを押しても新しい窓が開かなくなった**（→ §4.0・本人指摘）。v1.0.315 から「画面ごとに担当の窓を決め、担当外のタブはその窓を前に出す」形にしていたため、メイン窓で **NotionPlus のタブを押すだけで NotionPlus窓がもう1つ立ち上がって**いた。どのタブも**今いる窓でのページ遷移**に戻した（`TopTabs.tsx` の `ownerOf()`／`isForeign()`／`handoff()` を削除）。<br>排他制御を入れた元の動機（同じ画面が2窓に並び、古い方が昨日の日付のまま止まる）は `useToday()`（v1.0.315〜）が別に解決しているので、窓を分ける必要はもう無い。<br>**ディープリンク（`studytracker://`）とトレイからの切り替えはそのまま**＝`/notion-plus` を指すリンクは専用アイコンの NotionPlus窓を前に出す（NP整理スキルの `open-in-app.mjs` が使う経路）。IPC `open-section` もそのために残している。 |
 | 2026-09-08 | v1.0.317 | 改善：**区切り線（`---`）が掴みやすくなった**。線そのものは1pxしかなく、選択もドラッグもしづらかった（本人指摘）。線を背景で描き、要素の高さを16pxにして**当たり判定を16倍**にした（上下マージンを 1rem→0.5rem に詰めたので、見た目の間隔は従来どおり）。共有部品 `@futa/editor` の `editor.css`＝**ふたメモにも同時に効く**。モバイル用エディタ（`editor-mobile`）も同じ形に。<br>改善：**NotionPlus のパンくずを最上位ページでも出すようにした**（本人指摘）。従来は親がある時だけ出していたので、最上位を開くと居場所の手がかりが本文の見出しだけだった。<br>🔥 **地雷：共有部品は中身を変えても `version` を上げないと、Vercelのビルドキャッシュが古いファイルを使い回す**（→ 下の v1.0.316 の顛末）。配信スクリプトに**上げ忘れを止めるガード**を追加した（`scripts/build-and-sync.mjs`）。 |
 | 2026-09-08 | v1.0.316 | 修正：**「📖 ノートを開く」を押すと NotionPlus窓が新しく立ち上がる**のをやめ、**その窓でのページ遷移**に戻した（本人指示）。v1.0.315 でメインプロセスに張った全ナビゲーション監視（`guardWindowSection`）が行き過ぎており、本文中のリンクまで窓の切り替えに化けていた。**排他制御は大タブとディープリンクだけに効かせる**（→ §4.0）。<br>⚠ この版は**配信されたが、共有部品のCSSは古いまま載った**（`@futa/editor` の `version` を据え置いたため webpack のビルドキャッシュが効いた）。実際に直った版は v1.0.317。 |
@@ -1005,7 +1042,7 @@ git add -A && git commit -m "..." && git push origin master
 | 2026-09-08 | （サーバー側） | 変更：**復習通知の時刻を 8:00 → 10:00 JST に**（本人指示）。アプリ側の改修は不要で、`study-review-notifier` の設定だけを変えた（取り戻し幅180分はそのままなので、遅れても13:00までは届く）。 |
 | 2026-09-07 | v1.0.314 | 改善：**配信コマンドが `@futa/editor` の取り込み版を自動で最新にしてからビルドする**ようにした（`scripts/build-and-sync.mjs` の Step -1）。取り込み版を進め忘れると「手元では直っているのに配信物だけ古い」という気づきにくい食い違いが起きるため。**FutaEditor に未コミット／未pushがあるときは配信をその場で止める。** 手で進めたいときは `npm run editor:update`。<br>あわせて **Vercel の本番デプロイ失敗を修正**：`@futa/editor` が `file:` でリポジトリ外を指しており、2026-09-06 から**8回連続でビルドに失敗**していた（`Module not found: Can't resolve '@futa/editor'`）。GitHub参照（publicリポジトリ）へ切り替えて復旧。手元は `postinstall` のジャンクションで従来どおり実フォルダを見る（→ CLAUDE.md「配線」）。 |
 | 2026-09-07 | v1.0.313 | 改善：**窓の上の帯を1本にした**（→ §4.0）。従来は「Windowsのタイトルバー」と「アプリのタブバー」に**同じアイコンとアプリ名が上下2段**で並んでいた。Electron 側で `titleBarStyle:'hidden'` ＋ `titleBarOverlay`（`#F9FAFB` / 高さ40px）にして OS のタイトルバーを消し、その場所に `TopTabs` を出す形へ。`─ □ ✕` はOSが右上に重ねて描くので操作は変わらない。<br>`TopTabs` 側は高さを `h-10`（40px）に固定し、帯に `WebkitAppRegion:'drag'`（＝掴んで窓を動かせる）、タブに `'no-drag'` を付けた。右端は窓ボタンぶん `pr-[146px]`（**デスクトップ版のときだけ**＝`window.electronAPI` の有無で判定）。<br>**メイン窓と NotionPlus 窓の両方**に適用。本文が縦に約40px広がった。 |
-| 2026-09-07 | v1.0.312 | 新機能：**毎朝8時に「今日の復習 N件」をAndroidへ通知**（→ §4.10）。アプリを開かないと復習日に気づけなかったのを解消。0件の日は送らない。<br>送信は**VPS常駐の新サービス `study-review-notifier`**（`C:\dev\CompanyOps\Application\study-review-notifier`・firebase-adminでFirestoreを読みFCM直送・Cloud Functions不使用＝Blaze不要）。アプリ側は①トークンを `users/{uid}/pushTokens/{token}` に登録（`device:"android_phone"`）②タップで学習リストの「復習」タブを開く、の2つだけ（`src/services/push.ts` 新規・`App.tsx` に `PushRegistrar`）。<br>ネイティブ側＝`MainApplication.createReviewChannel` で通知チャンネル `study_review`（表示名「今日の復習」）を作成、`AndroidManifest.xml` に `POST_NOTIFICATIONS` と既定チャンネルの meta-data を追加。`index.js` に `setBackgroundMessageHandler` を空登録（**無いと data 付き通知が裏で届いた時に落ちる**）。<br>依存追加＝`@react-native-firebase/messaging@21.14.0`（app/auth/firestore と同版で揃える）。<br>🔥 **マニフェスト合成の衝突**＝`@react-native-firebase/messaging` が `default_notification_channel_id` を空文字で宣言しているため、`tools:replace="android:value"`（と `xmlns:tools`）が無いとAndroidビルドが必ず落ちる。<br>**通知バーのアイコン**＝`res/drawable/ic_notification.xml`（ノート＋チェックの白シルエット）＋差し色 `#F59E0B`。指定しないとランチャーアイコンが潰れて「灰色の四角」になる。 |
+| 2026-09-07 | v1.0.312 | 新機能：**毎朝8時に「今日の復習 N件」をAndroidへ通知**（→ §4.11）。アプリを開かないと復習日に気づけなかったのを解消。0件の日は送らない。<br>送信は**VPS常駐の新サービス `study-review-notifier`**（`C:\dev\CompanyOps\Application\study-review-notifier`・firebase-adminでFirestoreを読みFCM直送・Cloud Functions不使用＝Blaze不要）。アプリ側は①トークンを `users/{uid}/pushTokens/{token}` に登録（`device:"android_phone"`）②タップで学習リストの「復習」タブを開く、の2つだけ（`src/services/push.ts` 新規・`App.tsx` に `PushRegistrar`）。<br>ネイティブ側＝`MainApplication.createReviewChannel` で通知チャンネル `study_review`（表示名「今日の復習」）を作成、`AndroidManifest.xml` に `POST_NOTIFICATIONS` と既定チャンネルの meta-data を追加。`index.js` に `setBackgroundMessageHandler` を空登録（**無いと data 付き通知が裏で届いた時に落ちる**）。<br>依存追加＝`@react-native-firebase/messaging@21.14.0`（app/auth/firestore と同版で揃える）。<br>🔥 **マニフェスト合成の衝突**＝`@react-native-firebase/messaging` が `default_notification_channel_id` を空文字で宣言しているため、`tools:replace="android:value"`（と `xmlns:tools`）が無いとAndroidビルドが必ず落ちる。<br>**通知バーのアイコン**＝`res/drawable/ic_notification.xml`（ノート＋チェックの白シルエット）＋差し色 `#F59E0B`。指定しないとランチャーアイコンが潰れて「灰色の四角」になる。 |
 | 2026-09-05 | （次回配信） | 改善：**「絶対覚える」を「覚えるリスト」に改称し、ただのチェックリストへ単純化**（`app/(app)/goals/page.tsx` 全面書き換え・`stores/goalStore.ts`・`components/layout/TopTabs.tsx`）。ステータス3段階（未着手→学習中→習得済み）・カテゴリ・優先度を画面から廃止し、**左端の完了チェックボックスだけ**で `todo` ⇄ `done` を切り替える形にした。フィルターは「全て / 未完了 / 完了」、追加・編集モーダルは「タイトル＋メモ」だけ。<br>データは壊さない方針＝`Goal` 型の `category` / `priority` / `status:'learning'` は `@deprecated` を付けて残し、**`'learning'` の既存データは未完了として表示**するので移行不要。`add()` の引数は `Pick<Goal,'title'\|'memo'>` に縮小し、`createGoal` 側で `category:''` / `priority:'medium'` を既定で埋める。<br>`reorder(uid, orderedIds)` は「表示順に並べた id の配列」を受け取り、その順に `order` を振り直す（旧 `reorder(from,to,statusFilter)` は2値化で使えなくなったため差し替え）。<br>行の見た目は**中央寄せ・薄型**（`items-center` / `px-3 py-1.5` / チェックボックス18px / タイトル `text-sm leading-tight` / カード間 `space-y-1`）。 |
 | 2026-09-05 | （次回配信） | 新機能：**サイドバーの余白を右クリック→「最上位に作成」**（📄ページ／📊データベース）。従来は最上位ページを作る導線がヘッダーの`＋`だけで、ページ一覧を見ている流れのまま作れなかった。`Sidebar.tsx` に `rootCtxMenu` 状態を追加し、リストの器である `<nav className="flex-1 overflow-y-auto">` に `onContextMenu` を付けて余白クリックを拾う。作成は既存の `add(uid)`（parentId未指定＝ルート）／`add(uid,{type:'database'})` を再利用し、作成後はそのページへ遷移。<br>🔥 **ページ項目の上ではページ用メニューが優先**：`handleCtxMenu` の先頭に `e.stopPropagation()` を追加していないと、項目の右クリックが親`<nav>`まで伝播して両方のメニューが開く（DnDのときと同じ伝播の罠）。 |
 | 2026-09-05 | （次回配信） | **ハイライト（背景色）の「黄」を濃くした**（`#FEF9CD` → `#FDE047`）。淡すぎて紙の白と見分けがつかず、線を引いた意味が薄かったため。パレットは5か所（ツールバー `BG_COLORS`／コールアウト `CALLOUT_BG_COLORS`／看板セクション `PT_SECTION_BG_COLORS`／表セル `TABLE_CELL_COLORS`／ハイライト既定）すべて同時に更新（NotionEditor.tsx・editor-mobile/page.tsx）。<br>あわせて**既存ノートの黄色も新色へ統一**：過去に3種類の黄（`#FEF9CD`／`#FEF08A`／`#FDE68A`）が混在していたものを `notionPages` 25ページ・163箇所まとめて `#FDE047` に置換（`Skills/studytracker-seiri/core/migrate-yellow.mjs`・バックアップ `backup-yellow-2026-09-05.json`）。 |
