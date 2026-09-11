@@ -195,7 +195,7 @@ export default function NotionPlusHome() {
       )}
 
       {/* お気に入り */}
-      <section className="mt-8">
+      <section className="mt-8 mb-4">
         <SectionTitle icon="★" label="お気に入り" count={favorites.length} />
         {favorites.length === 0 ? (
           <div className="rounded-xl border border-dashed border-gray-200 px-4 py-8 text-center text-sm text-gray-400">
@@ -210,15 +210,6 @@ export default function NotionPlusHome() {
         )}
       </section>
 
-      {/* ページ一覧（ルート） */}
-      <section className="mt-8 mb-4">
-        <SectionTitle icon="📚" label="ページ一覧" count={rootPages.length} />
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {rootPages.map((p) => (
-            <PageCard key={p.id} page={p} path="" />
-          ))}
-        </div>
-      </section>
     </div>
   );
 }

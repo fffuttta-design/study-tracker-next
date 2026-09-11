@@ -52,7 +52,14 @@ function sectionOf(pathname: string): string | null {
 }
 
 function readStore(): Record<string, string> {
-  try { return JSON.parse(localStorage.getItem(LAST_KEY) || '{}'); } catch { return {}; }
+  try {
+    const store: Record<string, string> = JSON.parse(localStorage.getItem(LAST_KEY) || '{}');
+    // 🔥 NotionPlus は覚えない（rememberable 参照）。ただし v1.0.320 以前に保存された
+    //    「開いていたページ」が localStorage に残っているので、読み出し側でも捨てる。
+    //    ここを消し忘れると、書き込みを止めてもタブが古い記憶のまま直リンクし続ける。
+    delete store['/notion-plus'];
+    return store;
+  } catch { return {}; }
 }
 
 export function TopTabs() {
