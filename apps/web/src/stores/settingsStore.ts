@@ -57,6 +57,10 @@ interface SettingsState {
   // NotionPlus 前回表示ページ
   lastViewedNotionPageId: string | null;
   setLastViewedNotionPageId: (id: string | null) => void;
+  // NotionPlus ホーム「最近開いたページ」用の閲覧履歴（新しい順・最大20件）。
+  // 🔥 localStorage に持つ（Firestore に書かない）＝無料枠の読み書きを増やさないため。
+  recentNotionPageIds: string[];
+  pushRecentNotionPageId: (id: string) => void;
   // ドラッグハンドル縦オフセット (px)
   dragHandleOffset: number;
   setDragHandleOffset: (n: number) => void;
@@ -91,6 +95,11 @@ export const useSettingsStore = create<SettingsState>()(
       setQuickMemoDefaultRows: (n) => set({ quickMemoDefaultRows: n }),
       lastViewedNotionPageId: null,
       setLastViewedNotionPageId: (id) => set({ lastViewedNotionPageId: id }),
+      recentNotionPageIds: [],
+      pushRecentNotionPageId: (id) =>
+        set((state) => ({
+          recentNotionPageIds: [id, ...state.recentNotionPageIds.filter((x) => x !== id)].slice(0, 20),
+        })),
       dragHandleOffset: 0,
       setDragHandleOffset: (n) => set({ dragHandleOffset: n }),
     }),

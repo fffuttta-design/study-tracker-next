@@ -26,7 +26,7 @@ import {
 import { useToday } from '@/hooks/useToday';
 import { useCategoryStore } from '@/stores/categoryStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { format, subDays, isToday } from 'date-fns';
+import { format, isToday } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
@@ -57,6 +57,30 @@ const DAILY_QUOTES = [
 function toHHGroup(isoDate: string): string {
   const d = new Date(isoDate);
   return `${String(d.getHours()).padStart(2, '0')}:00～`;
+}
+
+/** YYYY-MM-DD 同士の日数差（to - from）。ローカル日付として解釈する。 */
+function diffDays(fromKey: string, toKey: string): number {
+  const [y1, m1, d1] = fromKey.split('-').map(Number);
+  const [y2, m2, d2] = toKey.split('-').map(Number);
+  return Math.round(
+    (new Date(y2, m2 - 1, d2).getTime() - new Date(y1, m1 - 1, d1).getTime()) / 86400000
+  );
+}
+
+/**
+ * そのグループが「何日遅れ」かを返す（0＝遅れなし）。
+ * グループ内でいちばん古い復習予定日を基準にする。
+ * 予定日は復習のたび `recalcNextReview` で引き直されるので、学習日ではなく予定日から数える。
+ */
+function lateDaysOf(items: LearningItem[], todayKey: string): number {
+  let oldest = '';
+  for (const it of items) {
+    const s = it.reviews.find((r) => !r.completed)?.scheduledDate?.slice(0, 10);
+    if (s && (!oldest || s < oldest)) oldest = s;
+  }
+  if (!oldest) return 0;
+  return Math.max(0, diffDays(oldest, todayKey));
 }
 
 const STAGE_LABELS = ['翌日', '3日後', '7日後', '2週間後', '1ヶ月後'];
@@ -286,31 +310,19 @@ function DashboardTab({ todayItems, dueItems, inboxItems, uid, onAdd, onQuickAdd
         .map(([label, items]) => ({ label, items }))
     : null;
 
-  // 昨日の日付キー（useToday 基準＝日をまたいでも勝手に繰り上がる）
+  // 今日の日付キー（useToday 基準＝日をまたいでも勝手に繰り上がる）
   const today = useToday();
-  const yesterday = toDateKey(subDays(today, 1));
-
-  // 昨日学んだ → 翌日(stageIndex=0)が due → 左パネル下部に表示
-  const yesterdayDueItems = useMemo(
-    () => dueItems.filter((item) => {
-      const next = item.reviews.find((r) => !r.completed);
-      return next?.stageIndex === 0 && item.dateKey === yesterday && !!item.notionPageId;
-    }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [dueItems],
-  );
+  const todayKey = toDateKey(today);
 
   // 復習待ちをステージでグループ化
-  // 翌日(index=0)は昨日分を除く（左パネルに表示するため）
+  // 🔥 復習は右パネルに一本化する（2026-09-11 本人指摘）。この見張りを戻さない。
+  //    以前は「昨日学んだ分」だけを左パネルに赤枠で出していたが、右の「翌日」と同じ段階（stageIndex=0）なのに
+  //    片方は"学習した日"・もう片方は"復習の間隔"で名前がついていて、違いが本人にも分からなかった。
+  //    昨日分は右の「翌日」の中に「◯/◯（◯）に学習」として並ぶので、情報は何も失われない。
   const dueGrouped = STAGE_LABELS.map((label, i) => ({
     label,
     index: i,
-    items: dueItems.filter((item) => {
-      const next = item.reviews.find((r) => !r.completed);
-      if (next?.stageIndex !== i) return false;
-      if (i === 0 && item.dateKey === yesterday) return false; // 左パネルに移動済み
-      return true;
-    }),
+    items: dueItems.filter((item) => item.reviews.find((r) => !r.completed)?.stageIndex === i),
   })).filter((g) => g.items.length > 0);
 
   return (
@@ -404,20 +416,6 @@ function DashboardTab({ todayItems, dueItems, inboxItems, uid, onAdd, onQuickAdd
           ) : (
             <ItemList items={digestedItems} uid={uid} compact fromTab={0} />
           )}
-
-          {/* 昨日の学習（翌日due → 今日復習すべきもの） */}
-          {yesterdayDueItems.length > 0 && (
-            <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-3">
-              <BadgeDivider
-                label="昨日の学習"
-                count={yesterdayDueItems.length}
-                badgeClass={STAGE_COLORS[0]}
-                countBg={STAGE_BADGE_COUNT_BG[0]}
-                leftAlign
-              />
-              <ItemList items={yesterdayDueItems} uid={uid} showReviewAction compact fromTab={0} />
-            </div>
-          )}
         </div>
       </div>
 
@@ -468,15 +466,11 @@ function DashboardTab({ todayItems, dueItems, inboxItems, uid, onAdd, onQuickAdd
                     <div className="space-y-2">
                       {byDate.map(([dateKey, dateItems]) => (
                         <div key={dateKey}>
-                          {byDate.length > 1 && (
-                            <div className="mb-1.5 flex items-center gap-2 text-xs text-gray-400">
-                              <span className="shrink-0 text-base font-bold text-gray-700">
-                                {format(new Date(dateKey), 'M/d（E）', { locale: ja })} に学習
-                              </span>
-                              <div className="h-px flex-1 bg-gray-200" />
-                              <span className="shrink-0 tabular-nums">{dateItems.length}件</span>
-                            </div>
-                          )}
+                          <StudiedOnHeader
+                            dateKey={dateKey}
+                            count={dateItems.length}
+                            lateDays={lateDaysOf(dateItems, todayKey)}
+                          />
                           <ItemList items={dateItems} uid={uid} showReviewAction compact fromTab={0} />
                         </div>
                       ))}
@@ -554,6 +548,7 @@ function ReviewTab({ dueItems, uid }: {
 }) {
   // デフォルト: 降順（新しい学習日が上）
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const todayKey = toDateKey(useToday()); // 遅れ日数の基準（日をまたぐと勝手に繰り上がる）
 
   const grouped = STAGE_LABELS.map((label, i) => ({
     label,
@@ -603,15 +598,11 @@ function ReviewTab({ dueItems, uid }: {
                 <div className="space-y-2">
                   {byDate.map(([dateKey, dateItems]) => (
                     <div key={dateKey}>
-                      {byDate.length > 1 && (
-                        <div className="mb-1.5 flex items-center gap-2 text-xs text-gray-400">
-                          <span className="shrink-0 text-base font-bold text-gray-700">
-                            {format(new Date(dateKey), 'M/d（E）', { locale: ja })} に学習
-                          </span>
-                          <div className="h-px flex-1 bg-gray-200" />
-                          <span className="shrink-0 tabular-nums">{dateItems.length}件</span>
-                        </div>
-                      )}
+                      <StudiedOnHeader
+                        dateKey={dateKey}
+                        count={dateItems.length}
+                        lateDays={lateDaysOf(dateItems, todayKey)}
+                      />
                       <ItemList items={dateItems} uid={uid} showReviewAction fromTab={2} />
                     </div>
                   ))}
@@ -1622,6 +1613,35 @@ function BadgeDivider({
         )}
       </div>
       <div className="h-px flex-1 bg-gray-200" />
+    </div>
+  );
+}
+
+/**
+ * 復習グループの中の「いつ学習した分か」の見出し。
+ * 🔥 予定日を過ぎている分は「◯日遅れ」を赤で出す（2026-09-11）。
+ *    ステージ名（翌日／3日後…）は"学習日から何日後に復習するか"の意味なので、
+ *    持ち越した項目がそのラベルの下にいると誤解を招く。遅れはここで明示する。
+ */
+function StudiedOnHeader({ dateKey, count, lateDays }: {
+  dateKey: string; count: number; lateDays: number;
+}) {
+  return (
+    <div className="mb-1.5 flex items-center gap-2 text-xs text-gray-400">
+      <span className="shrink-0 text-base font-bold text-gray-700">
+        {format(new Date(dateKey), 'M/d（E）', { locale: ja })} に学習
+      </span>
+      {lateDays > 0 ? (
+        <span className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-600">
+          {lateDays}日遅れ
+        </span>
+      ) : (
+        <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500">
+          今日ぶん
+        </span>
+      )}
+      <div className="h-px flex-1 bg-gray-200" />
+      <span className="shrink-0 tabular-nums">{count}件</span>
     </div>
   );
 }

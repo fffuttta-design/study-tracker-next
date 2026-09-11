@@ -33,7 +33,10 @@ function rememberable(pathname: string): string | null {
     const tab = new URLSearchParams(window.location.search).get('tab');
     return tab ? `/learning?tab=${tab}` : '/learning';
   }
-  if (pathname.startsWith('/notion-plus')) return pathname;
+  // 🔥 NotionPlus は「開いていたページ」を覚えない（2026-09-11 本人指示）。
+  //    /notion-plus をダッシュボード＝ホーム画面にしたので、深いページを覚えていると
+  //    タブを押してもホームに一度も辿り着けない。前回の続きはホームの「続きから」が受け持つ。
+  if (pathname.startsWith('/notion-plus')) return null;
   if (pathname.startsWith('/goals')) return pathname;
   return null;
 }

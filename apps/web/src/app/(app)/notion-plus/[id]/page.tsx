@@ -214,7 +214,7 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
     bookNumberHeadings, setBookNumberHeadings,
     bookHeadingNumberColor, setBookHeadingNumberColor,
     bookShowChapterHeading, setBookShowChapterHeading,
-    setLastViewedNotionPageId,
+    setLastViewedNotionPageId, pushRecentNotionPageId,
   } = useSettingsStore();
   const [saving, setSaving] = useState(false);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
@@ -247,10 +247,12 @@ export default function NotionPageDetail({ params }: { params: Promise<{ id: str
     if (!loading && !page) router.replace('/notion-plus');
   }, [page, loading, router]);
 
-  // 前回表示ページとして記録
+  // 前回表示ページとして記録（＋ホームの「最近開いたページ」へ積む）
   useEffect(() => {
-    if (page) setLastViewedNotionPageId(page.id);
-  }, [page?.id, setLastViewedNotionPageId]);
+    if (!page) return;
+    setLastViewedNotionPageId(page.id);
+    pushRecentNotionPageId(page.id);
+  }, [page?.id, setLastViewedNotionPageId, pushRecentNotionPageId]);
 
   // 子ページのPageLinkが欠けていれば自動補完（過去に移動したページ対応）
   // 保存後にeditorKeyを上げてエディタを再初期化→上書きによる消失を防ぐ
