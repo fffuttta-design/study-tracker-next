@@ -197,7 +197,7 @@ Start-Process "$env:LOCALAPPDATA\Programs\study-tracker\学習トラッカー.ex
 ```
 
 接続は Node 組込 WebSocket（`new WebSocket(t.webSocketDebuggerUrl)`・`ws` パッケージは入っていない）。
-雛形＝`C:\dev\Private\生活\学び\NP整理\core\cdp-verify-rootmenu3.mjs` / `_shot-page.mjs`（スクショ）。
+雛形＝`C:\dev\Private\生活\8.学び\NP整理\core\cdp-verify-rootmenu3.mjs` / `_shot-page.mjs`（スクショ）。
 
 ### 🔥 ここで3回誤診した（2026-09-05）
 
