@@ -79,7 +79,7 @@ Firestore を読んで FCM を投げている（Cloud Functions は使わない�
   （同じ理由で v1.0.317 に `guardWindowSection`＝全ナビゲーション監視も撤去済み。こちらも復活させない）
 - 🔥 **窓を切り替えてよいのはディープリンク（`studytracker://`）とトレイだけ**＝
   `electron/main.js` の `sectionOwner()` → `showSection()`。`/notion-plus` のディープリンクは
-  専用アイコンの NotionPlus窓を前に出す（`/studytracker-seiri` の `open-in-app.mjs` が使う経路）。
+  専用アイコンの NotionPlus窓を前に出す（`/NP整理` の `open-in-app.mjs` が使う経路）。
 - 「同じ画面が2窓に並ぶと古い方が昨日の日付で止まる」問題は `useToday()` 側で解決済み（下記）。
   **窓を分けることで防ごうとしない。**
 - 仕組みの詳細＝仕様書 §4.0。
@@ -197,7 +197,7 @@ Start-Process "$env:LOCALAPPDATA\Programs\study-tracker\学習トラッカー.ex
 ```
 
 接続は Node 組込 WebSocket（`new WebSocket(t.webSocketDebuggerUrl)`・`ws` パッケージは入っていない）。
-雛形＝`C:\dev\Skills\studytracker-seiri\core\cdp-verify-rootmenu3.mjs` / `_shot-page.mjs`（スクショ）。
+雛形＝`C:\dev\Skills\NP整理\core\cdp-verify-rootmenu3.mjs` / `_shot-page.mjs`（スクショ）。
 
 ### 🔥 ここで3回誤診した（2026-09-05）
 
